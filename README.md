@@ -117,9 +117,24 @@ The control system coordinates orders and fleet operations. It is intended to in
 
 ### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
 
-The robotics layer is responsible for executing delivery tasks and publishing robot state. Initial development will focus on a virtual/simulated environment to validate end-to-end behaviour. Support for physical robots will be introduced once the platform interfaces and workflows stabilise.
+The robotics layer is responsible for executing delivery tasks and publishing robot state. 
+
+Initial development will focus on a virtual/simulated environment to validate end-to-end behaviour. Support for physical robots will be introduced once the platform interfaces and workflows stabilise.
+
+**Virtual Robot Fleet** 
+![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![ROS%202](https://img.shields.io/badge/ROS%202-22314E?logo=ros&logoColor=white)
+
 
 ---
+
+## Deployment & CI/CD
+DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate   to AWS using IAM OIDC (no stored AWS keys).
+See [deployment.md](./docs/ci-cd.md) for details.
+
+## Contributing
+Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 <!-- ![Status](https://img.shields.io/badge/status-in%20progress-yellow?labelColor=555555)
 ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
