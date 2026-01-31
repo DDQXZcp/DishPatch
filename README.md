@@ -48,7 +48,7 @@ This diagram summarises the end-to-end workflow across ordering, dispatch, and f
 
 The POS system provides a customer-facing ordering interface used to place orders and generate delivery tasks.
 
-#### POS Frontend (Web)
+**POS Frontend (Web)**
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
@@ -62,7 +62,7 @@ The POS system provides a customer-facing ordering interface used to place order
 
 The POS frontend is a React web application hosted on **Amazon S3** and delivered via **CloudFront** for global caching and low-latency access.
 
-#### POS Backend (Serverless APIs)
+**POS Backend (Serverless APIs)**
 ![Express.js](https://img.shields.io/badge/Express.js-000000?logo=express&logoColor=white)
 ![API Gateway](https://img.shields.io/badge/AWS%20API%20Gateway-FF4F8B?logo=amazonapigateway&logoColor=white)
 ![Lambda](https://img.shields.io/badge/AWS%20Lambda-FF9900?logo=awslambda&logoColor=white)
@@ -83,7 +83,7 @@ The POS backend exposes APIs for menu/table queries and order submission. It use
   <a href="https://github.com/DDQXZcp/DishPatch/tree/main">Repository</a>
 </p>
 
-#### Control Frontend (Operator Dashboard)
+**Control Frontend (Operator Dashboard)**
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
@@ -96,7 +96,7 @@ The control system coordinates orders and fleet operations. It is intended to in
   CampusRide Frontend
 </p>
 
-#### Control Backend (Dispatch & Orchestration)
+**Control Backend (Dispatch & Orchestration)** 
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Spring%20Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?logo=springboot&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
@@ -112,6 +112,8 @@ The control system coordinates orders and fleet operations. It is intended to in
 - REST APIs for orders, tasks, and fleet management
 - real-time status streaming via WebSocket/MQTT
 - scheduling strategies (FIFO, priority-based, zone-aware, load balancing)
+
+---
 
 ### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
 
