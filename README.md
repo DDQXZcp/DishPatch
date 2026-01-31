@@ -14,28 +14,26 @@
 
 
 # DishPatch
-DishPatch is an open-source, cloud-based, end-to-end restaurant service-robot system that integrates a full-stack web platform with robot fleet control.
+An open-source, AWS-native platform for restaurant ordering, dispatch orchestration, and service-robot fleet control.
 
 <img alt="DishPatch Architecture" src="./img/DishPatch.png" />
 
-# Background
 ## Overview
-Service robots are increasingly used in restaurants and hotels. While commercial platforms (e.g., Yunji, Pudu) are mature and reliable, they are typically expensive, closed-source, and difficult for individual developers to customise or extend.
+Service robots are increasingly adopted in restaurants and hotels. While commercial platforms (e.g., Yunji, Pudu) are mature and reliable, they are often expensive, closed-source, and difficult for individual developers to customise or extend.
 
-DishPatch addresses this gap by providing a modular reference system spanning:
-- **Frontend (React)**: POS ordering and operator dashboards
-- **Backend (Spring Boot)**: order processing, scheduling, and APIs
-- **Robotics layer**: fleet management, robot state streaming, and task execution
+DishPatch provides a modular reference architecture spanning:
+- **Frontend (React)** — POS ordering and operator dashboards
+- **Backend (Spring Boot)** — order processing, scheduling, and APIs
+- **Robotics layer** — fleet management, robot state streaming, and task execution
 
-The project is designed for developers with basic software/robotics background to build, test, and iterate on a complete solution—from simulation to real deployment.
+The project targets developers with foundational software/robotics experience who want to build, test, and iterate on a complete system—from simulation to real-world deployment.
 
 ## System Workflow
-
-The proposed system workflow
+This diagram summarises the end-to-end workflow across ordering, dispatch, and fleet execution.
 
 <img alt="DishPatch Basic Workflow" src="./img/Workflow DishPatch.png" />
 <p align="center">
-  DishPatch Basic Workflows
+  DishPatch basic workflow
 </p>
 
 ## Components
@@ -50,7 +48,7 @@ The proposed system workflow
 
 The POS system provides a customer-facing ordering interface used to place orders and generate delivery tasks.
 
-**POS Frontend**
+#### POS Frontend (Web)
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
@@ -64,7 +62,7 @@ The POS system provides a customer-facing ordering interface used to place order
 
 The POS frontend is a React web application hosted on **Amazon S3** and delivered via **CloudFront** for global caching and low-latency access.
 
-**POS Backend**
+#### POS Backend (Serverless APIs)
 ![Express.js](https://img.shields.io/badge/Express.js-000000?logo=express&logoColor=white)
 ![API Gateway](https://img.shields.io/badge/AWS%20API%20Gateway-FF4F8B?logo=amazonapigateway&logoColor=white)
 ![Lambda](https://img.shields.io/badge/AWS%20Lambda-FF9900?logo=awslambda&logoColor=white)
@@ -85,7 +83,7 @@ The POS backend exposes APIs for menu/table queries and order submission. It use
   <a href="https://github.com/DDQXZcp/DishPatch/tree/main">Repository</a>
 </p>
 
-**Control Frontend**
+#### Control Frontend (Operator Dashboard)
 ![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
@@ -98,7 +96,7 @@ The control system coordinates orders and fleet operations. It is intended to in
   CampusRide Frontend
 </p>
 
-**Control Backend**
+#### Control Backend (Dispatch & Orchestration)
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Spring%20Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?logo=springboot&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
