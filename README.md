@@ -14,27 +14,36 @@
 
 
 # DishPatch
-An open-source, AWS-native platform for restaurant ordering, dispatch orchestration, and service-robot fleet control.
+DishPatch is an open-source, AWS cloud-based restaurant service-robot platform that integrates ordering, dispatch/control, and robotics fleet execution.
 
 <img alt="DishPatch Architecture" src="./img/DishPatch.png" />
 
 ## Overview
 Service robots are increasingly adopted in restaurants and hotels. While commercial platforms (e.g., Yunji, Pudu) are mature and reliable, they are often expensive, closed-source, and difficult for individual developers to customise or extend.
 
-DishPatch provides a modular reference architecture spanning:
-- **Frontend (React)** — POS ordering and operator dashboards
-- **Backend (Spring Boot)** — order processing, scheduling, and APIs
-- **Robotics layer** — fleet management, robot state streaming, and task execution
+DishPatch provides a modular architecture spanning:
+- **Ordering System** — POS ordering and data storage
+- **Control System** — monitoring, order processing, and job scheduling
+- **Robotics Fleet** — fleet management, robot state streaming, and task execution
 
 The project targets developers with foundational software/robotics experience who want to build, test, and iterate on a complete system—from simulation to real-world deployment.
 
 ## System Workflow
-This diagram summarises the end-to-end workflow across ordering, dispatch, and fleet execution.
+This diagram summarises the end-to-end workflow across ordering, dispatch/control, and robot fleet execution.
 
 <img alt="DishPatch Basic Workflow" src="./img/Workflow DishPatch.png" />
 <p align="center">
   DishPatch basic workflow
 </p>
+
+**Step 1 — Order Placement**  
+A customer places an order via the Ordering System. The order details are recorded and enqueued as a delivery job.
+
+**Step 2 — Dispatch & Monitoring**  
+The Control System consumes jobs from the queue, schedules delivery tasks for the robotics fleet, and provides a monitoring dashboard showing real-time robot status (e.g., location and battery).
+
+**Step 3 — Fleet Execution**  
+Robots receive high-level commands from the Control System and autonomously navigate to deliver dishes to the customer, then proceed to the next assigned task.
 
 ## Components
 
@@ -126,12 +135,14 @@ Initial development will focus on a virtual/simulated environment to validate en
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 ![ROS%202](https://img.shields.io/badge/ROS%202-22314E?logo=ros&logoColor=white)
 
+- **Job Scheduler** — transforms orders into tasks and assigns delivery jobs
+- **Fleet Manager** — manages high-level robot coordination and task execution
 
 ---
 
 ## Deployment & CI/CD
 DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate   to AWS using IAM OIDC (no stored AWS keys).
-See [deployment.md](./docs/ci-cd.md) for details.
+See [deployment.md](./docs/deployment.md) for details.
 
 ## Contributing
 Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.

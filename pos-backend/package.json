@@ -1,0 +1,35 @@
+{
+  "name": "pos-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon app.js",
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.890.0",
+    "@aws-sdk/client-sqs": "^3.913.0",
+    "@aws-sdk/client-ssm": "^3.891.0",
+    "@aws-sdk/lib-dynamodb": "^3.890.0",
+    "@vendia/serverless-express": "^4.12.6",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "http-errors": "^2.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "razorpay": "^2.9.5",
+    "tailwind-scrollbar-hide": "^4.0.0",
+    "uuid": "8.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

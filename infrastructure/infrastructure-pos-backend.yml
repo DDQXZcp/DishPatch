@@ -1,0 +1,347 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Infrastructure for Restaurant POS Backend - DynamoDB + SQS + Lambda + API Gateway + Custom Domain
+
+# ===========================
+# Parameters
+# ===========================
+Parameters:
+  BackendImageUri:
+    Type: String
+    Description: ECR image URI for Restaurant POS Backend
+
+  # ===== Custom domain for the backend API =====
+  ApiDomain:
+    Type: String
+    Default: posapi.herman-tang.com
+    Description: Custom domain name for the API (e.g., posapi.herman-tang.com)
+
+  ACMCertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN in ap-southeast-2 that covers ApiDomain (or *.root)
+
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: (Optional) Route53 hosted zone ID that contains ApiDomain
+
+# ===========================
+# Conditions
+# ===========================
+Conditions:
+  UseCustomDomain: !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
+  CreateDnsRecord: !And
+    - !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
+    - !Condition UseCustomDomain
+
+# ===========================
+# Resources
+# ===========================
+Resources:
+  # ---------------- DynamoDB ----------------
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Users
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Orders
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  PaymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Payments
+      AttributeDefinitions:
+        - AttributeName: paymentId
+          AttributeType: S
+        - AttributeName: orderId
+          AttributeType: S
+        - AttributeName: transactionType
+          AttributeType: S
+      KeySchema:
+        - AttributeName: paymentId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: OrderIndex
+          KeySchema:
+            - AttributeName: orderId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: TransactionTypeIndex
+          KeySchema:
+            - AttributeName: transactionType
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  TablesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Tables
+      AttributeDefinitions:
+        - AttributeName: tableNo
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tableNo
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  MenuItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MenuItems
+      AttributeDefinitions:
+        - AttributeName: menuName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: menuName
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # ---------------- SQS ----------------
+  PaymentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: pos-payment-queue
+      VisibilityTimeout: 30
+      MessageRetentionPeriod: 86400
+      ReceiveMessageWaitTimeSeconds: 10
+
+  PaymentQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref PaymentQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSendMessageFromPOS
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - "sqs:SendMessage"
+              - "sqs:GetQueueUrl"
+              - "sqs:GetQueueAttributes"
+            Resource: !GetAtt PaymentQueue.Arn
+
+  # ---------------- IAM Role for Lambda ----------------
+  PosBackendLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PosBackendLambdaRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PosBackendLambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # CloudWatch Logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+              # SSM Parameter Store
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/RestaurantPOS/JWT_SECRET"
+
+              # DynamoDB (tables + GSIs)
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !Sub "${UsersTable.Arn}/index/*"
+                  - !GetAtt OrdersTable.Arn
+                  - !Sub "${OrdersTable.Arn}/index/*"
+                  - !GetAtt PaymentsTable.Arn
+                  - !Sub "${PaymentsTable.Arn}/index/*"
+                  - !GetAtt TablesTable.Arn
+                  - !Sub "${TablesTable.Arn}/index/*"
+                  - !GetAtt MenuItemsTable.Arn
+                  - !Sub "${MenuItemsTable.Arn}/index/*"
+
+              # SQS Access
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt PaymentQueue.Arn
+
+  # ---------------- Lambda Function ----------------
+  BackendLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: RestaurantPosBackend
+      PackageType: Image
+      Role: !GetAtt PosBackendLambdaRole.Arn
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          NODE_ENV: lambda
+          REGION: ap-southeast-2
+          PAYMENT_QUEUE_URL: !Ref PaymentQueue
+      Code:
+        ImageUri: !Ref BackendImageUri
+
+  # ---------------- ApiGateway ----------------
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: PosBackendHttpApi
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "https://pos.herman-tang.com"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Amz-Date"
+          - "X-Api-Key"
+          - "X-Amz-Security-Token"
+        AllowCredentials: true
+
+  Integration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BackendLambda.Arn}/invocations
+      PayloadFormatVersion: "2.0"
+
+  RouteRoot:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /"
+      Target: !Sub integrations/${Integration}
+
+  RouteAnyProxy:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /{proxy+}"
+      Target: !Sub integrations/${Integration}
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: prod
+      AutoDeploy: true
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*
+
+  # ---------------- API Gateway Custom Domain + Route53 ----------------
+  ApiCustomDomain:
+    Condition: UseCustomDomain
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Ref ApiDomain
+      DomainNameConfigurations:
+        - CertificateArn: !Ref ACMCertificateArn
+          EndpointType: REGIONAL
+
+  ApiMapping:
+    Condition: UseCustomDomain
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiCustomDomain
+      Stage: !Ref Stage
+
+  ApiAliasRecord:
+    Condition: CreateDnsRecord
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApiDomain
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt ApiCustomDomain.RegionalHostedZoneId
+        DNSName: !GetAtt ApiCustomDomain.RegionalDomainName
+
+# ===========================
+# Outputs
+# ===========================
+Outputs:
+  UsersTableName:
+    Value: !Ref UsersTable
+  OrdersTableName:
+    Value: !Ref OrdersTable
+  PaymentsTableName:
+    Value: !Ref PaymentsTable
+  TablesTableName:
+    Value: !Ref TablesTable
+  MenuItemsTableName:
+    Value: !Ref MenuItemsTable
+  PaymentQueueUrl:
+    Description: The URL of the SQS queue used for payments
+    Value: !Ref PaymentQueue
+  PaymentQueueArn:
+    Description: The ARN of the SQS queue
+    Value: !GetAtt PaymentQueue.Arn
+  ApiBaseUrl:
+    Description: Base URL of the POS Backend API
+    Value: !If
+      - UseCustomDomain
+      - !Sub "https://${ApiDomain}"
+      - !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"

@@ -1,0 +1,8 @@
+// config/sqsClient.js
+const { SQSClient } = require("@aws-sdk/client-sqs");
+const config = require("./config");
+
+const sqs = new SQSClient({ region: config.awsRegion });
+console.log("SQS client initialized in region:", config.awsRegion);
+
+module.exports = sqs;
