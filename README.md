@@ -135,6 +135,12 @@ Initial development will focus on a virtual/simulated environment to validate en
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 ![ROS%202](https://img.shields.io/badge/ROS%202-22314E?logo=ros&logoColor=white)
 
+<img alt="DishPatch Virtual Robotics Fleet" src="./img/DishPatch Virtual Robotics Fleet.png" />
+
+<p align="center">
+  DishPatch Virtual Robot Fleet
+</p>
+
 - **Job Scheduler** — transforms orders into tasks and assigns delivery jobs
 - **Fleet Manager** — manages high-level robot coordination and task execution
 
