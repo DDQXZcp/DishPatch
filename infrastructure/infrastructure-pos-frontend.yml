@@ -1,24 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: HTCafePOS Frontend – S3 (private) + CloudFront
+Description: Frontend SPA – S3 (private) + CloudFront (portable, stack-name based)
 
 Parameters:
-  # ===== Custom domain for the SPA =====
+  # ===== Optional custom domain for the SPA =====
   SiteDomain:
     Type: String
-    Default: pos.herman-tang.com
-    Description: Public hostname for the SPA (e.g., pos.herman-tang.com)
+    Default: ""
+    Description: Public hostname for the SPA (e.g., pos.example.com). Leave empty to skip custom domain.
 
-  # CloudFront requires a certificate in us-east-1
+  # CloudFront requires a certificate in us-east-1 for custom domains
   ACMCertificateArn:
     Type: String
-    Description: ACM certificate ARN in us-east-1 that covers SiteDomain (or *.root)
     Default: ""
+    Description: ACM certificate ARN in us-east-1 that covers SiteDomain (or *.root). Required if SiteDomain is set.
 
   # If provided, create an A-record in this hosted zone for SiteDomain
   HostedZoneId:
     Type: String
-    Description: (Optional) Route53 Hosted Zone ID that contains SiteDomain
     Default: ""
+    Description: (Optional) Route53 Hosted Zone ID that contains SiteDomain. Required to create a DNS record.
 
   # ===== S3 bucket name (optional) =====
   SiteBucketName:
@@ -26,8 +26,31 @@ Parameters:
     Default: ""
     Description: Optional exact S3 bucket name. Leave empty to let AWS generate a name.
 
+  # ===== CloudFront policy IDs (parameterised for portability) =====
+  CloudFrontCachePolicyId:
+    Type: String
+    Default: "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    Description: CloudFront Cache Policy ID (default is AWS Managed CachingOptimized)
+
+  CloudFrontOriginRequestPolicyId:
+    Type: String
+    Default: "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+    Description: CloudFront Origin Request Policy ID (default is AWS Managed CORS-S3Origin)
+
+  CloudFrontResponseHeadersPolicyId:
+    Type: String
+    Default: "eaab4381-ed33-4a86-88ca-d9558dc6cd63"
+    Description: CloudFront Response Headers Policy ID (default is AWS Managed CORS-with-preflight-and-SecurityHeadersPolicy)
+
+  CloudFrontHostedZoneId:
+    Type: String
+    Default: "Z2FDTNDATAQYW2"
+    Description: CloudFront hosted zone ID used for Route53 alias records (global constant)
+
 Conditions:
-  UseCustomDomain: !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
+  UseCustomDomain: !And
+    - !Not [ !Equals [ !Ref SiteDomain, "" ] ]
+    - !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
   CreateDnsRecord: !And
     - !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
     - !Condition UseCustomDomain
@@ -38,18 +61,21 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "htcafepos-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
-      VersioningConfiguration: { Status: Enabled }
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -60,11 +86,13 @@ Resources:
         Statement:
           - Sid: AllowS3ServerLogs
             Effect: Allow
-            Principal: { Service: logging.s3.amazonaws.com }
+            Principal:
+              Service: logging.s3.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${LogsBucket.Arn}/*'
+            Resource: !Sub "${LogsBucket.Arn}/*"
             Condition:
-              StringEquals: { AWS:SourceAccount: !Ref AWS::AccountId }
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
 
   # Private S3 bucket for the SPA (CloudFront only)
   SiteBucket:
@@ -76,10 +104,12 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       LoggingConfiguration:
         DestinationBucketName: !Ref LogsBucket
         LogFilePrefix: s3/
@@ -89,7 +119,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub 'oac-${AWS::StackName}'
+        Name: !Sub "oac-${AWS::StackName}"
         Description: Access control for SPA S3 origin
         OriginAccessControlOriginType: s3
         SigningBehavior: always
@@ -101,7 +131,7 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: HTCafePOS SPA
+        Comment: !Sub "${AWS::StackName} SPA"
         DefaultRootObject: index.html
 
         Origins:
@@ -114,10 +144,11 @@ Resources:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           AllowedMethods: [ GET, HEAD, OPTIONS ]
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6          # Managed: CachingOptimized
-          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf   # Managed: CORS-S3Origin
-          ResponseHeadersPolicyId: eaab4381-ed33-4a86-88ca-d9558dc6cd63 # Managed: CORS-with-preflight-and-SecurityHeadersPolicy
+          CachePolicyId: !Ref CloudFrontCachePolicyId
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicyId
+          ResponseHeadersPolicyId: !Ref CloudFrontResponseHeadersPolicyId
 
+        # SPA routing support: serve index.html for 403/404
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -128,13 +159,16 @@ Resources:
 
         Logging:
           Bucket: !GetAtt LogsBucket.RegionalDomainName
-          Prefix: 'cloudfront/'
+          Prefix: "cloudfront/"
           IncludeCookies: false
 
         ViewerCertificate: !If
           - UseCustomDomain
-          - { AcmCertificateArn: !Ref ACMCertificateArn, SslSupportMethod: sni-only, MinimumProtocolVersion: TLSv1.2_2021 }
-          - { CloudFrontDefaultCertificate: true }
+          - AcmCertificateArn: !Ref ACMCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+
         Aliases: !If
           - UseCustomDomain
           - [ !Ref SiteDomain ]
@@ -151,14 +185,15 @@ Resources:
         Statement:
           - Sid: AllowCloudFrontAccess
             Effect: Allow
-            Principal: { Service: cloudfront.amazonaws.com }
+            Principal:
+              Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub '${SiteBucket.Arn}/*'
+            Resource: !Sub "${SiteBucket.Arn}/*"
             Condition:
               StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}'
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}"
 
-  # Route53 A-record pos.herman-tang.com -> CloudFront
+  # Optional Route53 A-record SiteDomain -> CloudFront
   SiteAliasRecord:
     Condition: CreateDnsRecord
     Type: AWS::Route53::RecordSet
@@ -167,22 +202,25 @@ Resources:
       Name: !Ref SiteDomain
       Type: A
       AliasTarget:
-        HostedZoneId: Z2FDTNDATAQYW2                        # CloudFront hosted zone ID (global constant)
+        HostedZoneId: !Ref CloudFrontHostedZoneId
         DNSName: !GetAtt SiteDistribution.DomainName
 
 Outputs:
   SiteBucketName:
     Description: S3 bucket that hosts the SPA artifacts
     Value: !Ref SiteBucket
+
   DistributionDomainName:
     Description: CloudFront domain name (use this if not using a custom domain)
     Value: !GetAtt SiteDistribution.DomainName
+
   DistributionId:
     Description: CloudFront distribution ID (for cache invalidations)
     Value: !Ref SiteDistribution
+
   SiteURL:
     Description: Public URL for the site
     Value: !If
       - UseCustomDomain
-      - !Sub 'https://${SiteDomain}'
-      - !Sub 'https://${SiteDistribution.DomainName}'
+      - !Sub "https://${SiteDomain}"
+      - !Sub "https://${SiteDistribution.DomainName}"

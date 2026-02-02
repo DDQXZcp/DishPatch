@@ -1,0 +1,129 @@
+name: Deploy POS Frontend
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'pos-frontend/**'
+      - 'infrastructure/infrastructure-pos-frontend.yml'
+      - '.github/workflows/deploy-pos-frontend.yml'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  ROLE_ARN: arn:aws:iam::334643191233:role/GitHubActions-DishPatch
+  FRONTEND_STACK: DishPatch-Pos-Frontend
+  TEMPLATE_PATH: infrastructure/infrastructure-pos-frontend.yml
+
+  # Your desired site & cert (CloudFront cert must be in us-east-1)
+  SITE_DOMAIN: pos.dish-patch.com
+  ACM_CERT_ARN: arn:aws:acm:us-east-1:334643191233:certificate/b11f4b5d-f532-4896-a989-5888157fb5f8
+
+  # Your Route53 public hosted zone (for dish-patch.com)
+  HOSTED_ZONE_ID: Z07539553FFDS683L3M15
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dishpatch-pos-frontend-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure frontend stack exists (create/update)
+        run: |
+          set -e
+          if aws cloudformation describe-stacks --stack-name "$FRONTEND_STACK" >/dev/null 2>&1; then
+            echo "Stack $FRONTEND_STACK exists. Updating…"
+          else
+            echo "Stack $FRONTEND_STACK not found. Creating…"
+          fi
+
+          aws cloudformation validate-template --template-body file://$GITHUB_WORKSPACE/${TEMPLATE_PATH}
+
+          aws cloudformation deploy \
+            --stack-name "$FRONTEND_STACK" \
+            --template-file "$GITHUB_WORKSPACE/${TEMPLATE_PATH}" \
+            --parameter-overrides \
+              SiteDomain="${SITE_DOMAIN}" \
+              ACMCertificateArn="${ACM_CERT_ARN}" \
+              HostedZoneId="${HOSTED_ZONE_ID}"
+
+      - name: Read stack outputs (bucket, distribution, url)
+        id: outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$FRONTEND_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='SiteBucketName'].OutputValue" --output text)
+          DIST=$(aws cloudformation describe-stacks --stack-name "$FRONTEND_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          URL=$(aws cloudformation describe-stacks --stack-name "$FRONTEND_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='SiteURL'].OutputValue" --output text)
+
+          if [[ -z "$BUCKET" || "$BUCKET" == "None" ]]; then
+            echo "Could not resolve SiteBucketName from stack outputs."
+            exit 1
+          fi
+          if [[ -z "$DIST" || "$DIST" == "None" ]]; then
+            echo "Could not resolve DistributionId from stack outputs."
+            exit 1
+          fi
+
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "dist=$DIST"     >> "$GITHUB_OUTPUT"
+          echo "url=$URL"       >> "$GITHUB_OUTPUT"
+
+          echo "S3 bucket: $BUCKET"
+          echo "CloudFront distribution: $DIST"
+          echo "Site URL: $URL"
+      
+      - name: Setup Node (Yarn)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: pos-frontend/yarn.lock
+
+      - name: Install deps
+        working-directory: pos-frontend
+        run: |
+          # Yarn 1.x
+          if yarn --version | grep -q '^1\.'; then
+            yarn install --frozen-lockfile
+          else
+            corepack enable
+            yarn install --immutable
+          fi
+
+      - name: Build
+        working-directory: pos-frontend
+        env:
+          VITE_BACKEND_URL: 'https://posapi.dish-patch.com'
+        run: yarn build
+
+      - name: Upload to S3
+        run: aws s3 sync pos-frontend/dist/ "s3://${{ steps.outputs.outputs.bucket }}/" --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.outputs.outputs.dist }}" \
+            --paths "/*"
+
+      - name: Done
+        run: echo "✅ Deployed. Visit ${{ steps.outputs.outputs.url }}"

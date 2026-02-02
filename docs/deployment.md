@@ -61,9 +61,11 @@ Each environment should have isolated AWS resources (separate buckets, tables, q
 
 ---
 
-## 4. Frontend Deployment (S3 + CloudFront)
+## 4. POS Frontend Deployment (S3 + CloudFront)
 
-### 4.1 Create an S3 bucket
+### Set up AWS IAM Roles for Github
+
+### 4.1 Create an Route 53 Domain and ACM Certificate
 Create an S3 bucket for the frontend assets (per environment), for example:
 - `dishpatch-pos-frontend-prod`
 - `dishpatch-control-frontend-prod`
@@ -72,7 +74,7 @@ Recommended settings:
 - Block public access **enabled**
 - Use CloudFront Origin Access Control (OAC) to restrict direct S3 access
 
-### 4.2 Create a CloudFront distribution
+### 4.2 Link the Certificate CNAME Record in Route 53
 - Origin: the S3 bucket
 - Enable HTTPS
 - Configure caching policies for static assets
