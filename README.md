@@ -137,14 +137,8 @@ Initial development will focus on a virtual/simulated environment to validate en
 
 <img alt="DishPatch Virtual Robotics Fleet" src="./img/DishPatch Virtual Robotics Fleet.png" />
 
-<p align="center">
-  DishPatch Virtual Robot Fleet
-</p>
-
-- **Job Scheduler** — transforms orders into tasks and assigns delivery jobs
-- **Fleet Manager** — manages high-level robot coordination and task execution
-
----
+- **Virtual Robot** — Each service robot runs in a Docker container with ROS 2 and simulation tooling (e.g., Gazebo, RViz2, Nav2). Robots subscribe to assigned jobs and autonomously navigate to perform dish delivery.
+- **ROS Bridge** — A bridge component that converts ROS topics into WebSocket messages for communication with the control backend, enabling real-time telemetry streaming and command dispatch.
 
 ## Deployment & CI/CD
 DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate   to AWS using IAM OIDC (no stored AWS keys).
