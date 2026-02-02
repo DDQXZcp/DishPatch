@@ -61,7 +61,6 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
