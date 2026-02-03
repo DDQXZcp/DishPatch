@@ -1,9 +1,10 @@
 const docClient = require("../config/database");
+const config = require("../config/config");
 const { GetCommand, PutCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcrypt");
 
-const TABLE_NAME = "Users";
+const TABLE_NAME = config.usersTable; // ✅ use CloudFormation-injected table name
 
 // Helper: validate email format
 function validateEmail(email) {
@@ -52,7 +53,8 @@ async function getUserByEmail(email) {
   const params = new QueryCommand({
     TableName: TABLE_NAME,
     IndexName: "EmailIndex", // requires a GSI on "email"
-    KeyConditionExpression: "email = :email",
+    // Safer expression: avoids reserved word issues
+    KeyConditionExpression: "#email = :email",
     ExpressionAttributeValues: {
       ":email": email
     }
