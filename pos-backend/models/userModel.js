@@ -52,12 +52,14 @@ async function createUser(user) {
 async function getUserByEmail(email) {
   const params = new QueryCommand({
     TableName: TABLE_NAME,
-    IndexName: "EmailIndex", // requires a GSI on "email"
-    // Safer expression: avoids reserved word issues
+    IndexName: "EmailIndex",
     KeyConditionExpression: "#email = :email",
+    ExpressionAttributeNames: {
+      "#email": "email",
+    },
     ExpressionAttributeValues: {
-      ":email": email
-    }
+      ":email": email,
+    },
   });
 
   const result = await docClient.send(params);
