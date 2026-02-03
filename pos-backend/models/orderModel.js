@@ -1,8 +1,9 @@
 const docClient = require("../config/database");
+const config = require("../config/config");
 const { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { v4: uuidv4 } = require("uuid");
 
-const TABLE_NAME = "Orders"; // Make sure this table exists in DynamoDB
+const TABLE_NAME = config.ordersTable;
 
 // Utility to generate a random 4-digit code
 function generateDisplayId() {

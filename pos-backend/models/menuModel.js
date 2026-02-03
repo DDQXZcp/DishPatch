@@ -1,7 +1,8 @@
 const docClient = require("../config/database");
 const { PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
+const config = require("../config/config");
 
-const TABLE_NAME = "MenuItems";
+const TABLE_NAME = config.menuItemsTable;
 
 /**
  * Get all menu items from DynamoDB

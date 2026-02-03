@@ -1,8 +1,9 @@
 const docClient = require("../config/database");
+const config = require("../config/config");
 const { GetCommand, PutCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
 const { v4: uuidv4 } = require("uuid");
 
-const TABLE_NAME = "Payments"; // DynamoDB table for payments
+const TABLE_NAME = config.paymentsTable;
 
 // Create a new payment
 async function createPayment(payment) {

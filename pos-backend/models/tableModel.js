@@ -1,4 +1,5 @@
 const docClient = require("../config/database");
+const config = require("../config/config");
 const {
   GetCommand,
   PutCommand,
@@ -7,7 +8,7 @@ const {
   ScanCommand
 } = require("@aws-sdk/lib-dynamodb");
 
-const TABLE_NAME = "Tables";
+const TABLE_NAME = config.tablesTable;
 
 // Create a new table entry
 async function createTable(table) {
