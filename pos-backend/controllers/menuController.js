@@ -35,10 +35,10 @@ const getMenus = async (req, res, next) => {
 
     // console.log("📦 [getMenus] Raw data from DynamoDB:", JSON.stringify(menus, null, 2));
 
-    if (!menus || menus.length === 0) {
-    //   console.warn("⚠️ [getMenus] No menu items found in database.");
-      return next(createHttpError(404, "No menu items found"));
-    }
+    // if (!menus || menus.length === 0) {
+    // //   console.warn("⚠️ [getMenus] No menu items found in database.");
+    //   return next(createHttpError(404, "No menu items found"));
+    // }
 
     // console.log(`✅ [getMenus] Found ${menus.length} menu(s).`);
 
