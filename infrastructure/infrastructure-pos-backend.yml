@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Infrastructure for Restaurant POS Backend - DynamoDB + SQS + Lambda + API Gateway + Custom Domain
+Description: Infrastructure for Restaurant POS Backend - DynamoDB + SQS + Lambda + API Gateway + Custom Domain (portable)
 
 # ===========================
 # Parameters
@@ -7,32 +7,58 @@ Description: Infrastructure for Restaurant POS Backend - DynamoDB + SQS + Lambda
 Parameters:
   BackendImageUri:
     Type: String
-    Description: ECR image URI for Restaurant POS Backend
+    Description: ECR image URI for Restaurant POS Backend (Lambda container image)
 
-  # ===== Custom domain for the backend API =====
+  # ===== Optional custom domain for the backend API =====
   ApiDomain:
     Type: String
-    Default: posapi.herman-tang.com
-    Description: Custom domain name for the API (e.g., posapi.herman-tang.com)
+    Default: ""
+    Description: Custom domain name for the API (e.g., posapi.example.com). Leave empty to skip custom domain.
 
   ACMCertificateArn:
     Type: String
     Default: ""
-    Description: ACM certificate ARN in ap-southeast-2 that covers ApiDomain (or *.root)
+    Description: ACM certificate ARN in the SAME region as the API (REGIONAL endpoint). Required if ApiDomain is set.
 
   HostedZoneId:
     Type: String
     Default: ""
-    Description: (Optional) Route53 hosted zone ID that contains ApiDomain
+    Description: (Optional) Route53 hosted zone ID that contains ApiDomain. Required to create a DNS record.
+
+  # ===== API stage =====
+  StageName:
+    Type: String
+    Default: "prod"
+    AllowedPattern: "^[a-zA-Z0-9_-]+$"
+    Description: API Gateway stage name (e.g., prod, dev, staging)
+
+  # ===== CORS configuration =====
+  CorsAllowOrigins:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: >
+      Comma-separated list of allowed CORS origins (e.g., https://pos.example.com,https://admin.example.com).
+      Leave empty to omit CORS config (not recommended for browser clients).
+
+  # ===== Optional SSM parameter path (JWT secret) =====
+  JwtSecretSsmParamName:
+    Type: String
+    Default: "RestaurantPOS/JWT_SECRET"
+    Description: SSM Parameter name (without leading slash) that stores the JWT secret.
 
 # ===========================
 # Conditions
 # ===========================
 Conditions:
-  UseCustomDomain: !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
+  UseCustomDomain: !And
+    - !Not [ !Equals [ !Ref ApiDomain, "" ] ]
+    - !Not [ !Equals [ !Ref ACMCertificateArn, "" ] ]
+
   CreateDnsRecord: !And
     - !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
     - !Condition UseCustomDomain
+
+  UseCors: !Not [ !Equals [ !Join [ "", !Ref CorsAllowOrigins ], "" ] ]
 
 # ===========================
 # Resources
@@ -42,7 +68,7 @@ Resources:
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Users
+      TableName: !Sub "${AWS::StackName}-Users"
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -63,7 +89,7 @@ Resources:
   OrdersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Orders
+      TableName: !Sub "${AWS::StackName}-Orders"
       AttributeDefinitions:
         - AttributeName: orderId
           AttributeType: S
@@ -75,7 +101,7 @@ Resources:
   PaymentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Payments
+      TableName: !Sub "${AWS::StackName}-Payments"
       AttributeDefinitions:
         - AttributeName: paymentId
           AttributeType: S
@@ -104,7 +130,7 @@ Resources:
   TablesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: Tables
+      TableName: !Sub "${AWS::StackName}-Tables"
       AttributeDefinitions:
         - AttributeName: tableNo
           AttributeType: S
@@ -116,7 +142,7 @@ Resources:
   MenuItemsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: MenuItems
+      TableName: !Sub "${AWS::StackName}-MenuItems"
       AttributeDefinitions:
         - AttributeName: menuName
           AttributeType: S
@@ -129,11 +155,13 @@ Resources:
   PaymentQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: pos-payment-queue
+      QueueName: !Sub "${AWS::StackName}-pos-payment-queue"
       VisibilityTimeout: 30
       MessageRetentionPeriod: 86400
       ReceiveMessageWaitTimeSeconds: 10
 
+  # NOTE: Prefer restricting who can send messages. This keeps original behavior (open send),
+  # but you should tighten it once you know the sender identity (e.g., Lambda role, specific AWS account, etc.)
   PaymentQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
@@ -142,7 +170,7 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowSendMessageFromPOS
+          - Sid: AllowSendMessage
             Effect: Allow
             Principal: "*"
             Action:
@@ -155,7 +183,7 @@ Resources:
   PosBackendLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: PosBackendLambdaRole
+      # Avoid fixed RoleName to prevent conflicts across stacks/environments
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -164,7 +192,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: PosBackendLambdaPolicy
+        - PolicyName: !Sub "${AWS::StackName}-PosBackendLambdaPolicy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -176,13 +204,13 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
-              # SSM Parameter Store
+              # SSM Parameter Store (JWT secret)
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/RestaurantPOS/JWT_SECRET"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${JwtSecretSsmParamName}"
 
               # DynamoDB (tables + GSIs)
               - Effect: Allow
@@ -216,7 +244,7 @@ Resources:
   BackendLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: RestaurantPosBackend
+      # Avoid fixed FunctionName to prevent conflicts across stacks/environments
       PackageType: Image
       Role: !GetAtt PosBackendLambdaRole.Arn
       MemorySize: 512
@@ -224,41 +252,53 @@ Resources:
       Environment:
         Variables:
           NODE_ENV: lambda
-          REGION: ap-southeast-2
+          REGION: !Ref AWS::Region
+          STAGE: !Ref StageName
+
+          # Resource identifiers for your code (prefer reading from env, not hardcoding in code)
           PAYMENT_QUEUE_URL: !Ref PaymentQueue
+          USERS_TABLE: !Ref UsersTable
+          ORDERS_TABLE: !Ref OrdersTable
+          PAYMENTS_TABLE: !Ref PaymentsTable
+          TABLES_TABLE: !Ref TablesTable
+          MENU_ITEMS_TABLE: !Ref MenuItemsTable
+
+          # Optional: if your code fetches JWT secret from SSM, it can use this name
+          JWT_SECRET_PARAM: !Ref JwtSecretSsmParamName
       Code:
         ImageUri: !Ref BackendImageUri
 
-  # ---------------- ApiGateway ----------------
+  # ---------------- ApiGateway (HTTP API) ----------------
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: PosBackendHttpApi
+      Name: !Sub "${AWS::StackName}-HttpApi"
       ProtocolType: HTTP
-      CorsConfiguration:
-        AllowOrigins:
-          - "https://pos.herman-tang.com"
-        AllowMethods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        AllowHeaders:
-          - "Content-Type"
-          - "Authorization"
-          - "X-Amz-Date"
-          - "X-Api-Key"
-          - "X-Amz-Security-Token"
-        AllowCredentials: true
+      CorsConfiguration: !If
+        - UseCors
+        - AllowOrigins: !Ref CorsAllowOrigins
+          AllowMethods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          AllowHeaders:
+            - "Content-Type"
+            - "Authorization"
+            - "X-Amz-Date"
+            - "X-Api-Key"
+            - "X-Amz-Security-Token"
+          AllowCredentials: true
+        - !Ref AWS::NoValue
 
   Integration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BackendLambda.Arn}/invocations
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BackendLambda.Arn}/invocations"
       PayloadFormatVersion: "2.0"
 
   RouteRoot:
@@ -266,20 +306,20 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: "ANY /"
-      Target: !Sub integrations/${Integration}
+      Target: !Sub "integrations/${Integration}"
 
   RouteAnyProxy:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: "ANY /{proxy+}"
-      Target: !Sub integrations/${Integration}
+      Target: !Sub "integrations/${Integration}"
 
   Stage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
       ApiId: !Ref HttpApi
-      StageName: prod
+      StageName: !Ref StageName
       AutoDeploy: true
 
   LambdaInvokePermission:
@@ -288,7 +328,7 @@ Resources:
       FunctionName: !Ref BackendLambda
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*"
 
   # ---------------- API Gateway Custom Domain + Route53 ----------------
   ApiCustomDomain:
@@ -333,15 +373,18 @@ Outputs:
     Value: !Ref TablesTable
   MenuItemsTableName:
     Value: !Ref MenuItemsTable
+
   PaymentQueueUrl:
     Description: The URL of the SQS queue used for payments
     Value: !Ref PaymentQueue
+
   PaymentQueueArn:
     Description: The ARN of the SQS queue
     Value: !GetAtt PaymentQueue.Arn
+
   ApiBaseUrl:
     Description: Base URL of the POS Backend API
     Value: !If
       - UseCustomDomain
       - !Sub "https://${ApiDomain}"
-      - !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+      - !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/"
