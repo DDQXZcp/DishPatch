@@ -1,12 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CampusRide Frontend – S3 (private) + CloudFront
+Description: DishPatch Control Frontend – S3 (private) + CloudFront
 
 Parameters:
   # ===== Custom domain for the SPA =====
   SiteDomain:
     Type: String
-    Default: campusride.herman-tang.com
-    Description: Public hostname for the SPA (e.g., campusride.herman-tang.com)
+    Default: control.dish-patch.com
+    Description: Public hostname for the SPA (e.g., control.dish-patch.com)
 
   # CloudFront requires a certificate in us-east-1
   ACMCertificateArn:
@@ -38,7 +38,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "campusride-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "dishpatch-logs-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -101,7 +101,7 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: CampusRide SPA
+        Comment: DishPatch Control SPA
         DefaultRootObject: index.html
 
         Origins:
@@ -158,7 +158,7 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}'
 
-  # Route53 A-record campusride.herman-tang.com -> CloudFront
+  # Route53 A-record dish-patch.com -> CloudFront
   SiteAliasRecord:
     Condition: CreateDnsRecord
     Type: AWS::Route53::RecordSet
