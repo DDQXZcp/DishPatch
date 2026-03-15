@@ -102,10 +102,10 @@ jobs:
         with:
           node-version: 20
           cache: yarn
-          cache-dependency-path: apps/frontend/yarn.lock
+          cache-dependency-path: control-frontend/yarn.lock
 
       - name: Install deps
-        working-directory: apps/frontend
+        working-directory: control-frontend
         run: |
           # Yarn 1.x
           if yarn --version | grep -q '^1\.'; then
@@ -117,13 +117,13 @@ jobs:
           fi
 
       - name: Build
-        working-directory: apps/frontend
+        working-directory: control-frontend
         env:
           VITE_BACKEND_URL: 'https://controlapi.dish-patch.com' # Use your backend URL here
         run: yarn build
 
       - name: Upload to S3
-        run: aws s3 sync apps/frontend/dist/ "s3://${{ steps.outputs.outputs.bucket }}/" --delete
+        run: aws s3 sync control-frontend/dist/ "s3://${{ steps.outputs.outputs.bucket }}/" --delete
 
       - name: Invalidate CloudFront cache
         run: |
