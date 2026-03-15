@@ -1,3 +1,6 @@
+# This workflow builds and deploys the POS backend, which is a Lambda function packaged as a container image.
+# It is triggered by changes to the backend code or infrastructure template.
+
 name: Deploy POS Backend (Lambda container + CFN)
 
 on:

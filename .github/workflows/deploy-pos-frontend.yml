@@ -1,3 +1,6 @@
+# This workflow deploys the POS frontend to S3/CloudFront using CloudFormation.
+# It is triggered by changes to the frontend code or infrastructure template.
+
 name: Deploy POS Frontend
 
 on:

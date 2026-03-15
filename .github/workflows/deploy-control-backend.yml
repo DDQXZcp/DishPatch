@@ -1,0 +1,91 @@
+# This workflow builds the control backend using Maven and deploys it to an EC2 instance.
+# It is triggered by changes to the backend code or infrastructure template.
+
+# Before this step, we need to manually set up the EC2 instance and configure elastic IP, security groups, and IAM role. 
+# The deployment script will handle copying files and restarting the service.
+
+name: Build and Deploy Backend (Maven → EC2)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'control-backend/**'
+      - 'control-backend/virtual-robots/**'
+      - '.github/workflows/deploy-control-backend.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  EC2_HOST: 52.63.53.185
+  EC2_USER: ec2-user
+  EC2_SSH_KEY_SECRET: EC2_SSH_KEY
+  JAR_NAME: dishpatch-control-backend-1.0.0.jar # Defined in pom.xml
+  REMOTE_DIR: /home/ec2-user/app
+  SERVICE_NAME: dishpatch-control-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: 17
+
+    - name: Build with Maven
+      working-directory: apps/backend
+      run: mvn clean package -DskipTests
+
+    - name: Find built JAR file
+      id: find-jar
+      run: |
+        JAR_FILE=$(find apps/backend/target -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+        if [ -z "$JAR_FILE" ]; then
+          echo "No JAR file found in target directory!"
+          exit 1
+        fi
+        echo "jar=$JAR_FILE" >> $GITHUB_OUTPUT
+
+    - name: Prepare SSH key
+      id: ssh-key
+      run: |
+        echo "${{ secrets[env.EC2_SSH_KEY_SECRET] }}" > key.pem
+        chmod 600 key.pem
+
+    - name: Copy JAR to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i key.pem "${{ steps.find-jar.outputs.jar }}" ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/
+
+    # Copy Python app files
+    - name: Copy Python app to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i key.pem apps/things/escooter-ec2.py ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/
+
+    # For better security, now only scp the certificate directly from my device
+
+    # Now use a script to set up the backend service
+    - name: Copy setup script to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i key.pem .github/scripts/setup-backend-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
+
+    # Copy escooter setup script to EC2
+    - name: Copy escooter setup script to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i key.pem .github/scripts/setup-escooter-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
+
+    - name: Run setup script on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-backend-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"
+
+    # Run escooter setup script
+    - name: Run escooter setup script on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-escooter-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"

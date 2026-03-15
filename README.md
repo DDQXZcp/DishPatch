@@ -80,6 +80,12 @@ The POS frontend is a React web application hosted on **Amazon S3** and delivere
 The POS backend exposes APIs for menu/table queries and order submission. It uses **API Gateway + AWS Lambda** for request handling and **DynamoDB** for persistent storage.
 
 
+**Initialize DynamoDB Menu**
+```
+cd pos-backend
+node scripts/seedMenus.js
+```
+
 <!-- > Note: If this module is currently hosted in a different repo (e.g., CampusRide), replace the link above to keep naming consistent. -->
 
 ---

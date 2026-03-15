@@ -137,3 +137,11 @@ export const menus = [
   { id: 4, name: "Omelet Rice", bgColor: "#285430" ,icon: "🥘", items: omeletRice },
   { id: 5, name: "Sandwiches", bgColor: "#5b45b0" ,icon: "🥪", items: sandwiches }
 ]
+
+export const tables = [
+  { tableNo: "A1", seats: 4 },
+  { tableNo: "A2", seats: 4 },
+  { tableNo: "A3", seats: 4 },
+  { tableNo: "A4", seats: 4 },
+  { tableNo: "A5", seats: 4 },
+];

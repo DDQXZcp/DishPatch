@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Start/Stop a single EC2 instance on a weekday schedule (separate Lambdas, no action parameter)
+
+Parameters:
+  InstanceId:
+    Type: String
+    Description: EC2 instance to schedule (e.g. i-0123456789abcdef0)
+
+Resources:
+  # ---------- IAM ----------
+  StartStopLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StartStopOneInstance
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:DescribeInstances
+                Resource:
+                  - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}
+
+  # ---------- Lambda: START ----------
+  StartEC2Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt StartStopLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref InstanceId
+      Code:
+        ZipFile: |
+          import os, boto3, botocore
+          ec2 = boto3.client('ec2')
+          INSTANCE_ID = os.environ['INSTANCE_ID']
+
+          def handler(event, context):
+              try:
+                  ec2.start_instances(InstanceIds=[INSTANCE_ID])
+              except botocore.exceptions.ClientError as e:
+                  # Ignore if already running
+                  if e.response['Error']['Code'] != 'IncorrectInstanceState':
+                      raise
+              return {"status":"ok","did":"start","instance":INSTANCE_ID}
+
+  # ---------- Lambda: STOP ----------
+  StopEC2Lambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt StartStopLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref InstanceId
+      Code:
+        ZipFile: |
+          import os, boto3, botocore
+          ec2 = boto3.client('ec2')
+          INSTANCE_ID = os.environ['INSTANCE_ID']
+
+          def handler(event, context):
+              try:
+                  ec2.stop_instances(InstanceIds=[INSTANCE_ID])
+              except botocore.exceptions.ClientError as e:
+                  # Ignore if already stopped
+                  if e.response['Error']['Code'] != 'IncorrectInstanceState':
+                      raise
+              return {"status":"ok","did":"stop","instance":INSTANCE_ID}
+
+  # ---------- EventBridge Rules (UTC) ----------
+  # 08:00 AEST == 22:00 UTC previous day (Mon–Fri). Adjust if you need AEDT handling.
+  StartRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'cron(0 22 ? * SUN-THU *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StartEC2Lambda.Arn
+          Id: StartEC2Target
+
+  # 17:00 AEST == 07:00 UTC same day (Mon–Fri).
+  StopRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'cron(0 7 ? * MON-FRI *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StopEC2Lambda.Arn
+          Id: StopEC2Target
+
+  # ---------- Lambda invoke permissions ----------
+  PermissionForStartRule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StartEC2Lambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StartRule.Arn
+
+  PermissionForStopRule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StopEC2Lambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StopRule.Arn

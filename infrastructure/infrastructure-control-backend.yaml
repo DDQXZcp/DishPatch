@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 instance for Spring Boot backend (t3.micro) with magnetic storage and Route53 DNS
+
+Parameters:
+  HostedZoneId:
+    Type: String
+    Default: Z08785651YWXFF77ALIFS 
+    Description: The Route 53 hosted zone ID for herman-tang.com
+
+Resources:
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH and HTTP access for backend
+      VpcId: vpc-04588e93c954ce990
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0    # ⚠️ Consider restricting SSH access for security
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  BackendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: CampusRide
+      SubnetId: subnet-0f66fb5bc8794a840
+      SecurityGroupIds:
+        - !Ref BackendSecurityGroup
+      ImageId: ami-0bd143bcbc97ff02d # Amazon Linux 2023 kernel-6.1 AMI
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: standard  # magnetic (HDD) storage to save cost
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          dnf install -y java-17-amazon-corretto-devel python3 python3-pip
+          python3 -m pip install --upgrade pip
+          pip3 install paho-mqtt
+          mkdir -p /home/ec2-user/app
+
+  BackendEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: eipalloc-0408749d93b2d3960
+      InstanceId: !Ref BackendInstance
+
+  BackendDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: api.campusride.herman-tang.com
+      Type: A
+      TTL: 300
+      ResourceRecords:
+        - 52.63.53.185  # Your Elastic IP
+
+Outputs:
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref BackendInstance
+
+  PublicIP:
+    Description: Public IP address of backend instance
+    Value: 52.63.53.185
+
+  SecurityGroupId:
+    Description: Security group for backend
+    Value: !Ref BackendSecurityGroup
+
+  DNSName:
+    Description: DNS name for backend API
+    Value: api.campusride.herman-tang.com
