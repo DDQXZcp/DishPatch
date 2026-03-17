@@ -41,13 +41,13 @@ jobs:
         java-version: 17
 
     - name: Build with Maven
-      working-directory: apps/backend
+      working-directory: control-backend
       run: mvn clean package -DskipTests
 
     - name: Find built JAR file
       id: find-jar
       run: |
-        JAR_FILE=$(find apps/backend/target -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+        JAR_FILE=$(find control-backend/target -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
         if [ -z "$JAR_FILE" ]; then
           echo "No JAR file found in target directory!"
           exit 1
@@ -67,25 +67,25 @@ jobs:
     # Copy Python app files
     - name: Copy Python app to EC2
       run: |
-        scp -o StrictHostKeyChecking=no -i key.pem apps/things/escooter-ec2.py ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/
+        scp -o StrictHostKeyChecking=no -i key.pem control-backend/virtual-robots/virtual-robots.py ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/
 
     # For better security, now only scp the certificate directly from my device
 
     # Now use a script to set up the backend service
     - name: Copy setup script to EC2
       run: |
-        scp -o StrictHostKeyChecking=no -i key.pem .github/scripts/setup-backend-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
+        scp -o StrictHostKeyChecking=no -i key.pem control-backend/deployment-scripts/setup-control-backend-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
 
-    # Copy escooter setup script to EC2
-    - name: Copy escooter setup script to EC2
+    # Copy virtual robots setup script to EC2
+    - name: Copy virtual robots setup script to EC2
       run: |
-        scp -o StrictHostKeyChecking=no -i key.pem .github/scripts/setup-escooter-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
+        scp -o StrictHostKeyChecking=no -i key.pem control-backend/deployment-scripts/setup-virtual-robots-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
 
     - name: Run setup script on EC2
       run: |
-        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-backend-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"
+        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-control-backend-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"
 
-    # Run escooter setup script
-    - name: Run escooter setup script on EC2
+    # Run virtual robots setup script
+    - name: Run virtual robots setup script on EC2
       run: |
-        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-escooter-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"
+        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-virtual-robots-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"

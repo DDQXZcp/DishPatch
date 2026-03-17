@@ -1,8 +1,8 @@
 #!/bin/bash
 
-SERVICE_NAME=campusride-backend
+SERVICE_NAME=dishpatch-control-backend
 REMOTE_DIR=/home/ec2-user/app
-JAR_NAME=campusride-backend-1.0.0.jar
+JAR_NAME=dishpatch-control-backend-1.0.0.jar
 
 MQTT_USERNAME=$1
 MQTT_PASSWORD=$2
@@ -11,7 +11,7 @@ SERVICE_FILE=/etc/systemd/system/${SERVICE_NAME}.service
 
 sudo tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
-Description=CampusRide Backend Service
+Description=Dishpatch Control Backend Service
 After=network.target
 
 [Service]
