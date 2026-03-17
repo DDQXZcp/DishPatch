@@ -17,7 +17,7 @@ After=network.target
 [Service]
 User=ec2-user
 WorkingDirectory=$REMOTE_DIR
-ExecStart=/usr/bin/java -jar $REMOTE_DIR/$JAR_NAME
+ExecStart=/usr/bin/java -jar $REMOTE_DIR/$JAR_NAME --server.port=8081
 Restart=on-failure
 Environment=MQTT_USERNAME=$MQTT_USERNAME
 Environment=MQTT_PASSWORD=$MQTT_PASSWORD
