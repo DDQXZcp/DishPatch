@@ -45,7 +45,7 @@ public class ScooterService {
                 throw new RuntimeException("MQTT_USERNAME or MQTT_PASSWORD environment variables are not set.");
             }
 
-            MqttClient mqttClient = new MqttClient(broker, "backend");
+            MqttClient mqttClient = new MqttClient(broker, "dishpatch-controlbackend");
             MqttConnectOptions options = new MqttConnectOptions();
             options.setUserName(username);
             options.setPassword(password.toCharArray());
