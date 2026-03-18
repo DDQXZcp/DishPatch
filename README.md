@@ -163,3 +163,39 @@ Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for g
 ![Status](https://img.shields.io/badge/status-on%20hold-lightgrey?labelColor=555555)
 ![Status](https://img.shields.io/badge/status-deprecated-red?labelColor=555555)
 ![Status](https://img.shields.io/badge/status-experimental-orange?labelColor=555555) -->
+
+
+## Dependencies
+
+### Step 1 - Install Node.js & NPM as Pre-build
+- https://nodejs.org/en/download
+- Yarn
+```
+npm --version
+node --version
+```
+### Step 2 - Install Yarn via NPM
+
+```
+npm install -g yarn
+yarn --version
+```
+
+### Step 3 - Download the Components via Yarn
+
+```
+cd control-frontend
+yarn
+```
+This will create a node_modules folder and download the dependencies for that component.
+
+### Step 4 - Run the Components via yarn
+
+Check package.json for each component for what command should be run
+e.g. for control-frontend
+
+```
+yarn dev
+```
+
+
