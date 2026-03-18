@@ -10,18 +10,21 @@
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
 ![SQS](https://img.shields.io/badge/AWS%20SQS-FF4F8B?logo=amazonsqs&logoColor=white)
 ![WebSocket](https://img.shields.io/badge/WebSocket-000000?logo=socketdotio&logoColor=white)
+
 <!-- ![React](https://img.shields.io/badge/react-frontend-61DAFB?logo=react&logoColor=white&labelColor=000000) -->
 
-
 # DishPatch
+
 DishPatch is an open-source, AWS cloud-based restaurant service-robot platform that integrates ordering, dispatch/control, and robotics fleet execution.
 
 <img alt="DishPatch Architecture" src="./img/DishPatch.png" />
 
 ## Overview
+
 Service robots are increasingly adopted in restaurants and hotels. While commercial platforms (e.g., Yunji, Pudu) are mature and reliable, they are often expensive, closed-source, and difficult for individual developers to customise or extend.
 
 DishPatch provides a modular architecture spanning:
+
 - **Ordering System** — POS ordering and data storage
 - **Control System** — monitoring, order processing, and job scheduling
 - **Robotics Fleet** — fleet management, robot state streaming, and task execution
@@ -29,6 +32,7 @@ DishPatch provides a modular architecture spanning:
 The project targets developers with foundational software/robotics experience who want to build, test, and iterate on a complete system—from simulation to real-world deployment.
 
 ## System Workflow
+
 This diagram summarises the end-to-end workflow across ordering, dispatch/control, and robot fleet execution.
 
 <img alt="DishPatch Basic Workflow" src="./img/Workflow DishPatch.png" />
@@ -62,8 +66,6 @@ The POS system provides a customer-facing ordering interface used to place order
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
 
-
-
 <img alt="POS System Frontend" src="./img/POS System Frontend.png" />
 <p align="center">
   HTCafePOS POS Frontend
@@ -79,8 +81,8 @@ The POS frontend is a React web application hosted on **Amazon S3** and delivere
 
 The POS backend exposes APIs for menu/table queries and order submission. It uses **API Gateway + AWS Lambda** for request handling and **DynamoDB** for persistent storage.
 
-
 **Initialize DynamoDB Menu**
+
 ```
 cd pos-backend
 node scripts/seedMenus.js
@@ -104,6 +106,7 @@ node scripts/seedMenus.js
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
 
 The control system coordinates orders and fleet operations. It is intended to include:
+
 - **Monitoring Dashboard** — real-time robot telemetry (location, heading, speed, battery)
 
 <img alt="Control System Frontend" src="./img/CampusRide-Frontend.png" />
@@ -111,19 +114,18 @@ The control system coordinates orders and fleet operations. It is intended to in
   CampusRide Frontend
 </p>
 
-**Control Backend (Dispatch & Orchestration)** 
+**Control Backend (Dispatch & Orchestration)**
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Spring%20Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?logo=springboot&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
 ![SQS](https://img.shields.io/badge/AWS%20SQS-FF4F8B?logo=amazonsqs&logoColor=white)
 ![WebSocket](https://img.shields.io/badge/WebSocket-000000?logo=socketdotio&logoColor=white)
 
-
 - **Job Scheduler** — transforms orders into tasks and assigns delivery jobs
 - **Fleet Manager** — manages high-level robot coordination and task execution
 
-
 **Planned deliverables**
+
 - REST APIs for orders, tasks, and fleet management
 - real-time status streaming via WebSocket/MQTT
 - scheduling strategies (FIFO, priority-based, zone-aware, load balancing)
@@ -132,11 +134,11 @@ The control system coordinates orders and fleet operations. It is intended to in
 
 ### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
 
-The robotics layer is responsible for executing delivery tasks and publishing robot state. 
+The robotics layer is responsible for executing delivery tasks and publishing robot state.
 
 Initial development will focus on a virtual/simulated environment to validate end-to-end behaviour. Support for physical robots will be introduced once the platform interfaces and workflows stabilise.
 
-**Virtual Robot Fleet** 
+**Virtual Robot Fleet**
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 ![ROS%202](https://img.shields.io/badge/ROS%202-22314E?logo=ros&logoColor=white)
@@ -147,10 +149,12 @@ Initial development will focus on a virtual/simulated environment to validate en
 - **ROS Bridge** — A bridge component that converts ROS topics into WebSocket messages for communication with the control backend, enabling real-time telemetry streaming and command dispatch.
 
 ## Deployment & CI/CD
-DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate   to AWS using IAM OIDC (no stored AWS keys).
+
+DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate to AWS using IAM OIDC (no stored AWS keys).
 See [deployment.md](./docs/deployment.md) for details.
 
 ## Contributing
+
 Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 <!-- ![Status](https://img.shields.io/badge/status-in%20progress-yellow?labelColor=555555)
@@ -164,16 +168,18 @@ Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for g
 ![Status](https://img.shields.io/badge/status-deprecated-red?labelColor=555555)
 ![Status](https://img.shields.io/badge/status-experimental-orange?labelColor=555555) -->
 
-
 ## Dependencies
 
 ### Step 1 - Install Node.js & NPM as Pre-build
+
 - https://nodejs.org/en/download
 - Yarn
+
 ```
 npm --version
 node --version
 ```
+
 ### Step 2 - Install Yarn via NPM
 
 ```
@@ -187,6 +193,7 @@ yarn --version
 cd control-frontend
 yarn
 ```
+
 This will create a node_modules folder and download the dependencies for that component.
 
 ### Step 4 - Run the Components via yarn
@@ -197,5 +204,3 @@ e.g. for control-frontend
 ```
 yarn dev
 ```
-
-
