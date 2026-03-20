@@ -60,9 +60,8 @@ Robots receive high-level commands from the Control System and autonomously navi
 ### (1) POS System ![Status](https://img.shields.io/badge/status-done-brightgreen)
 
 <p align="center">
-  Implementation: <strong>HTCafePOS</strong> ·
-  <a href="https://pos.herman-tang.com/menu">Demo</a> ·
-  <a href="https://github.com/DDQXZcp/HTCafePOS/">Repository</a>
+  <strong>POS System</strong> 
+  <a href="https://pos.dish-patch.com/">Live Demo</a>
 </p>
 
 The POS system provides a customer-facing ordering interface used to place orders and generate delivery tasks.
@@ -101,9 +100,8 @@ node scripts/seedMenus.js
 ### (2) Control System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
 
 <p align="center">
-  Existing Work <strong>CampusRide</strong> — Personal POS Project ·
-  <a href="https://campusride.herman-tang.com/">Demo</a> ·
-  <a href="https://github.com/DDQXZcp/DishPatch/tree/main">Repository</a>
+  <strong>Control System</strong> 
+  <a href="https://control.dish-patch.com/">Live Demo</a>
 </p>
 
 **Control Frontend (Operator Dashboard)**
