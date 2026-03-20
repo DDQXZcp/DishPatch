@@ -1,4 +1,14 @@
 {
+  "name": "spring-boot-backend",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "mvn spring-boot:run",
+    "dev": "mvn spring-boot:run",
+    "build": "mvn clean package",
+    "test": "mvn test",
+    "clean": "mvn clean"
+  },
   "dependencies": {
     "sockjs-client": "^1.6.1"
   }

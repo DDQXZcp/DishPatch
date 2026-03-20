@@ -53,26 +53,3 @@ Thumbs.db
 *.sln.docstates
 *.crt
 *.env
-
-# ===============================
-# Backend - Spring Boot
-# ===============================
-
-apps/backend/target/
-
-# ASP.NET Secrets (if any)
-secrets.json
-
-# Local environment settings
-appsettings.Development.json
-*.db
-*.sqlite
-
-# ===============================
-# Logs & Temporary Files
-# ===============================
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*

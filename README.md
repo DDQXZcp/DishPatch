@@ -187,7 +187,25 @@ npm install -g yarn
 yarn --version
 ```
 
-### Step 3 - Download the Components via Yarn
+### Step 3 - Install Java & Maven via Chocolatey (for Control Backend)
+
+Control Backend is running on Spring Boot Backend
+
+Install Chocolatey
+https://chocolatey.org/install
+
+Install Java
+```
+choco install openjdk17
+```
+
+Install Maven
+https://maven.apache.org/install.html
+```
+choco install maven
+```
+
+### Step 4 - Download the Components via Yarn
 
 ```
 cd control-frontend
@@ -196,7 +214,7 @@ yarn
 
 This will create a node_modules folder and download the dependencies for that component.
 
-### Step 4 - Run the Components via yarn
+### Step 5 - Run the Components via yarn
 
 Check package.json for each component for what command should be run
 e.g. for control-frontend
