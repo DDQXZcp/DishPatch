@@ -168,57 +168,60 @@ Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for g
 ![Status](https://img.shields.io/badge/status-deprecated-red?labelColor=555555)
 ![Status](https://img.shields.io/badge/status-experimental-orange?labelColor=555555) -->
 
+
 ## Dependencies
 
-### Step 1 - Install Node.js & NPM as Pre-build
+### Step 1 - Install Node.js as Pre-build
 
-- https://nodejs.org/en/download
-- Yarn
+Install Node.js & NPM as Pre-build https://nodejs.org/en/download
 
+Check if the installation is successful.
 ```
 npm --version
 node --version
 ```
 
 ### Step 2 - Install Yarn via NPM
-
+Install yarn via npm
 ```
 npm install -g yarn
+```
+Check if the installation is successful
+```
 yarn --version
 ```
 
 ### Step 3 - Install Java & Maven via Chocolatey (for Control Backend)
 
-Control Backend is running on Spring Boot Backend
+Control Backend is running on Spring Boot Backend, which runs on Java and build application using maven.
 
-Install Chocolatey
+**Step 3.1** - Install Chocolatey
 https://chocolatey.org/install
 
-Install Java
+**Step 3.2** - Install Java
 ```
 choco install openjdk17
 ```
 
-Install Maven
+**Step 3.3** - Install Maven
 https://maven.apache.org/install.html
 ```
 choco install maven
 ```
 
-### Step 4 - Download the Components via Yarn
+### Step 4 - Run the Components via yarn
 
+**Step 4.1** - Go inside component's folder, e.g.
 ```
 cd control-frontend
-yarn
 ```
-
-This will create a node_modules folder and download the dependencies for that component.
-
-### Step 5 - Run the Components via yarn
-
-Check package.json for each component for what command should be run
-e.g. for control-frontend
-
+**Step 4.2** - For the first time, run
 ```
-yarn dev
+yarn install
+```
+This will install all the dependencies in node_modules folder.
+
+**Step 4.3** - Launch the component
+```
+yarn start
 ```
