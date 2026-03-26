@@ -4,16 +4,17 @@ import { Link, useLocation } from "react-router";
 // Assume these icons are imported from an icon library
 import {
   BoxCubeIcon,
-  CalenderIcon,
+  // CalenderIcon,
   ChevronDownIcon,
   GridIcon,
   HorizontaLDots,
-  ListIcon,
-  PageIcon,
+  // ListIcon,
+  // PageIcon,
   PieChartIcon,
   PlugInIcon,
-  TableIcon,
+  // TableIcon,
   UserCircleIcon,
+  GroupIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -41,6 +42,11 @@ const navItems: NavItem[] = [
     icon: <UserCircleIcon />,
     name: "User Profile",
     path: "/profile",
+  },
+  {
+    icon: <GroupIcon />,
+    name: "Contributors",
+    path: "/contributors",
   },
   // {
   //   name: "Forms",
