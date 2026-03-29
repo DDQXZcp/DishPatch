@@ -86,7 +86,7 @@ const Header: React.FC<HeaderProps> = ({ onClick, onToggle }) => {
             />
             <img
               className="hidden dark:block"
-              src="./images/logo/Jinmao-Lisi-Signature-HermanT-dark.svg"
+              src="./images/logo/dishpatch-dark.svg"
               alt="Logo"
             />
           </Link>
