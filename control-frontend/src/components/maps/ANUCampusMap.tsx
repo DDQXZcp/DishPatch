@@ -1,8 +1,8 @@
 import { MapContainer, ImageOverlay, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useScooterContext } from '../../context/ScooterWebSocketProvider';
-import { Scooter } from '../../types/Scooter';
+// import { useScooterContext } from '../../context/ScooterWebSocketProvider';
+// import { Scooter } from '../../types/Scooter';
 
 // Fix for default markers in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -12,26 +12,23 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// ANU campus coordinates
-const ANU_CENTER: [number, number] = [-35.276781489695345, 149.12011959981004];
-const ZOOM_LEVEL = 16;
+// function getScooterIcon(status: 'Running' | 'Locked' | 'Maintenance') {
+//   let borderColor = '';
 
-function getScooterIcon(status: 'Running' | 'Locked' | 'Maintenance') {
-  let borderColor = '';
+//   if (status === 'Running') borderColor = 'border-green-500';
+//   else if (status === 'Locked') borderColor = 'border-yellow-500';
+//   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
-  if (status === 'Running') borderColor = 'border-green-500';
-  else if (status === 'Locked') borderColor = 'border-yellow-500';
-  else if (status === 'Maintenance') borderColor = 'border-red-500';
+//   return new L.Icon({
+//     iconUrl: '/images/scooter/scooter-neuron-icon.jpg',
+//     iconSize: [40, 40],
+//     iconAnchor: [20, 20],
+//     popupAnchor: [0, -20],
+//     className: `rounded-full border-2 ${borderColor} shadow-lg`
+//   });
+// }
 
-  return new L.Icon({
-    iconUrl: '/images/scooter/scooter-neuron-icon.jpg',
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -20],
-    className: `rounded-full border-2 ${borderColor} shadow-lg`
-  });
-}
-
+const FLOORPLAN_URL = "/maps/the-hive-floorplan.svg";
 const FLOORPLAN_BOUNDS: [[number, number], [number, number]] = [
   [0, 0],
   [2468, 1696],
@@ -56,7 +53,7 @@ function RecenterButton() {
 }
 
 export default function ANUCampusMap() {
-  const { scooters } = useScooterContext();
+  // const { scooters } = useScooterContext();
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden">
@@ -72,7 +69,7 @@ export default function ANUCampusMap() {
       >
         <RecenterButton />
         <ImageOverlay
-          url="/maps/the-hive-floorplan.svg"
+          url={FLOORPLAN_URL}
           bounds={FLOORPLAN_BOUNDS}
         />
       </MapContainer>
