@@ -1,21 +1,20 @@
 package com.campusride.service;
 
 import com.campusride.model.Scooter;
-import com.campusride.utils.SSLUtils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import io.github.cdimascio.dotenv.Dotenv;
-import org.eclipse.paho.client.mqttv3.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Controller;
 
-import java.io.File;
+
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Logger;
 
-@Service
+@Controller //Change to @service when @MessageMapping is moved
 public class ScooterService {
 
     private static final Logger logger = Logger.getLogger(ScooterService.class.getName());
@@ -30,62 +29,34 @@ public class ScooterService {
 
     private static final long EXPIRY_MILLIS = 20_000L; // 20 seconds
 
-    public ScooterService() {
-        initializeMQTT();
-    }
+    @MessageMapping("/robot-data") // Temporary Placement. Should have a dedicated file for managing mappings
+    private void manageIncomingData(@Payload List<Scooter> updatedScooters) {
+        logger.info("Received from websocket: " + updatedScooters);
+            synchronized (scooters) {
+                for (Scooter incomingScooter : updatedScooters){
+                    Optional<Scooter> existingScooter = scooters.stream()
+                            .filter(s -> s.getId() == incomingScooter.getId())
+                            .findFirst();
 
-    private void initializeMQTT() {
-        try {
-            // Load MQTT credentials from environment variables instead of local .env file
-            String broker = "ssl://m178f7c2.ala.asia-southeast1.emqxsl.com:8883";
-            String username = System.getenv("MQTT_USERNAME");
-            String password = System.getenv("MQTT_PASSWORD");
-
-            if (username == null || password == null) {
-                throw new RuntimeException("MQTT_USERNAME or MQTT_PASSWORD environment variables are not set.");
+                    if (existingScooter.isPresent()) {
+                        Scooter scooter = existingScooter.get();
+                        scooter.setLat(incomingScooter.getLat());
+                        scooter.setLng(incomingScooter.getLng());
+                        scooter.setStatus(incomingScooter.getStatus());
+                        scooter.setBattery(incomingScooter.getBattery());
+                        scooter.setSpeed(incomingScooter.getSpeed());
+                    } else {
+                        scooters.add(incomingScooter);
+                    }
+                    // Update last update time
+                    scooterLastUpdMap.put(incomingScooter.getId(), System.currentTimeMillis());
+                }
             }
 
-            MqttClient mqttClient = new MqttClient(broker, "dishpatch-controlbackend");
-            MqttConnectOptions options = new MqttConnectOptions();
-            options.setUserName(username);
-            options.setPassword(password.toCharArray());
-            options.setSocketFactory(SSLUtils.getSocketFactory("/home/ec2-user/emqxsl-ca.crt"));
-
-            mqttClient.connect(options);
-            mqttClient.subscribe("scooter/data", (topic, message) -> {
-                String payload = new String(message.getPayload());
-                logger.info("Received from MQTT: " + payload);
-
-                List<Scooter> updatedScooters = gson.fromJson(payload, new TypeToken<List<Scooter>>() {}.getType());
-                synchronized (scooters) {
-                    for (Scooter incomingScooter : updatedScooters){
-                        Optional<Scooter> existingScooter = scooters.stream()
-                                .filter(s -> s.getId() == incomingScooter.getId())
-                                .findFirst();
-
-                        if (existingScooter.isPresent()) {
-                            Scooter scooter = existingScooter.get();
-                            scooter.setLat(incomingScooter.getLat());
-                            scooter.setLng(incomingScooter.getLng());
-                            scooter.setStatus(incomingScooter.getStatus());
-                            scooter.setBattery(incomingScooter.getBattery());
-                            scooter.setSpeed(incomingScooter.getSpeed());
-                        } else {
-                            scooters.add(incomingScooter);
-                        }
-                        // Update last update time
-                        scooterLastUpdMap.put(incomingScooter.getId(), System.currentTimeMillis());
-                    }
-                }
-
-                updateStats();
-                messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
-                messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
-            });
-        } catch (Exception e) {
-            logger.severe("MQTT connection failed: " + e.getMessage());
+            updateStats();
+            messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
+            messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
         }
-    }
 
     // Sort scooters by status and filter out expired ones
     private List<Scooter> getScootersSortedByStatus() {
