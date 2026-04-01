@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { MoreDotIcon } from "../../icons";
-import CountryMap from "./CountryMap";
 import ANUCampusMap from "../maps/ANUCampusMap";
 import { useScooterContext } from "../../context/ScooterWebSocketProvider";
 
@@ -32,10 +31,10 @@ export default function DemographicCard() {
       <div className="flex justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Scooter Operational Map
+            Robot Operational Map
           </h3>
           <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-            Scooter operational status across the ANU campus
+            Robot operational status in the restaurant
           </p>
         </div>
         <div className="relative inline-block">
@@ -78,7 +77,7 @@ export default function DemographicCard() {
             </div>
             <div>
               <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                Running Scooters
+                Running Robots
               </p>
               <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
                 {runningCount} Available for rent
@@ -106,7 +105,7 @@ export default function DemographicCard() {
             </div>
             <div>
               <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                Locked Scooters
+                Locked Robots
               </p>
               <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
                 {lockedCount} Currently in use
