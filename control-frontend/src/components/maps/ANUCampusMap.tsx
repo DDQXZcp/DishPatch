@@ -12,14 +12,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-<!-- function getScooterIcon(status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance') {
-  let borderColor = '';
+// function getScooterIcon(status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance') {
+//   let borderColor = '';
 
-  if (status === 'Serving') borderColor = 'border-green-500';
-  else if (status === 'Pickup') borderColor = 'border-yellow-500';
-  else if (status == 'Returning') borderColor = 'border-blue-500';
-  else if (status == 'Waiting') borderColor = 'border-purple-500';
-  else if (status === 'Maintenance') borderColor = 'border-red-500'; -->
+//   if (status === 'Serving') borderColor = 'border-green-500';
+//   else if (status === 'Pickup') borderColor = 'border-yellow-500';
+//   else if (status == 'Returning') borderColor = 'border-blue-500';
+//   else if (status == 'Waiting') borderColor = 'border-purple-500';
+//   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
 //   return new L.Icon({
 //     iconUrl: '/images/scooter/scooter-neuron-icon.jpg',
@@ -74,7 +74,7 @@ export default function ANUCampusMap() {
           url={FLOORPLAN_URL}
           bounds={FLOORPLAN_BOUNDS}
         />
-<!--         {(scooters as Scooter[]).map((scooter) => (
+        {/*{(scooters as Scooter[]).map((scooter) => (
           <Marker key={scooter.id} position={[scooter.x, scooter.y]} icon={getScooterIcon(scooter.status)}>
             <Popup>
               <div className="text-sm">
@@ -92,7 +92,7 @@ export default function ANUCampusMap() {
               </div>
             </Popup>
           </Marker>
-        ))} -->
+        ))}*/}
       </MapContainer>
     </div>
   );
