@@ -128,11 +128,15 @@ export default function RecentOrders() {
                   <Badge
                     size="sm"
                     color={
-                      scooter.status === "Running"
+                      scooter.status === "Serving"
                         ? "success"
-                        : scooter.status === "Locked"
+                        : scooter.status === "Pickup"
                         ? "warning"
-                        : "error"
+                        : scooter.status === "Returning"
+                        ? "info"
+                        : scooter.status === "Waiting"
+                        ? "dark"
+                        : "error"  // Maintenance
                     }
                   >
                     {scooter.status}

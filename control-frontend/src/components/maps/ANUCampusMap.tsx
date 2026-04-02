@@ -14,14 +14,17 @@ L.Icon.Default.mergeOptions({
 });
 
 // ANU campus coordinates
-const ANU_CENTER: [number, number] = [-35.276781489695345, 149.12011959981004];
+// const ANU_CENTER: [number, number] = [-35.276781489695345, 149.12011959981004];
+const ANU_CENTER: [number, number] = [100, 500];
 const ZOOM_LEVEL = 16;
 
-function getScooterIcon(status: 'Running' | 'Locked' | 'Maintenance') {
+function getScooterIcon(status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance') {
   let borderColor = '';
 
-  if (status === 'Running') borderColor = 'border-green-500';
-  else if (status === 'Locked') borderColor = 'border-yellow-500';
+  if (status === 'Serving') borderColor = 'border-green-500';
+  else if (status === 'Pickup') borderColor = 'border-yellow-500';
+  else if (status == 'Returning') borderColor = 'border-blue-500';
+  else if (status == 'Waiting') borderColor = 'border-purple-500';
   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
   return new L.Icon({
@@ -63,14 +66,16 @@ export default function ANUCampusMap() {
           attribution="&copy; OpenStreetMap contributors"
         />
         {(scooters as Scooter[]).map((scooter) => (
-          <Marker key={scooter.id} position={[scooter.lat, scooter.lng]} icon={getScooterIcon(scooter.status)}>
+          <Marker key={scooter.id} position={[scooter.x, scooter.y]} icon={getScooterIcon(scooter.status)}>
             <Popup>
               <div className="text-sm">
                 <strong>{scooter.name}</strong>
                 <br />
                 <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                  scooter.status === 'Running' ? 'bg-green-100 text-green-800' :
-                  scooter.status === 'Locked' ? 'bg-yellow-100 text-yellow-800' :
+                  scooter.status === 'Serving' ? 'bg-green-100 text-green-800' :
+                  scooter.status === 'Pickup' ? 'bg-yellow-100 text-yellow-800' :
+                  scooter.status === 'Returning' ? 'bg-blue-100 text-blue-800' :
+                  scooter.status === 'Waiting' ? 'bg-purple-100 text-purple-800' :
                   'bg-red-100 text-red-800'
                 }`}>
                   {scooter.status}

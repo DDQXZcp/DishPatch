@@ -4,25 +4,27 @@ import { Client, IMessage } from '@stomp/stompjs';
 
 interface ScooterData {
   id: number;
-  name: string; // 👈 Add this line
-  lat: number;
-  lng: number;
-  battery: number;
-  status: 'Running' | 'Locked' | 'Maintenance';
-}
-
-interface RobotData {
-  id: number;
   name: string;
-  lat: number;
-  long: number;
+  x: number;
+  y: number;
   battery: number;
   status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
 }
 
+// interface RobotData {
+//   id: number;
+//   name: string;
+//   x: number;
+//   y: number;
+//   battery: number;
+//   status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
+// }
+
 interface ScooterStats {
-  runningCount: number;
-  lockedCount: number;
+  servingCount: number;
+  pickupCount: number;
+  returningCount: number;
+  waitingCount: number;
   maintenanceCount: number;
   totalCount: number;
   runningPercentage: number;

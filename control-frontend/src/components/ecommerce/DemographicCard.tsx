@@ -20,8 +20,10 @@ export default function DemographicCard() {
 
   // Count scooter statuses
   const total = scooters.length;
-  const runningCount = scooters.filter((s) => s.status === "Running").length;
-  const lockedCount = scooters.filter((s) => s.status === "Locked").length;
+  const servingCount = scooters.filter((s) => s.status === "Serving").length;
+  const pickupCount = scooters.filter((s) => s.status === "Pickup").length;
+  const returningCount = scooters.filter((s) => s.status === "Returning").length;
+  const waitingCount = scooters.filter((s) => s.status === "Waiting").length;
   const maintenanceCount = scooters.filter((s) => s.status === "Maintenance").length;
 
   const getPercent = (count: number) =>
@@ -70,7 +72,7 @@ export default function DemographicCard() {
       </div>
 
       <div className="space-y-5">
-        {/* Running */}
+        {/* Serving */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
@@ -78,10 +80,10 @@ export default function DemographicCard() {
             </div>
             <div>
               <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                Running Scooters
+                Serving Scooters
               </p>
               <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                {runningCount} Available for rent
+                {servingCount} robots serving customers
               </span>
             </div>
           </div>
@@ -89,16 +91,16 @@ export default function DemographicCard() {
             <div className="relative block h-2 w-full max-w-[100px] rounded-sm bg-gray-200 dark:bg-gray-800">
               <div
                 className="absolute left-0 top-0 flex h-full items-center justify-center rounded-sm bg-green-500 text-xs font-medium text-white"
-                style={{ width: `${getPercent(runningCount)}%` }}
+                style={{ width: `${getPercent(servingCount)}%` }}
               ></div>
             </div>
             <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-              {getPercent(runningCount)}%
+              {getPercent(servingCount)}%
             </p>
           </div>
         </div>
 
-        {/* Locked */}
+        {/* Pickup */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/20">
@@ -106,10 +108,10 @@ export default function DemographicCard() {
             </div>
             <div>
               <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
-                Locked Scooters
+                Pickup Scooters
               </p>
               <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                {lockedCount} Currently in use
+                {pickupCount} robots picking up orders
               </span>
             </div>
           </div>
@@ -117,11 +119,67 @@ export default function DemographicCard() {
             <div className="relative block h-2 w-full max-w-[100px] rounded-sm bg-gray-200 dark:bg-gray-800">
               <div
                 className="absolute left-0 top-0 flex h-full items-center justify-center rounded-sm bg-yellow-500 text-xs font-medium text-white"
-                style={{ width: `${getPercent(lockedCount)}%` }}
+                style={{ width: `${getPercent(pickupCount)}%` }}
               ></div>
             </div>
             <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-              {getPercent(lockedCount)}%
+              {getPercent(pickupCount)}%
+            </p>
+          </div>
+        </div>
+
+        {/* Returning */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/20">
+              <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
+                Returning Scooters
+              </p>
+              <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                {returningCount} robots returning to home
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full max-w-[140px] items-center gap-3">
+            <div className="relative block h-2 w-full max-w-[100px] rounded-sm bg-gray-200 dark:bg-gray-800">
+              <div
+                className="absolute left-0 top-0 flex h-full items-center justify-center rounded-sm bg-blue-500 text-xs font-medium text-white"
+                style={{ width: `${getPercent(returningCount)}%` }}
+              ></div>
+            </div>
+            <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+              {getPercent(returningCount)}%
+            </p>
+          </div>
+        </div>
+
+        {/* Waiting */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/20">
+              <div className="h-3 w-3 rounded-full bg-purple-500"></div>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800 text-theme-sm dark:text-white/90">
+                Waiting Scooters
+              </p>
+              <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
+                {waitingCount} robots waiting for an order
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full max-w-[140px] items-center gap-3">
+            <div className="relative block h-2 w-full max-w-[100px] rounded-sm bg-gray-200 dark:bg-gray-800">
+              <div
+                className="absolute left-0 top-0 flex h-full items-center justify-center rounded-sm bg-purple-500 text-xs font-medium text-white"
+                style={{ width: `${getPercent(waitingCount)}%` }}
+              ></div>
+            </div>
+            <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+              {getPercent(waitingCount)}%
             </p>
           </div>
         </div>
@@ -137,7 +195,7 @@ export default function DemographicCard() {
                 Under Maintenance
               </p>
               <span className="block text-gray-500 text-theme-xs dark:text-gray-400">
-                {maintenanceCount} Being serviced
+                {maintenanceCount} being serviced
               </span>
             </div>
           </div>

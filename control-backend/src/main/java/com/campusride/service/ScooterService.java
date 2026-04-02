@@ -40,8 +40,8 @@ public class ScooterService {
 
                     if (existingScooter.isPresent()) {
                         Scooter scooter = existingScooter.get();
-                        scooter.setLat(incomingScooter.getLat());
-                        scooter.setLng(incomingScooter.getLng());
+                        scooter.setX(incomingScooter.getX());
+                        scooter.setY(incomingScooter.getY());
                         scooter.setStatus(incomingScooter.getStatus());
                         scooter.setBattery(incomingScooter.getBattery());
                         scooter.setSpeed(incomingScooter.getSpeed());
@@ -72,10 +72,12 @@ public class ScooterService {
 
             validScooters.sort(Comparator.comparingInt(s -> {
                 switch (s.getStatus()) {
-                    case "Running": return 0;
-                    case "Locked": return 1;
-                    case "Maintenance": return 2;
-                    default: return 3; // Unknown status
+                    case "Serving": return 0;
+                    case "Pickup": return 1;
+                    case "Returning": return 2;
+                    case "Waiting": return 3;
+                    case "Maintenance": return 4;
+                    default: return 5; // Unknown status
                 }
             }));
             return validScooters;
@@ -83,13 +85,17 @@ public class ScooterService {
     }
 
     private void updateStats() {
-        long running = scooters.stream().filter(s -> "Running".equals(s.getStatus())).count();
-        long locked = scooters.stream().filter(s -> "Locked".equals(s.getStatus())).count();
+        long serving = scooters.stream().filter(s -> "Serving".equals(s.getStatus())).count();
+        long pickup = scooters.stream().filter(s -> "Pickup".equals(s.getStatus())).count();
+        long returning = scooters.stream().filter(s -> "Returning".equals(s.getStatus())).count();
+        long waiting = scooters.stream().filter(s -> "Waiting".equals(s.getStatus())).count();
         long maintenance = scooters.stream().filter(s -> "Maintenance".equals(s.getStatus())).count();
         int total = scooters.size();
 
-        stats.put("running", running);
-        stats.put("locked", locked);
+        stats.put("serving", serving);
+        stats.put("pickup", pickup);
+        stats.put("returning", returning);
+        stats.put("waiting", waiting);
         stats.put("maintenance", maintenance);
         stats.put("total", total);
         stats.put("timestamp", new Date());
