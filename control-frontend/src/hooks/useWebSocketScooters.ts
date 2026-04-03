@@ -4,16 +4,27 @@ import { Client, IMessage } from '@stomp/stompjs';
 
 interface ScooterData {
   id: number;
-  name: string; // 👈 Add this line
-  lat: number;
-  lng: number;
+  name: string;
+  x: number;
+  y: number;
   battery: number;
-  status: 'Running' | 'Locked' | 'Maintenance';
+  status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
 }
 
+// interface RobotData {
+//   id: number;
+//   name: string;
+//   x: number;
+//   y: number;
+//   battery: number;
+//   status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
+// }
+
 interface ScooterStats {
-  runningCount: number;
-  lockedCount: number;
+  servingCount: number;
+  pickupCount: number;
+  returningCount: number;
+  waitingCount: number;
   maintenanceCount: number;
   totalCount: number;
   runningPercentage: number;
@@ -31,7 +42,10 @@ export const useWebSocketScooters = () => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
   useEffect(() => {
+    let active = true;
+
     const connect = () => {
+      if (!active) return
       try {
         stompClient.current = new Client({
           webSocketFactory: () => new SockJS(`${backendUrl}/ws`),
@@ -43,6 +57,7 @@ export const useWebSocketScooters = () => {
           heartbeatIncoming: 4000,
           heartbeatOutgoing: 4000,
           onConnect: (frame) => {
+            if (!active) return
             console.log('Connected to WebSocket:', frame);
             setIsConnected(true);
             setError(null);
@@ -91,6 +106,7 @@ export const useWebSocketScooters = () => {
     connect();
 
     return () => {
+      active = false;
       if (stompClient.current?.connected) {
         stompClient.current.deactivate();
       }

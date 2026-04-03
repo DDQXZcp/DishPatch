@@ -12,11 +12,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// function getScooterIcon(status: 'Running' | 'Locked' | 'Maintenance') {
+// function getScooterIcon(status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance') {
 //   let borderColor = '';
 
-//   if (status === 'Running') borderColor = 'border-green-500';
-//   else if (status === 'Locked') borderColor = 'border-yellow-500';
+//   if (status === 'Serving') borderColor = 'border-green-500';
+//   else if (status === 'Pickup') borderColor = 'border-yellow-500';
+//   else if (status == 'Returning') borderColor = 'border-blue-500';
+//   else if (status == 'Waiting') borderColor = 'border-purple-500';
 //   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
 //   return new L.Icon({
@@ -72,6 +74,25 @@ export default function ANUCampusMap() {
           url={FLOORPLAN_URL}
           bounds={FLOORPLAN_BOUNDS}
         />
+        {/*{(scooters as Scooter[]).map((scooter) => (
+          <Marker key={scooter.id} position={[scooter.x, scooter.y]} icon={getScooterIcon(scooter.status)}>
+            <Popup>
+              <div className="text-sm">
+                <strong>{scooter.name}</strong>
+                <br />
+                <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                  scooter.status === 'Serving' ? 'bg-green-100 text-green-800' :
+                  scooter.status === 'Pickup' ? 'bg-yellow-100 text-yellow-800' :
+                  scooter.status === 'Returning' ? 'bg-blue-100 text-blue-800' :
+                  scooter.status === 'Waiting' ? 'bg-purple-100 text-purple-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {scooter.status}
+                </span>
+              </div>
+            </Popup>
+          </Marker>
+        ))}*/}
       </MapContainer>
     </div>
   );

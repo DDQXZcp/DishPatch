@@ -3,8 +3,8 @@ package com.campusride.model;
 public class Scooter {
     private int id;
     private String name;
-    private double lat;
-    private double lng;
+    private double x;
+    private double y;
     private String status;
     private int battery;
     private int speed;
@@ -16,11 +16,11 @@ public class Scooter {
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
-    public double getLat() { return lat; }
-    public void setLat(double lat) { this.lat = lat; }
+    public double getX() { return x; }
+    public void setX(double x) { this.x = x; }
 
-    public double getLng() { return lng; }
-    public void setLng(double lng) { this.lng = lng; }
+    public double getY() { return y; }
+    public void setY(double y) { this.y = y; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
