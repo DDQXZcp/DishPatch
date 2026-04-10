@@ -6,11 +6,11 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
-import { Scooter } from '../../types/Scooter';
-import { useScooterContext } from '../../context/ScooterWebSocketProvider';
+import type { Robot } from '../../types/Robot';
+import { useRobotContext } from '../../context/RobotWebSocketProvider';
 
 export default function RecentOrders() {
-  const { scooters } = useScooterContext();
+  const { robots } = useRobotContext();
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
@@ -100,46 +100,46 @@ export default function RecentOrders() {
           {/* Table Body */}
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {(scooters as Scooter[]).map((scooter) => (
-              <TableRow key={scooter.id} className="">
+            {robots.map((robot: Robot) => (
+              <TableRow key={robot.id} className="">
                 <TableCell className="py-3">
                   <div className="flex items-center gap-3">
                     <div className="h-[50px] w-[50px] overflow-hidden rounded-md">
                       <img
                         src="/images/scooter/scooter-neuron-icon.jpg"
                         className="h-[50px] w-[50px]"
-                        alt={scooter.name}
+                        alt={robot.name}
                       />
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {scooter.name}
+                        {robot.name}
                       </p>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {scooter.speed} kph
+                  {robot.speed} kph
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {scooter.battery}%
+                  {robot.battery}%
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                   <Badge
                     size="sm"
                     color={
-                      scooter.status === "Serving"
+                      robot.status === "Serving"
                         ? "success"
-                        : scooter.status === "Pickup"
+                        : robot.status === "Pickup"
                         ? "warning"
-                        : scooter.status === "Returning"
+                        : robot.status === "Returning"
                         ? "info"
-                        : scooter.status === "Waiting"
+                        : robot.status === "Waiting"
                         ? "dark"
                         : "error"  // Maintenance
                     }
                   >
-                    {scooter.status}
+                    {robot.status}
                   </Badge>
                 </TableCell>
               </TableRow>

@@ -1,40 +1,36 @@
 import { useState, useEffect, useRef } from 'react';
 import SockJS from 'sockjs-client';
 import { Client, IMessage } from '@stomp/stompjs';
+import type { Robot, RobotStats } from '../types/Robot';
 
-interface ScooterData {
-  id: number;
-  name: string;
-  x: number;
-  y: number;
-  battery: number;
-  status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
+interface RobotStatsMessage {
+  serving?: number;
+  pickup?: number;
+  returning?: number;
+  waiting?: number;
+  maintenance?: number;
+  total?: number;
+  timestamp?: string;
 }
 
-// interface RobotData {
-//   id: number;
-//   name: string;
-//   x: number;
-//   y: number;
-//   battery: number;
-//   status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
-// }
+const ROBOT_LOCATIONS_TOPIC = '/topic/scooter-locations';
+const ROBOT_STATS_TOPIC = '/topic/scooter-stats';
 
-interface ScooterStats {
-  servingCount: number;
-  pickupCount: number;
-  returningCount: number;
-  waitingCount: number;
-  maintenanceCount: number;
-  totalCount: number;
-  runningPercentage: number;
-  lockedPercentage: number;
-  maintenancePercentage: number;
+function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
+  return {
+    servingCount: message.serving ?? 0,
+    pickupCount: message.pickup ?? 0,
+    returningCount: message.returning ?? 0,
+    waitingCount: message.waiting ?? 0,
+    maintenanceCount: message.maintenance ?? 0,
+    totalCount: message.total ?? 0,
+    timestamp: message.timestamp,
+  };
 }
 
-export const useWebSocketScooters = () => {
-  const [scooters, setScooters] = useState<ScooterData[]>([]);
-  const [stats, setStats] = useState<ScooterStats | null>(null);
+export const useWebSocketRobots = () => {
+  const [robots, setRobots] = useState<Robot[]>([]);
+  const [stats, setStats] = useState<RobotStats | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
@@ -62,27 +58,17 @@ export const useWebSocketScooters = () => {
             setIsConnected(true);
             setError(null);
 
-            // Subscribe to scooter locations
-            stompClient.current?.subscribe('/topic/scooter-locations', (message: IMessage) => {
-              const locations: ScooterData[] = JSON.parse(message.body);
-              setScooters(locations);
+            // Keep the subscribed topic aligned with the current backend contract.
+            stompClient.current?.subscribe(ROBOT_LOCATIONS_TOPIC, (message: IMessage) => {
+              const locations: Robot[] = JSON.parse(message.body);
+              setRobots(locations);
             });
 
-            // Subscribe to scooter stats
-            stompClient.current?.subscribe('/topic/scooter-stats', (message: IMessage) => {
-              const statsData: ScooterStats = JSON.parse(message.body);
-              setStats(statsData);
+            // Keep the subscribed topic aligned with the current backend contract.
+            stompClient.current?.subscribe(ROBOT_STATS_TOPIC, (message: IMessage) => {
+              const statsData: RobotStatsMessage = JSON.parse(message.body);
+              setStats(normalizeRobotStats(statsData));
             });
-
-            // Request initial data
-            // stompClient.current?.publish({
-            //   destination: '/app/location-request',
-            //   body: '{}'
-            // });
-            // stompClient.current?.publish({
-            //   destination: '/app/scooter-request',
-            //   body: '{}'
-            // });
           },
           onStompError: (frame) => {
             console.error('STOMP error:', frame);
@@ -113,5 +99,5 @@ export const useWebSocketScooters = () => {
     };
   }, []);
 
-  return { scooters, stats, isConnected, error };
+  return { robots, stats, isConnected, error };
 };

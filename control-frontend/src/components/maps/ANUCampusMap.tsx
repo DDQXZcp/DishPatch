@@ -1,8 +1,8 @@
 import { MapContainer, ImageOverlay, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useScooterContext } from '../../context/ScooterWebSocketProvider';
-import { Scooter } from '../../types/Scooter';
+import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import type { Robot, RobotStatus } from '../../types/Robot';
 
 
 const FLOORPLAN_URL = "/maps/the-hive-floorplan.svg";
@@ -19,13 +19,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-function getScooterIcon(status: 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance') {
+function getRobotIcon(status: RobotStatus) {
   let borderColor = '';
 
   if (status === 'Serving') borderColor = 'border-green-500';
   else if (status === 'Pickup') borderColor = 'border-yellow-500';
-  else if (status == 'Returning') borderColor = 'border-blue-500';
-  else if (status == 'Waiting') borderColor = 'border-purple-500';
+  else if (status === 'Returning') borderColor = 'border-blue-500';
+  else if (status === 'Waiting') borderColor = 'border-purple-500';
   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
   return new L.Icon({
@@ -56,7 +56,7 @@ function RecenterButton() {
 }
 
 export default function ANUCampusMap() {
-  const { scooters } = useScooterContext();
+  const { robots } = useRobotContext();
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden">
@@ -75,20 +75,20 @@ export default function ANUCampusMap() {
           url={FLOORPLAN_URL}
           bounds={FLOORPLAN_BOUNDS}
         />
-        {(scooters as Scooter[]).map((scooter) => (
-          <Marker key={scooter.id} position={[scooter.x, scooter.y]} icon={getScooterIcon(scooter.status)}>
+        {robots.map((robot: Robot) => (
+          <Marker key={robot.id} position={[robot.x, robot.y]} icon={getRobotIcon(robot.status)}>
             <Popup>
               <div className="text-sm">
-                <strong>{scooter.name}</strong>
+                <strong>{robot.name}</strong>
                 <br />
                 <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                  scooter.status === 'Serving' ? 'bg-green-100 text-green-800' :
-                  scooter.status === 'Pickup' ? 'bg-yellow-100 text-yellow-800' :
-                  scooter.status === 'Returning' ? 'bg-blue-100 text-blue-800' :
-                  scooter.status === 'Waiting' ? 'bg-purple-100 text-purple-800' :
+                  robot.status === 'Serving' ? 'bg-green-100 text-green-800' :
+                  robot.status === 'Pickup' ? 'bg-yellow-100 text-yellow-800' :
+                  robot.status === 'Returning' ? 'bg-blue-100 text-blue-800' :
+                  robot.status === 'Waiting' ? 'bg-purple-100 text-purple-800' :
                   'bg-red-100 text-red-800'
                 }`}>
-                  {scooter.status}
+                  {robot.status}
                 </span>
               </div>
             </Popup>

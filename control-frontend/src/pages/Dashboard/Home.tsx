@@ -10,8 +10,8 @@ export default function Home() {
   return (
     <>
       <PageMeta
-        title="CampusRide - Real-time IoT Dashboard for Scooter Management"
-        description="Real-time IoT Dashboard for Scooter Management by Herman Tang"
+        title="CampusRide - Real-time Control Dashboard for Robot Management"
+        description="Real-time control dashboard for robot management by Herman Tang"
       />
       <div className="grid grid-cols-12 gap-4 md:gap-6">
         {/* <div className="col-span-12 space-y-6 xl:col-span-7">
