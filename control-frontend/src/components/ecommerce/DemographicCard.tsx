@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { MoreDotIcon } from "../../icons";
-import ANUCampusMap from "../maps/ANUCampusMap";
+import RestaurantMap from "../maps/RestaurantMap";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 
 export default function DemographicCard() {
@@ -65,7 +65,7 @@ export default function DemographicCard() {
 
       <div className="my-6 overflow-hidden border border-gray-200 rounded-2xl dark:border-gray-800">
         <div id="mapOne" className="mapOne map-btn h-[500px] w-full">
-          <ANUCampusMap />
+          <RestaurantMap />
         </div>
       </div>
 

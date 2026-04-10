@@ -55,7 +55,7 @@ function RecenterButton() {
   );
 }
 
-export default function ANUCampusMap() {
+export default function RestaurantMap() {
   const { robots } = useRobotContext();
 
   return (
