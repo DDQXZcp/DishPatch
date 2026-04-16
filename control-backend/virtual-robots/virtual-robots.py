@@ -5,13 +5,15 @@ import os
 import websocket
 
 
-ws = websocket.create_connection(f"ws://localhost:8080/ws/websocket")
+ws = websocket.create_connection("ws://localhost:8080/ws/websocket")
 
 ws.send("CONNECT\naccept-version:1.2\nheart-beat:0,0\n\n\x00")
 result = ws.recv()
 print("STOMP handshake:", result)
 
 statuses = ['Serving', 'Pickup', 'Returning', 'Waiting', 'Maintenance']
+MAX_X = 5084
+MAX_Y = 3302
 
 def create_robots(count=10):
     robots = []
@@ -19,8 +21,8 @@ def create_robots(count=10):
         id = i+1
         name = "Robot " + f'{id}'
         battery = random.randint(0, 90)
-        x = random.randint(0, 200)
-        y = random.randint(0, 1000)
+        x = random.randint(0, MAX_X)
+        y = random.randint(0, MAX_Y)
         if battery <= 10:
             status = "Maintenance"
         else:
@@ -29,7 +31,7 @@ def create_robots(count=10):
         speed = 0 if (status == "Maintenance" or status == "Waiting") else random.randint(10, 25)
         robot = {"id": id, "name": name, "x": x, "y": y, "battery": battery, "status": status, "speed": speed}
         robots.append(robot)
-    
+
     return robots
 
 def update_status(r):
@@ -52,11 +54,10 @@ def update_status(r):
 def move_robot(r):
     if r["speed"] == 0:
         return r
-    
+
     # 50% chance to move, equal chance to move positive or negative
-    # TODO: Change guards to match map bounds
-    r["x"] = min(200, max(0, random.randint(0, 1) * random.randint(-5, 5)))
-    r["y"] = min(1000, max(0, random.randint(0, 1) * random.randint(-25, 25)))
+    r["x"] = min(MAX_X, max(0, r["x"] + random.randint(0, 1) * random.randint(-5, 5)))
+    r["y"] = min(MAX_Y, max(0, r["y"] + random.randint(0, 1) * random.randint(-25, 25)))
     r["speed"] = random.randint(10, 25)
     return r
 
@@ -69,7 +70,7 @@ def update_robot(r):
         r["battery"] = min(100, r["battery"] + random.randint(5, 10))
     elif r["status"] != "Maintenance":
         r["battery"] = max(0, r["battery"] - random.randint(3, 5))
-    
+
     return move_robot(r)
 
 
