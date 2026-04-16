@@ -27,10 +27,10 @@ function getRobotIcon(status: RobotStatus) {
   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
   return new L.Icon({
-    iconUrl: '/images/scooter/scooter-neuron-icon.jpg',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
+    iconUrl: '/images/robot/robot-face-icon.svg',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
     className: `rounded-full border-2 ${borderColor} shadow-lg`
   });
 }
@@ -76,7 +76,7 @@ export default function RestaurantMap() {
         bounds={bounds}
         maxBounds={bounds}
         maxBoundsViscosity={1}
-        minZoom={-2}
+        minZoom={-3}
         maxZoom={2}
         style={{ height: '100%', width: '100%' }}
         className="rounded-lg bg-gray-100"
