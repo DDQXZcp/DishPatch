@@ -106,7 +106,7 @@ export default function RecentOrders() {
                   <div className="flex items-center gap-3">
                     <div className="h-[50px] w-[50px] overflow-hidden rounded-md">
                       <img
-                        src="/images/scooter/scooter-neuron-icon.jpg"
+                        src="/images/robot/robot-face-icon.svg"
                         className="h-[50px] w-[50px]"
                         alt={robot.name}
                       />
