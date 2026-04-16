@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MapContainer, ImageOverlay, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -5,11 +6,8 @@ import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
-const FLOORPLAN_URL = "/maps/the-hive-floorplan.svg";
-const FLOORPLAN_BOUNDS: [[number, number], [number, number]] = [
-  [0, 0],
-  [2468, 1696],
-];
+const FLOORPLAN_URL = "/maps/the-hive-floorplan.webp";
+type FloorplanBounds = [[number, number], [number, number]];
 
 // Fix for default markers in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -37,12 +35,12 @@ function getRobotIcon(status: RobotStatus) {
   });
 }
 
-function RecenterButton() {
+function RecenterButton({ bounds }: { bounds: FloorplanBounds }) {
   const map = useMap();
   return (
     <div className="absolute top-4 right-4 z-[1000]">
       <button
-        onClick={() => map.fitBounds(FLOORPLAN_BOUNDS)}
+        onClick={() => map.fitBounds(bounds)}
         className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-lg dark:bg-gray-800 dark:hover:bg-gray-700 dark:border-gray-600"
         title="Recenter"
       >
@@ -57,23 +55,36 @@ function RecenterButton() {
 
 export default function RestaurantMap() {
   const { robots } = useRobotContext();
+  const [bounds, setBounds] = useState<FloorplanBounds | null>(null);
+
+  useEffect(() => {
+    const image = new Image();
+    image.src = FLOORPLAN_URL;
+    image.onload = () => {
+      setBounds([[0, 0], [image.naturalHeight, image.naturalWidth]]);
+    };
+  }, []);
+
+  if (!bounds) {
+    return <div className="h-full w-full rounded-lg bg-gray-100" />;
+  }
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden">
       <MapContainer
         crs={L.CRS.Simple}
-        bounds={FLOORPLAN_BOUNDS}
-        maxBounds={FLOORPLAN_BOUNDS}
+        bounds={bounds}
+        maxBounds={bounds}
         maxBoundsViscosity={1}
         minZoom={-2}
         maxZoom={2}
         style={{ height: '100%', width: '100%' }}
         className="rounded-lg bg-gray-100"
       >
-        <RecenterButton />
+        <RecenterButton bounds={bounds} />
         <ImageOverlay
           url={FLOORPLAN_URL}
-          bounds={FLOORPLAN_BOUNDS}
+          bounds={bounds}
         />
         {robots.map((robot: Robot) => (
           <Marker key={robot.id} position={[robot.x, robot.y]} icon={getRobotIcon(robot.status)}>
