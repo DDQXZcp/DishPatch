@@ -28,9 +28,9 @@ function getRobotIcon(status: RobotStatus) {
 
   return new L.Icon({
     iconUrl: '/images/scooter/scooter-neuron-icon.jpg',
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -20],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
     className: `rounded-full border-2 ${borderColor} shadow-lg`
   });
 }
