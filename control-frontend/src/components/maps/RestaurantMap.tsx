@@ -80,6 +80,7 @@ export default function RestaurantMap() {
         maxZoom={2}
         style={{ height: '100%', width: '100%' }}
         className="rounded-lg bg-gray-100"
+        attributionControl={false}
       >
         <RecenterButton bounds={bounds} />
         <ImageOverlay
