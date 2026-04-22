@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { MoreDotIcon } from "../../icons";
-import ANUCampusMap from "../maps/ANUCampusMap";
-import { useScooterContext } from "../../context/ScooterWebSocketProvider";
+import RestaurantMap from "../maps/RestaurantMap";
+import { useRobotContext } from "../../context/RobotWebSocketProvider";
 
 export default function DemographicCard() {
   const [isOpen, setIsOpen] = useState(false);
-  const { scooters } = useScooterContext();
+  const { robots } = useRobotContext();
 
   function toggleDropdown() {
     setIsOpen(!isOpen);
@@ -17,13 +17,12 @@ export default function DemographicCard() {
     setIsOpen(false);
   }
 
-  // Count scooter statuses
-  const total = scooters.length;
-  const servingCount = scooters.filter((s) => s.status === "Serving").length;
-  const pickupCount = scooters.filter((s) => s.status === "Pickup").length;
-  const returningCount = scooters.filter((s) => s.status === "Returning").length;
-  const waitingCount = scooters.filter((s) => s.status === "Waiting").length;
-  const maintenanceCount = scooters.filter((s) => s.status === "Maintenance").length;
+  const total = robots.length;
+  const servingCount = robots.filter((robot) => robot.status === "Serving").length;
+  const pickupCount = robots.filter((robot) => robot.status === "Pickup").length;
+  const returningCount = robots.filter((robot) => robot.status === "Returning").length;
+  const waitingCount = robots.filter((robot) => robot.status === "Waiting").length;
+  const maintenanceCount = robots.filter((robot) => robot.status === "Maintenance").length;
 
   const getPercent = (count: number) =>
     total === 0 ? 0 : Math.round((count / total) * 100);
@@ -66,7 +65,7 @@ export default function DemographicCard() {
 
       <div className="my-6 overflow-hidden border border-gray-200 rounded-2xl dark:border-gray-800">
         <div id="mapOne" className="mapOne map-btn h-[500px] w-full">
-          <ANUCampusMap />
+          <RestaurantMap />
         </div>
       </div>
 

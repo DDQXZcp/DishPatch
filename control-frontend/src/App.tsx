@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter as Router, Routes, Route } from "react-router";
 import SignIn from "./pages/AuthPages/SignIn";
 import SignUp from "./pages/AuthPages/SignUp";
 import NotFound from "./pages/OtherPage/NotFound";
@@ -19,11 +19,11 @@ import Contributors from "./pages/Contributors";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
-import { ScooterWebSocketProvider } from "./context/ScooterWebSocketProvider";
+import { RobotWebSocketProvider } from "./context/RobotWebSocketProvider";
 
 export default function App() {
   return (
-    <ScooterWebSocketProvider>
+    <RobotWebSocketProvider>
       <Router>
         <ScrollToTop />
         <Routes>
@@ -64,6 +64,6 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
-    </ScooterWebSocketProvider>
+    </RobotWebSocketProvider>
   );
 }
