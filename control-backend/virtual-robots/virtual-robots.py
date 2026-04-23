@@ -5,7 +5,7 @@ import os
 import websocket
 
 
-ws = websocket.create_connection("ws://localhost:8080/ws/websocket")
+ws = websocket.create_connection("ws://localhost:8081/ws/websocket")
 
 ws.send("CONNECT\naccept-version:1.2\nheart-beat:0,0\n\n\x00")
 result = ws.recv()
