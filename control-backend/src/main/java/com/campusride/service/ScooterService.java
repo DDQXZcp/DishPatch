@@ -2,6 +2,7 @@ package com.campusride.service;
 
 import com.campusride.model.Scooter;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -99,6 +100,36 @@ public class ScooterService {
         stats.put("maintenance", maintenance);
         stats.put("total", total);
         stats.put("timestamp", new Date());
+    }
+
+    public void updateField(int id, String field, JsonObject msg) {
+        synchronized (scooters) {
+            Scooter scooter = scooters.stream()
+                    .filter(s -> s.getId() == id)
+                    .findFirst()
+                    .orElseGet(() -> {
+                        Scooter ns = new Scooter();
+                        ns.setId(id);
+                        ns.setName("Robot " + id);
+                        scooters.add(ns);
+                        return ns;
+                    });
+
+            switch (field) {
+                case "status"   -> scooter.setStatus(msg.get("data").getAsString());
+                case "battery"  -> scooter.setBattery(msg.get("data").getAsInt());
+                case "position" -> {
+                    scooter.setX(msg.get("x").getAsDouble());
+                    scooter.setY(msg.get("y").getAsDouble());
+                }
+            }
+
+            scooterLastUpdMap.put(id, System.currentTimeMillis());
+        }
+
+        updateStats();
+        messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
+        messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
     }
 
     public List<Scooter> getAllScooters() {
