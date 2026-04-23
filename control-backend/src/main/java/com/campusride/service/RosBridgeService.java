@@ -25,7 +25,7 @@ import java.util.logging.Logger;
  *   /robot/robot_{id}/battery   std_msgs/Float32
  *
  * Configure in application.properties:
- *   rosbridge.url=ws://<WSL_IP>:9090
+ *   rosbridge.url=ws://<IP>:9090
  *   rosbridge.robot-count=10
  */
 @Service
@@ -44,6 +44,10 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     private WebSocketSession session;
 
+    /**
+     * Initiates a WebSocket connection to rosbridge on startup.
+     * Retries every 5 seconds until the connection is established.
+     */
     @PostConstruct
     public void connect() {
         new Thread(() -> {
@@ -65,6 +69,10 @@ public class RosBridgeService extends TextWebSocketHandler {
         }).start();
     }
 
+    /**
+     * Called when the WebSocket connection to rosbridge is established.
+     * Subscribes to all robot topics based on robotCount from config.
+     */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.session = session;
@@ -79,6 +87,10 @@ public class RosBridgeService extends TextWebSocketHandler {
         logger.info("Subscribed to " + (robotCount * 3) + " ROS2 topics.");
     }
 
+    /**
+     * Called on each incoming message from rosbridge.
+     * Parses the topic and field, then forwards to ScooterService.updateField().
+     */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
@@ -103,6 +115,10 @@ public class RosBridgeService extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * Called when the rosbridge connection is closed.
+     * Waits 5 seconds then attempts to reconnect.
+     */
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         logger.warning("Rosbridge disconnected (" + status + "). Reconnecting in 5s...");
@@ -114,6 +130,12 @@ public class RosBridgeService extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * Sends a rosbridge subscribe request for the given ROS2 topic.
+     *
+     * @param topic ROS2 topic name e.g. "/robot/robot_1/status"
+     * @param type  ROS2 message type e.g. "std_msgs/String"
+     */
     private void subscribe(String topic, String type) throws Exception {
         String payload = String.format(
             "{\"op\":\"subscribe\",\"topic\":\"%s\",\"type\":\"%s\"}", topic, type

@@ -102,6 +102,14 @@ public class ScooterService {
         stats.put("timestamp", new Date());
     }
 
+    /**
+     * Updates a single field of a scooter from a rosbridge message.
+     * If the scooter does not exist, it is created with the given id.
+     *
+     * @param id    robot ID extracted from the ROS2 topic name
+     * @param field topic field name: "status", "position", or "battery"
+     * @param msg   rosbridge message payload as a JsonObject
+     */
     public void updateField(int id, String field, JsonObject msg) {
         synchronized (scooters) {
             Scooter scooter = scooters.stream()

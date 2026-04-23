@@ -51,6 +51,7 @@ STATUSES = ['Serving', 'Pickup', 'Returning', 'Waiting', 'Maintenance']
 # ---------------------------------------------------------------------------
 
 def create_robots(count=ROBOT_COUNT):
+    """Creates a list of robots with random initial state."""
     robots = []
     for i in range(count):
         robot_id = i + 1
@@ -73,6 +74,7 @@ def create_robots(count=ROBOT_COUNT):
 
 
 def update_status(r):
+    """Returns the next status based on current status and battery level."""
     if r['battery'] <= 10 and r['status'] != 'Maintenance':
         return 'Waiting'
     if r['status'] == 'Serving':
@@ -90,6 +92,7 @@ def update_status(r):
 
 
 def update_robot(r):
+    """Updates status, battery, speed, and position of a robot for one tick."""
     r['status'] = update_status(r)
     if r['status'] in ('Waiting', 'Maintenance'):
         r['speed'] = 0
@@ -115,6 +118,7 @@ def update_robot(r):
 class SimRobotNode(Node):
 
     def __init__(self):
+        """Initializes publishers for each robot and starts the publish timer."""
         super().__init__('sim_robot')
 
         self._robots     = create_robots(ROBOT_COUNT)
@@ -138,6 +142,7 @@ class SimRobotNode(Node):
         )
 
     def _publish_state(self):
+        """Called every PUBLISH_INTERVAL_SEC. Updates and publishes all robot states."""
         for r in self._robots:
             update_robot(r)
             rid  = r['id']
