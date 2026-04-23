@@ -217,7 +217,7 @@ export default function RecentOrders() {
                         : robot.status === "Returning"
                         ? "info"
                         : robot.status === "Waiting"
-                        ? "dark"
+                        ? "purple"
                         : "error"  // Maintenance
                     }
                   >
