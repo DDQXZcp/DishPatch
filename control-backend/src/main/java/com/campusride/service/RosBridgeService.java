@@ -46,12 +46,23 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     @PostConstruct
     public void connect() {
-        try {
-            new StandardWebSocketClient().execute(this, rosbridgeUrl);
-            logger.info("RosBridgeService connecting to " + rosbridgeUrl);
-        } catch (Exception e) {
-            logger.warning("Failed to connect to rosbridge: " + e.getMessage());
-        }
+        new Thread(() -> {
+            while (true) {
+                try {
+                    logger.info("RosBridgeService connecting to " + rosbridgeUrl);
+                    new StandardWebSocketClient().execute(this, rosbridgeUrl);
+                    return;
+                } catch (Exception e) {
+                    logger.warning("Failed to connect to rosbridge, retrying in 5s: " + e.getMessage());
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+            }
+        }).start();
     }
 
     @Override
