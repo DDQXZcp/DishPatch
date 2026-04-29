@@ -1,0 +1,9 @@
+services:
+  robot-location-publisher:
+    build: .
+    container_name: robot-location-publisher
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
