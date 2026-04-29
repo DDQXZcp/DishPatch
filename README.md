@@ -173,7 +173,7 @@ Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for g
 ![Status](https://img.shields.io/badge/status-experimental-orange?labelColor=555555) -->
 
 
-## Dependencies
+## Dependencies - POS and Control System
 
 ### Step 1 - Install Node.js as Pre-build
 
@@ -228,4 +228,34 @@ This will install all the dependencies in node_modules folder.
 **Step 4.3** - Launch the component
 ```
 yarn start
+```
+
+## Dependencies - Robot Fleet
+
+### Step 1 - Prepare EC2 Ubuntu 24.04 LTS
+
+The robot is running on ROS 2 Jazzy. An instance with Ubuntu 24.04 LTS is recommended.
+
+### Step 2 - Install Docker
+
+Install docker in EC2 instance following the official guide. [Docker Installation in Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+
+Grant docker permission to access API.
+```
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
+### Step 3 - Launch Robot Fleet in Containers
+
+Go inside **robot-fleet** folder. This folder is the root folder of all ROS packages. This command will launch virtual robots inside EC2.
+```
+docker compose up --build
+```
+This will create several docker images. To verify the published topics:
+
+```
+docker ps # Find the running container
+docker exec -it <container_name_or_id> /bin/bash
+ros2 topic list -t
+ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
