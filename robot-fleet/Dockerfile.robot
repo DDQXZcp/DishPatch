@@ -2,6 +2,8 @@
 # Builds the full ROS2 workspace containing all robot packages.
 # The namespace is supplied at runtime via the ROBOT_NAMESPACE env var
 # (set in docker-compose.yml or on the docker run command line).
+# Changes to get new commit comment.
+
 # ──────────────────────────────────────────────────────────────────────────────
 FROM ros:jazzy-ros-base
 
