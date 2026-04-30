@@ -28,7 +28,7 @@ def create_robots(count=10):
         else:
             status_ind = random.randint(0, 4)
             status = statuses[status_ind]
-        speed = 0 if (status == "Maintenance" or status == "Waiting") else random.randint(10, 25)
+        speed = 0 if (status == "Maintenance" or status == "Waiting") else random.randint(100, 250)
         robot = {"id": id, "name": name, "x": x, "y": y, "battery": battery, "status": status, "speed": speed}
         robots.append(robot)
 
@@ -56,15 +56,16 @@ def move_robot(r):
         return r
 
     # 50% chance to move, equal chance to move positive or negative
-    r["x"] = min(MAX_X, max(0, r["x"] + random.randint(0, 1) * random.randint(-5, 5)))
-    r["y"] = min(MAX_Y, max(0, r["y"] + random.randint(0, 1) * random.randint(-25, 25)))
-    r["speed"] = random.randint(10, 25)
+    r["x"] = min(MAX_X, max(0, r["x"] + random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])))
+    r["y"] = min(MAX_Y, max(0, r["y"] + random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])))
     return r
 
 def update_robot(r):
     r["status"] = update_status(r)
     if r["status"] == "Waiting" or r["status"] == "Maintenance":
         r["speed"] = 0
+    else:
+        r["speed"] = random.randint(100, 250)
 
     if r["status"] == "Waiting":
         r["battery"] = min(100, r["battery"] + random.randint(5, 10))
