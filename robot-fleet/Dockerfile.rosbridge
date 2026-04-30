@@ -1,0 +1,26 @@
+# ── Rosbridge container ────────────────────────────────────────────────────────
+# Runs rosbridge_server on port 9090 — bridges ROS2 topics to WebSocket.
+# One instance per VM; all robot containers share the same ROS domain.
+# ──────────────────────────────────────────────────────────────────────────────
+FROM ros:jazzy-ros-base
+
+SHELL ["/bin/bash", "-c"]
+
+ENV ROS_DISTRO=jazzy
+ENV PYTHONUNBUFFERED=1
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# ── Install rosbridge suite ────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y \
+    ros-jazzy-rosbridge-suite \
+    ros-jazzy-rmw-cyclonedds-cpp \
+    python3-colcon-common-extensions \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 9090
+
+# ── Start rosbridge WebSocket server ──────────────────────────────────────────
+CMD ["bash", "-c", \
+  "source /opt/ros/jazzy/setup.bash && \
+   exec ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
+     port:=9090"]
