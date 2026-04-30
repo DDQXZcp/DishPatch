@@ -11,6 +11,9 @@ User=ec2-user
 WorkingDirectory=/home/ec2-user/app
 ExecStart=/usr/bin/python3 /home/ec2-user/app/virtual-robots.py
 Restart=always
+RestartSec=5
+StartLimitBurst=20
+StartLimitIntervalSec=300
 
 [Install]
 WantedBy=multi-user.target
