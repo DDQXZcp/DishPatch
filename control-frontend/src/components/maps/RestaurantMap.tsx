@@ -6,7 +6,7 @@ import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
-const FLOORPLAN_URL = "/maps/the-hive-floorplan.webp";
+const FLOORPLAN_URL = "/maps/the-hive-floorplan-landscape.webp";
 type FloorplanBounds = [[number, number], [number, number]];
 
 // Fix for default markers in react-leaflet
