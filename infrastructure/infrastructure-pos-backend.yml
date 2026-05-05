@@ -93,7 +93,7 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowSpecificAccess
+          - Sid: AllowPublicRead
             Effect: Allow
             Principal: "*"
             Action: "s3:GetObject"
