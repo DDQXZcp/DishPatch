@@ -68,7 +68,7 @@ Resources:
   MenuPhotoBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-MenuPhoto"
+      BucketName: !Sub "\${AWS::StackName}-menu-photo"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
