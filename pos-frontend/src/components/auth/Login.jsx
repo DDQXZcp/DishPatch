@@ -23,6 +23,15 @@ const Login = () => {
     loginMutation.mutate(formData);
   };
 
+  const handleGuestLogin = () => {
+    // Predefined guest credentials
+    const guestCredentials = {
+      email: "guest@anu.edu.au",
+      password: "guest",
+    };
+    loginMutation.mutate(guestCredentials);
+  };
+
   const loginMutation = useMutation({
     mutationFn: (reqData) => login(reqData),
     onSuccess: (res) => {
@@ -55,7 +64,7 @@ const Login = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter employee email"
+              placeholder="Enter staff email"
               className="bg-transparent flex-1 text-white focus:outline-none"
               required
             />
@@ -85,6 +94,14 @@ const Login = () => {
           Sign in
         </button>
       </form>
+
+      {/* Guest Sign In Button */}
+      <button
+        onClick={handleGuestLogin}
+        className="w-full rounded-lg mt-3 py-3 text-lg bg-gray-700 text-white font-bold"
+      >
+        Guest Sign In
+      </button>
     </div>
   );
 };
