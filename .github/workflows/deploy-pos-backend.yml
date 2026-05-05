@@ -5,7 +5,9 @@ name: Deploy POS Backend (Lambda container + CFN)
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main 
+      - pos-system-restructure
     paths:
       - 'pos-backend/**'
       - 'infrastructure/infrastructure-pos-backend.yml'
