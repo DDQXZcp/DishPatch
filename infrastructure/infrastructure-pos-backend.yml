@@ -64,6 +64,41 @@ Conditions:
 # Resources
 # ===========================
 Resources:
+  # ---------------- S3 Bucket for Menu Photos ----------------
+  MenuPhotoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-MenuPhoto"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3000
+
+  MenuPhotoBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MenuPhotoBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "${MenuPhotoBucket.Arn}/*"
+
   # ---------------- DynamoDB ----------------
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -262,6 +297,7 @@ Resources:
           PAYMENTS_TABLE: !Ref PaymentsTable
           TABLES_TABLE: !Ref TablesTable
           MENU_ITEMS_TABLE: !Ref MenuItemsTable
+          MENU_PHOTO_BUCKET: !Ref MenuPhotoBucket
 
           # Optional: if your code fetches JWT secret from SSM, it can use this name
           JWT_SECRET_PARAM: !Ref JwtSecretSsmParamName
@@ -363,6 +399,14 @@ Resources:
 # Outputs
 # ===========================
 Outputs:
+  MenuPhotoBucketName:
+    Description: The name of the S3 bucket for menu photos
+    Value: !Ref MenuPhotoBucket
+
+  MenuPhotoBucketArn:
+    Description: The ARN of the S3 bucket for menu photos
+    Value: !GetAtt MenuPhotoBucket.Arn
+
   UsersTableName:
     Value: !Ref UsersTable
   OrdersTableName:
