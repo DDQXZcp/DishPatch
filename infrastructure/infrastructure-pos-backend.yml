@@ -267,13 +267,13 @@ Resources:
                   - !GetAtt MenuItemsTable.Arn
                   - !Sub "${MenuItemsTable.Arn}/index/*"
 
-              # SQS Access
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                  - sqs:GetQueueUrl
-                  - sqs:GetQueueAttributes
-                Resource: !GetAtt PaymentQueue.Arn
+              # # SQS Access
+              # - Effect: Allow
+              #   Action:
+              #     - sqs:SendMessage
+              #     - sqs:GetQueueUrl
+              #     - sqs:GetQueueAttributes
+              #   Resource: !GetAtt PaymentQueue.Arn
 
   # ---------------- Lambda Function ----------------
   BackendLambda:
@@ -291,7 +291,7 @@ Resources:
           STAGE: !Ref StageName
 
           # Resource identifiers for your code (prefer reading from env, not hardcoding in code)
-          PAYMENT_QUEUE_URL: !Ref PaymentQueue
+          # PAYMENT_QUEUE_URL: !Ref PaymentQueue
           USERS_TABLE: !Ref UsersTable
           ORDERS_TABLE: !Ref OrdersTable
           PAYMENTS_TABLE: !Ref PaymentsTable
@@ -418,13 +418,13 @@ Outputs:
   MenuItemsTableName:
     Value: !Ref MenuItemsTable
 
-  PaymentQueueUrl:
-    Description: The URL of the SQS queue used for payments
-    Value: !Ref PaymentQueue
+  # PaymentQueueUrl:
+  #   Description: The URL of the SQS queue used for payments
+  #   Value: !Ref PaymentQueue
 
-  PaymentQueueArn:
-    Description: The ARN of the SQS queue
-    Value: !GetAtt PaymentQueue.Arn
+  # PaymentQueueArn:
+  #   Description: The ARN of the SQS queue
+  #   Value: !GetAtt PaymentQueue.Arn
 
   ApiBaseUrl:
     Description: Base URL of the POS Backend API

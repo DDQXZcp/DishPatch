@@ -3,7 +3,7 @@ const docClient = require("../config/database");
 
 const { tables } = require("../constants/index.js");
 
-const TABLE_NAME = "DishPatch-Pos-Backend-Tables"; // Replace with your actual table name
+const TABLE_NAME = "dishpatch-pos-backend-Tables"; // Replace with your actual table name
 
 async function seedTables() {
   try {

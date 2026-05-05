@@ -17,7 +17,7 @@ const config = Object.freeze({
   // AWS
   // Support both names: AWS_REGION (common) and REGION (what your CFN sets)
   awsRegion: process.env.AWS_REGION || process.env.REGION || "ap-southeast-2",
-  paymentQueueUrl: process.env.PAYMENT_QUEUE_URL,
+  // paymentQueueUrl: process.env.PAYMENT_QUEUE_URL,
 
   // DynamoDB table names (injected by CloudFormation in the new template)
   usersTable: process.env.USERS_TABLE || "Users",
