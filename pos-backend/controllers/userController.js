@@ -13,9 +13,9 @@ const {
 // 🔹 Register new user
 const register = async (req, res, next) => {
   try {
-    const { name, phone, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!name || !phone || !email || !password || !role) {
+    if (!name || !email || !password) {
       return next(createHttpError(400, "All fields are required!"));
     }
 
@@ -24,7 +24,7 @@ const register = async (req, res, next) => {
       return next(createHttpError(400, "User already exists!"));
     }
 
-    const newUser = await createUser({ name, phone, email, password, role });
+    const newUser = await createUser({ name, email, password });
 
     res.status(201).json({
       success: true,
@@ -39,7 +39,6 @@ const register = async (req, res, next) => {
 // 🔹 Login user
 const login = async (req, res, next) => {
   try {
-
     console.log("Cookie options in login:", getCookieOptions());
     const { email, password } = req.body;
 

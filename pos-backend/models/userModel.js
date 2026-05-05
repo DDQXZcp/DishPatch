@@ -11,18 +11,10 @@ function validateEmail(email) {
   return /\S+@\S+\.\S+/.test(email);
 }
 
-// Helper: validate phone format (10 digits)
-function validatePhone(phone) {
-  return /^\d{10}$/.test(phone);
-}
-
 // Create a new user
 async function createUser(user) {
   if (!validateEmail(user.email)) {
     throw new Error("Email must be in valid format!");
-  }
-  if (!validatePhone(user.phone)) {
-    throw new Error("Phone number must be a 10-digit number!");
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -36,12 +28,10 @@ async function createUser(user) {
       userId,
       name: user.name,
       email: user.email,
-      phone: user.phone,
       password: hashedPassword,
-      role: user.role || "customer",
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+      updatedAt: new Date().toISOString(),
+    },
   });
 
   await docClient.send(params);
@@ -70,7 +60,7 @@ async function getUserByEmail(email) {
 async function getUserById(userId) {
   const params = new GetCommand({
     TableName: TABLE_NAME,
-    Key: { userId }
+    Key: { userId },
   });
 
   const result = await docClient.send(params);
@@ -82,22 +72,20 @@ async function verifyPassword(inputPassword, hashedPassword) {
   return await bcrypt.compare(inputPassword, hashedPassword);
 }
 
-// Update user (e.g., role or phone)
+// Update user (e.g., name)
 async function updateUser(userId, updates) {
   const params = new UpdateCommand({
     TableName: TABLE_NAME,
     Key: { userId },
-    UpdateExpression: "set #name = :name, phone = :phone, role = :role, updatedAt = :updatedAt",
+    UpdateExpression: "set #name = :name, updatedAt = :updatedAt",
     ExpressionAttributeNames: {
-      "#name": "name"
+      "#name": "name",
     },
     ExpressionAttributeValues: {
       ":name": updates.name,
-      ":phone": updates.phone,
-      ":role": updates.role,
-      ":updatedAt": new Date().toISOString()
+      ":updatedAt": new Date().toISOString(),
     },
-    ReturnValues: "ALL_NEW"
+    ReturnValues: "ALL_NEW",
   });
 
   const result = await docClient.send(params);
@@ -107,7 +95,7 @@ async function updateUser(userId, updates) {
 module.exports = {
   createUser,
   getUserByEmail,
-  getUserById,     // 👈 added export
+  getUserById, // 👈 added export
   verifyPassword,
-  updateUser
+  updateUser,
 };
