@@ -1,46 +1,46 @@
 import React, { useState } from "react";
-import { useMutation } from "@tanstack/react-query"
-import { login } from "../../https/index"
+import { useMutation } from "@tanstack/react-query";
+import { login } from "../../https/index";
 import { enqueueSnackbar } from "notistack";
 import { useDispatch } from "react-redux";
 import { setUser } from "../../redux/slices/userSlice";
 import { useNavigate } from "react-router-dom";
- 
+
 const Login = () => {
-    const navigate = useNavigate();
-    const dispatch = useDispatch();
-    const[formData, setFormData] = useState({
-      email: "",
-      password: "",
-    });
-  
-    const handleChange = (e) => {
-      setFormData({...formData, [e.target.name]: e.target.value});
-    }
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
 
-  
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      loginMutation.mutate(formData);
-    }
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-    const loginMutation = useMutation({
-      mutationFn: (reqData) => login(reqData),
-      onSuccess: (res) => {
-        const user = res.data.user || res.data; // depending on backend
-        console.log("Login response:", res.data);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    loginMutation.mutate(formData);
+  };
 
-        // Adjust for DynamoDB
-        const { userId, name, email, phone, role } = user;
+  const loginMutation = useMutation({
+    mutationFn: (reqData) => login(reqData),
+    onSuccess: (res) => {
+      const user = res.data.user || res.data; // depending on backend
+      console.log("Login response:", res.data);
 
-        dispatch(setUser({ userId, name, email, phone, role }));
-        navigate("/"); // go to main page
-      },
-      onError: (error) => {
-        const { response } = error;
-        enqueueSnackbar(response.data.message, { variant: "error" });
-      }
-    })
+      // Adjust for DynamoDB
+      const { userId, name, email } = user;
+
+      // Dispatch only the necessary fields
+      dispatch(setUser({ userId, name, email }));
+      navigate("/"); // go to main page
+    },
+    onError: (error) => {
+      const { response } = error;
+      enqueueSnackbar(response.data.message, { variant: "error" });
+    },
+  });
 
   return (
     <div>
