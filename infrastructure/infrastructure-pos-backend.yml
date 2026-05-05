@@ -68,7 +68,7 @@ Resources:
   MenuPhotoBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "\${AWS::StackName}-menu-photo"
+      BucketName: !Sub "${AWS::StackName}-menu-photo"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -187,32 +187,32 @@ Resources:
       BillingMode: PAY_PER_REQUEST
 
   # ---------------- SQS ----------------
-  PaymentQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub "${AWS::StackName}-pos-payment-queue"
-      VisibilityTimeout: 30
-      MessageRetentionPeriod: 86400
-      ReceiveMessageWaitTimeSeconds: 10
+  # PaymentQueue:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     QueueName: !Sub "${AWS::StackName}-pos-payment-queue"
+  #     VisibilityTimeout: 30
+  #     MessageRetentionPeriod: 86400
+  #     ReceiveMessageWaitTimeSeconds: 10
 
-  # NOTE: Prefer restricting who can send messages. This keeps original behavior (open send),
-  # but you should tighten it once you know the sender identity (e.g., Lambda role, specific AWS account, etc.)
-  PaymentQueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref PaymentQueue
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowSendMessage
-            Effect: Allow
-            Principal: "*"
-            Action:
-              - "sqs:SendMessage"
-              - "sqs:GetQueueUrl"
-              - "sqs:GetQueueAttributes"
-            Resource: !GetAtt PaymentQueue.Arn
+  # # NOTE: Prefer restricting who can send messages. This keeps original behavior (open send),
+  # # but you should tighten it once you know the sender identity (e.g., Lambda role, specific AWS account, etc.)
+  # PaymentQueuePolicy:
+  #   Type: AWS::SQS::QueuePolicy
+  #   Properties:
+  #     Queues:
+  #       - !Ref PaymentQueue
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Sid: AllowSendMessage
+  #           Effect: Allow
+  #           Principal: "*"
+  #           Action:
+  #             - "sqs:SendMessage"
+  #             - "sqs:GetQueueUrl"
+  #             - "sqs:GetQueueAttributes"
+  #           Resource: !GetAtt PaymentQueue.Arn
 
   # ---------------- IAM Role for Lambda ----------------
   PosBackendLambdaRole:

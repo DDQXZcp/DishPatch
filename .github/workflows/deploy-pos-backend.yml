@@ -23,7 +23,7 @@ env:
   ROLE_ARN: arn:aws:iam::334643191233:role/GitHubActions-DishPatch
 
   ECR_REPO: dishpatch-pos-backend
-  CFN_STACK: DishPatch-Pos-Backend
+  CFN_STACK: dishpatch-pos-backend
   CFN_TEMPLATE: infrastructure/infrastructure-pos-backend.yml
 
   # ---- API config ----
