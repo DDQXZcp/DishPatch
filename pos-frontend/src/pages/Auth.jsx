@@ -47,7 +47,6 @@ const Auth = () => {
 
         <div className="flex justify-center mt-6">
           <p className="text-sm text-[#ababab] text-center">
-            <p className="text-lg">Guest Account: guest@cafe.com | Password: guest</p>
             {isRegister ? "Already have an account? " : "Don't have an account? "}
             <a onClick={() => setIsRegister(!isRegister)} className="text-yellow-400 font-semibold hover:underline" href="#">
               {isRegister ? "Sign in" : "Sign up"}

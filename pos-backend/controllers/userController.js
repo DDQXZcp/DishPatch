@@ -48,12 +48,12 @@ const login = async (req, res, next) => {
 
     const user = await getUserByEmail(email);
     if (!user) {
-      return next(createHttpError(401, "Invalid Credentials"));
+      return next(createHttpError(401, "Invalid Username"));
     }
 
     const isMatch = await verifyPassword(password, user.password);
     if (!isMatch) {
-      return next(createHttpError(401, "Invalid Credentials"));
+      return next(createHttpError(401, "Wrong Password"));
     }
 
     const secret = await getJwtSecret();

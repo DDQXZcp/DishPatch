@@ -259,3 +259,22 @@ docker exec -it <container_name_or_id> /bin/bash
 ros2 topic list -t
 ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
+
+## Local Testing - POS System
+
+For local development, we need to manually create an **.env** in pos-backend folder as some credentials are hided in Repository Secret or AWS System Manager Parameter Stores for security reason.
+
+```
+# .env
+# Replace with your credentials and region
+AWS_ACCESS_KEY_ID=<Your AWS Access Key>
+AWS_SECRET_ACCESS_KEY=<Your AWS Secret Access Key>
+AWS_REGION=ap-southeast-2
+
+# Replace with your table name
+USERS_TABLE=DishPatch-Pos-Backend-Users
+ORDERS_TABLE=DishPatch-Pos-Backend-Orders
+PAYMENTS_TABLE=DishPatch-Pos-Backend-Payments
+TABLES_TABLE=DishPatch-Pos-Backend-Tables
+MENU_ITEMS_TABLE=DishPatch-Pos-Backend-MenuItems
+```
