@@ -36,7 +36,6 @@ export const desserts = [
     id: 2,
     name: "Tiramisu",
     price: 12,
-    category: "Vegetarian"
   },
   {
     id: 3,
