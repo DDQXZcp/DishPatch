@@ -272,9 +272,23 @@ AWS_SECRET_ACCESS_KEY=<Your AWS Secret Access Key>
 AWS_REGION=ap-southeast-2
 
 # Replace with your table name
-USERS_TABLE=DishPatch-Pos-Backend-Users
-ORDERS_TABLE=DishPatch-Pos-Backend-Orders
-PAYMENTS_TABLE=DishPatch-Pos-Backend-Payments
-TABLES_TABLE=DishPatch-Pos-Backend-Tables
-MENU_ITEMS_TABLE=DishPatch-Pos-Backend-MenuItems
+USERS_TABLE=dishPatch-pos-backend-Users
+ORDERS_TABLE=dishPatch-pos-backend-Orders
+PAYMENTS_TABLE=dishPatch-pos-backend-Payments
+TABLES_TABLE=dishPatch-pos-backend-Tables
+MENU_ITEMS_TABLE=dishPatch-pos-backend-MenuItems
 ```
+### Seed Data to DynamoDB
+
+When you first create the stack, all DynamoDB is empty. You may wish to seed data to the DynamoDB table.
+
+To allow the script to access to AWS resources, you may need to install and configure AWS CLI via
+```
+aws configure
+```
+Inside **pos-backend** folder, run the scripts using node.js
+```
+node .\seedMenus.js
+node .\seedTables.js
+```
+The scripts will fetch the data defined in constants/index.js and upload to DynamoDB tables.
