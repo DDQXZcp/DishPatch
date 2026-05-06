@@ -208,9 +208,14 @@ export function moveWidgetNearTarget(
     );
     const insertIndex =
       position === "left" ? targetColumnIndex : targetColumnIndex + 1;
-    const columns = [...row.columns];
+    const insertedWidth = 100 / (row.columns.length + 1);
+    const retainedWidthScale = (100 - insertedWidth) / 100;
+    const columns = row.columns.map((column) => ({
+      ...column,
+      width: column.width * retainedWidthScale,
+    }));
 
-    columns.splice(insertIndex, 0, { widgetId, width: 100 });
+    columns.splice(insertIndex, 0, { widgetId, width: insertedWidth });
 
     return { ...row, columns: normalizeColumns(columns) };
   });

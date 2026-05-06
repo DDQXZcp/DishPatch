@@ -341,12 +341,12 @@ function RowResizeHandle({
   return (
     <button
       type="button"
-      className="absolute inset-x-5 -bottom-2 z-30 flex h-4 cursor-row-resize touch-none items-center justify-center rounded-full focus:outline-none"
+      className="group absolute inset-x-5 -bottom-2 z-30 flex h-4 cursor-row-resize touch-none items-center justify-center rounded-full focus:outline-none"
       onPointerDown={onResizeStart}
       aria-label="Resize widget row"
       title="Resize row"
     >
-      <span className="h-px w-24 rounded-full bg-transparent transition hover:bg-brand-400" />
+      <span className="h-px w-24 rounded-full bg-gray-200 transition group-hover:h-1 group-hover:bg-brand-400 dark:bg-gray-700 dark:group-hover:bg-brand-400" />
     </button>
   );
 }
