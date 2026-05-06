@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapContainer, ImageOverlay, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -53,6 +53,40 @@ function RecenterButton({ bounds }: { bounds: FloorplanBounds }) {
   );
 }
 
+function ResizeMapOnContainerChange() {
+  const map = useMap();
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const refreshMapSize = () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+
+      frameRef.current = window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+        frameRef.current = null;
+      });
+    };
+
+    refreshMapSize();
+
+    const resizeObserver = new ResizeObserver(refreshMapSize);
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+    };
+  }, [map]);
+
+  return null;
+}
+
 export default function RestaurantMap() {
   const { robots } = useRobotContext();
   const [bounds, setBounds] = useState<FloorplanBounds | null>(null);
@@ -82,6 +116,7 @@ export default function RestaurantMap() {
         className="rounded-lg bg-gray-100"
         attributionControl={false}
       >
+        <ResizeMapOnContainerChange />
         <RecenterButton bounds={bounds} />
         <ImageOverlay
           url={FLOORPLAN_URL}
