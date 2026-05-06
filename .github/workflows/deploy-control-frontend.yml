@@ -97,30 +97,22 @@ jobs:
           echo "CloudFront distribution: $DIST"
           echo "Site URL: $URL"
       
-      - name: Setup Node (Yarn)
+      - name: Setup Node (npm)
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
-          cache-dependency-path: control-frontend/yarn.lock
+          cache: npm
+          cache-dependency-path: control-frontend/package-lock.json
 
       - name: Install deps
         working-directory: control-frontend
-        run: |
-          # Yarn 1.x
-          if yarn --version | grep -q '^1\.'; then
-            yarn install --frozen-lockfile
-          else
-            # Yarn 3+ (Berry)
-            corepack enable
-            yarn install --immutable
-          fi
+        run: npm ci
 
       - name: Build
         working-directory: control-frontend
         env:
           VITE_BACKEND_URL: 'https://controlapi.dish-patch.com' # Use your backend URL here
-        run: yarn build
+        run: npm run build
 
       - name: Upload to S3
         run: aws s3 sync control-frontend/dist/ "s3://${{ steps.outputs.outputs.bucket }}/" --delete

@@ -95,29 +95,22 @@ jobs:
           echo "CloudFront distribution: $DIST"
           echo "Site URL: $URL"
       
-      - name: Setup Node (Yarn)
+      - name: Setup Node (npm)
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
-          cache-dependency-path: pos-frontend/yarn.lock
+          cache: npm
+          cache-dependency-path: pos-frontend/package-lock.json
 
       - name: Install deps
         working-directory: pos-frontend
-        run: |
-          # Yarn 1.x
-          if yarn --version | grep -q '^1\.'; then
-            yarn install --frozen-lockfile
-          else
-            corepack enable
-            yarn install --immutable
-          fi
+        run: npm ci
 
       - name: Build
         working-directory: pos-frontend
         env:
           VITE_BACKEND_URL: 'https://posapi.dish-patch.com'
-        run: yarn build
+        run: npm run build
 
       - name: Upload to S3
         run: aws s3 sync pos-frontend/dist/ "s3://${{ steps.outputs.outputs.bucket }}/" --delete
