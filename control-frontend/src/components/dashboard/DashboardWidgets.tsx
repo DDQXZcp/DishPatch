@@ -433,7 +433,7 @@ export default function DashboardWidgets() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900 lg:sticky lg:top-[88px] lg:z-9999 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-theme-sm font-semibold text-gray-800 dark:text-white/90">
             Dashboard Widgets
@@ -481,7 +481,7 @@ export default function DashboardWidgets() {
         ))}
       </div>
 
-      <div className="hidden h-[calc(100vh-220px)] min-h-[760px] lg:block">
+      <div className="hidden h-[1120px] min-h-[calc(100vh-220px)] lg:block">
         {visibleLayout ? (
           <Mosaic<WidgetId>
             className="dishpatch-widget-mosaic"
