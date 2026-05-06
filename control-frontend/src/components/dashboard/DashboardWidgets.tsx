@@ -585,10 +585,14 @@ export default function DashboardWidgets() {
   );
 
   useEffect(() => {
-    window.localStorage.setItem(
-      DASHBOARD_WIDGET_STORAGE_KEY,
-      JSON.stringify(widgetState),
-    );
+    try {
+      window.localStorage.setItem(
+        DASHBOARD_WIDGET_STORAGE_KEY,
+        JSON.stringify(widgetState),
+      );
+    } catch (error) {
+      console.warn("Unable to persist dashboard widget layout", error);
+    }
   }, [widgetState]);
 
   useEffect(() => {
@@ -623,18 +627,30 @@ export default function DashboardWidgets() {
       }));
     }
 
-    function handlePointerUp() {
+    function finishResize() {
       setRowResizeState(null);
     }
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        finishResize();
+      }
+    }
+
     window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
+    window.addEventListener("blur", finishResize);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+      window.removeEventListener("blur", finishResize);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [rowResizeState]);
 
@@ -675,18 +691,30 @@ export default function DashboardWidgets() {
       }));
     }
 
-    function handlePointerUp() {
+    function finishResize() {
       setColumnResizeState(null);
     }
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        finishResize();
+      }
+    }
+
     window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
+    window.addEventListener("blur", finishResize);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+      window.removeEventListener("blur", finishResize);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [columnResizeState]);
 

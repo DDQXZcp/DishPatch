@@ -59,6 +59,16 @@ function createRobotPopup(robot: Robot) {
   return wrapper;
 }
 
+function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[]) {
+  markerGroup.clearLayers();
+
+  robots.forEach((robot: Robot) => {
+    L.marker([robot.x, robot.y], { icon: getRobotIcon(robot.status) })
+      .bindPopup(createRobotPopup(robot))
+      .addTo(markerGroup);
+  });
+}
+
 function RecenterButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="absolute top-4 right-4 z-[1000]">
@@ -119,7 +129,9 @@ export default function RestaurantMap() {
 
     mapRef.current = map;
     L.imageOverlay(FLOORPLAN_URL, bounds).addTo(map);
-    markerGroupRef.current = L.layerGroup().addTo(map);
+    const markerGroup = L.layerGroup().addTo(map);
+    markerGroupRef.current = markerGroup;
+    syncRobotMarkers(markerGroup, robots);
     map.fitBounds(bounds);
 
     const refreshMapSize = () => {
@@ -166,13 +178,7 @@ export default function RestaurantMap() {
       return;
     }
 
-    markerGroup.clearLayers();
-
-    robots.forEach((robot: Robot) => {
-      L.marker([robot.x, robot.y], { icon: getRobotIcon(robot.status) })
-        .bindPopup(createRobotPopup(robot))
-        .addTo(markerGroup);
-    });
+    syncRobotMarkers(markerGroup, robots);
   }, [robots]);
 
   if (!bounds) {

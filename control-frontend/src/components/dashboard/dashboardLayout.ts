@@ -71,7 +71,14 @@ export function readStoredWidgetState(): DashboardWidgetState {
     return defaultWidgetState();
   }
 
-  const storedValue = window.localStorage.getItem(DASHBOARD_WIDGET_STORAGE_KEY);
+  let storedValue: string | null;
+
+  try {
+    storedValue = window.localStorage.getItem(DASHBOARD_WIDGET_STORAGE_KEY);
+  } catch {
+    return defaultWidgetState();
+  }
+
   if (!storedValue) {
     return defaultWidgetState();
   }
@@ -100,6 +107,7 @@ export function sanitizeWidgetState(
   const visibleWidgetIds = uniqueWidgetIds(state.visibleWidgetIds);
   const visibleIdSet = new Set<WidgetId>(visibleWidgetIds);
   const seenWidgetIds = new Set<WidgetId>();
+  const seenRowIds = new Set<string>();
   const rows: DashboardWidgetRow[] = [];
 
   for (const row of state.rows) {
@@ -117,7 +125,7 @@ export function sanitizeWidgetState(
 
     if (columns.length > 0) {
       rows.push({
-        id: row.id || createDashboardRowId(),
+        id: getUniqueRowId(row.id, seenRowIds),
         height: normalizeRowHeight(row.height),
         columns: normalizeColumns(columns),
       });
@@ -206,6 +214,11 @@ export function moveWidgetNearTarget(
     const targetColumnIndex = row.columns.findIndex(
       (column) => column.widgetId === targetWidgetId,
     );
+
+    if (targetColumnIndex === -1) {
+      return row;
+    }
+
     const insertIndex =
       position === "left" ? targetColumnIndex : targetColumnIndex + 1;
     const insertedWidth = 100 / (row.columns.length + 1);
@@ -343,6 +356,10 @@ function removeWidgetFromRows(rows: DashboardWidgetRow[], widgetId: WidgetId) {
 }
 
 function normalizeColumns(columns: DashboardWidgetColumn[]) {
+  if (columns.length === 0) {
+    return [];
+  }
+
   const fallbackWidth = 100 / columns.length;
   const rawColumns = columns.map((column) => ({
     widgetId: column.widgetId,
@@ -364,7 +381,20 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
 }
 
 function normalizeRowHeight(height: number) {
-  return Number.isFinite(height) ? Math.max(MIN_ROW_HEIGHT, height) : DEFAULT_ROW_HEIGHT;
+  return Number.isFinite(height)
+    ? Math.max(MIN_ROW_HEIGHT, height)
+    : DEFAULT_ROW_HEIGHT;
+}
+
+function getUniqueRowId(rowId: string, seenRowIds: Set<string>) {
+  let nextRowId = rowId.trim();
+
+  while (!nextRowId || seenRowIds.has(nextRowId)) {
+    nextRowId = createDashboardRowId();
+  }
+
+  seenRowIds.add(nextRowId);
+  return nextRowId;
 }
 
 function uniqueWidgetIds(widgetIds: WidgetId[]) {
