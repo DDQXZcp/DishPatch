@@ -18,7 +18,7 @@ const docClient = require("../config/database");
 // Import your local menu data
 const { menus } = require("../constants/index.js"); // adjust path if needed
 
-const TABLE_NAME = "DishPatch-Pos-Backend-MenuItems"; // Replace with your actual table name
+const TABLE_NAME = "dishPatch-pos-backend-MenuItems"; // Replace with your actual table name
 
 async function seedMenus() {
   try {

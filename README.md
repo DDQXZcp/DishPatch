@@ -259,3 +259,36 @@ docker exec -it <container_name_or_id> /bin/bash
 ros2 topic list -t
 ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
+
+## Local Testing - POS System
+
+For local development, we need to manually create an **.env** in pos-backend folder as some credentials are hided in Repository Secret or AWS System Manager Parameter Stores for security reason.
+
+```
+# .env
+# Replace with your credentials and region
+AWS_ACCESS_KEY_ID=<Your AWS Access Key>
+AWS_SECRET_ACCESS_KEY=<Your AWS Secret Access Key>
+AWS_REGION=ap-southeast-2
+
+# Replace with your table name
+USERS_TABLE=dishPatch-pos-backend-Users
+ORDERS_TABLE=dishPatch-pos-backend-Orders
+PAYMENTS_TABLE=dishPatch-pos-backend-Payments
+TABLES_TABLE=dishPatch-pos-backend-Tables
+MENU_ITEMS_TABLE=dishPatch-pos-backend-MenuItems
+```
+### Seed Data to DynamoDB
+
+When you first create the stack, all DynamoDB is empty. You may wish to seed data to the DynamoDB table.
+
+To allow the script to access to AWS resources, you may need to install and configure AWS CLI via
+```
+aws configure
+```
+Inside **pos-backend** folder, run the scripts using node.js
+```
+node .\seedMenus.js
+node .\seedTables.js
+```
+The scripts will fetch the data defined in constants/index.js and upload to DynamoDB tables.

@@ -5,7 +5,9 @@ name: Deploy POS Frontend
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main 
+      - pos-system-restructure
     paths:
       - 'pos-frontend/**'
       - 'infrastructure/infrastructure-pos-frontend.yml'

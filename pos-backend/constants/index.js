@@ -2,7 +2,7 @@
   {
     id: 1,
     name: "Tomato and Mozzarella Pasta",
-    price: 18,
+    price: 17,
   },
   {
     id: 2,
@@ -36,7 +36,6 @@ export const desserts = [
     id: 2,
     name: "Tiramisu",
     price: 12,
-    category: "Vegetarian"
   },
   {
     id: 3,

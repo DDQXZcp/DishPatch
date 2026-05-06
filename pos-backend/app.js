@@ -2,16 +2,21 @@ const express = require("express");
 const config = require("./config/config");
 const globalErrorHandler = require("./middlewares/globalErrorHandler");
 const cookieParser = require("cookie-parser");
-// const cors = require("cors");
+const cors = require("cors");
 
 const app = express();
 const PORT = config.port;
 
+// Determine allowed origins based on environment
+const allowedOrigins = process.env.NODE_ENV !== "lambda"
+  ? 'http://localhost:5173' // Local origin
+  : process.env.CORS_ALLOW_ORIGINS; // Online environment origin
+
 // Middlewares
-// app.use(cors({
-//   credentials: true,
-//   origin: ['http://localhost:5173'] // adjust when deploying
-// }));
+app.use(cors({
+  credentials: true,
+  origin: allowedOrigins,
+}));
 app.use(express.json());
 app.use(cookieParser());
 
