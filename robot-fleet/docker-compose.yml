@@ -1,9 +1,98 @@
+# ── DishPatch Robot Fleet — docker-compose.yml ────────────────────────────────
+#
+# Services
+# ────────
+#   rosbridge   — bridges ROS2 topics to WebSocket on port 9090
+#   robot1      — simulated robot, namespace=robot1
+#   robot2      — simulated robot, namespace=robot2
+#
+# All containers share the "ros_net" Docker network and ROS_DOMAIN_ID=0
+# so they see each other's topics without using host networking.
+#
+# To add more robots: copy the robot1 block, change the service name,
+# ROBOT_NAMESPACE, and container_name.
+# ──────────────────────────────────────────────────────────────────────────────
+
+networks:
+  ros_net:
+    driver: bridge
+
 services:
-  robot-location-publisher:
-    build: .
-    container_name: robot-location-publisher
+
+  # ── Rosbridge ──────────────────────────────────────────────────────────────
+  rosbridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.rosbridge
+    container_name: rosbridge
     restart: unless-stopped
-    network_mode: host
+    networks:
+      - ros_net
+    ports:
+      - "9090:9090"           # exposed to host so the Java backend can connect
     environment:
       - ROS_DOMAIN_ID=0
       - PYTHONUNBUFFERED=1
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9090 || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Robot 1 ───────────────────────────────────────────────────────────────
+  robot1:
+    build:
+      context: .
+      dockerfile: Dockerfile.robot
+    container_name: robot1
+    restart: unless-stopped
+    networks:
+      - ros_net
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
+      - ROBOT_NAMESPACE=robot1
+      - AUTO_CYCLE=true
+      - INITIAL_BATTERY=100.0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    depends_on:
+      - rosbridge
+
+  # ── Robot 2 ───────────────────────────────────────────────────────────────
+  robot2:
+    build:
+      context: .
+      dockerfile: Dockerfile.robot
+    container_name: robot2
+    restart: unless-stopped
+    networks:
+      - ros_net
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
+      - ROBOT_NAMESPACE=robot2
+      - AUTO_CYCLE=true
+      - INITIAL_BATTERY=75.0    # start at different battery level for variety
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    depends_on:
+      - rosbridge
+
+      # ── Robot 3 ───────────────────────────────────────────────────────────────
+  robot3:
+    build:
+      context: .
+      dockerfile: Dockerfile.robot
+    container_name: robot3
+    restart: unless-stopped
+    networks:
+      - ros_net
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
+      - ROBOT_NAMESPACE=robot3
+      - AUTO_CYCLE=true
+      - INITIAL_BATTERY=50.0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    depends_on:
+      - rosbridge
