@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Mosaic,
   MosaicWindow,
@@ -29,6 +29,12 @@ const DEFAULT_LAYOUT: MosaicNode<WidgetId> = {
 };
 
 const DEFAULT_VISIBLE_WIDGETS = DASHBOARD_WIDGETS.map((widget) => widget.id);
+const STORAGE_KEY = "dishpatch.control.dashboard.widgets.v1";
+
+interface DashboardWidgetState {
+  layout: MosaicNode<WidgetId> | null;
+  visibleWidgetIds: WidgetId[];
+}
 
 function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
@@ -147,12 +153,123 @@ function appendWidget(
   };
 }
 
+function isValidLayoutNode(value: unknown): value is MosaicNode<WidgetId> {
+  if (typeof value === "string") {
+    return isWidgetId(value);
+  }
+
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const node = value as {
+    direction?: unknown;
+    first?: unknown;
+    second?: unknown;
+    splitPercentage?: unknown;
+  };
+
+  const hasValidDirection =
+    node.direction === "row" || node.direction === "column";
+  const hasValidSplit =
+    node.splitPercentage === undefined ||
+    typeof node.splitPercentage === "number";
+
+  return (
+    hasValidDirection &&
+    hasValidSplit &&
+    isValidLayoutNode(node.first) &&
+    isValidLayoutNode(node.second)
+  );
+}
+
+function collectLayoutWidgetIds(
+  node: MosaicNode<WidgetId> | null,
+  ids = new Set<WidgetId>(),
+) {
+  if (!node) {
+    return ids;
+  }
+
+  if (isLeaf(node)) {
+    ids.add(node);
+    return ids;
+  }
+
+  collectLayoutWidgetIds(node.first, ids);
+  collectLayoutWidgetIds(node.second, ids);
+  return ids;
+}
+
+function normalizeLayout(
+  layout: MosaicNode<WidgetId> | null,
+  visibleWidgetIds: WidgetId[],
+) {
+  const visibleIdSet = new Set(visibleWidgetIds);
+  let nextLayout = pruneLayout(layout, visibleIdSet);
+  const layoutIds = collectLayoutWidgetIds(nextLayout);
+
+  for (const widgetId of visibleWidgetIds) {
+    if (!layoutIds.has(widgetId)) {
+      nextLayout = appendWidget(nextLayout, widgetId);
+      layoutIds.add(widgetId);
+    }
+  }
+
+  return nextLayout;
+}
+
+function defaultWidgetState(): DashboardWidgetState {
+  return {
+    layout: DEFAULT_LAYOUT,
+    visibleWidgetIds: [...DEFAULT_VISIBLE_WIDGETS],
+  };
+}
+
+function readStoredWidgetState(): DashboardWidgetState {
+  if (typeof window === "undefined") {
+    return defaultWidgetState();
+  }
+
+  const storedValue = window.localStorage.getItem(STORAGE_KEY);
+  if (!storedValue) {
+    return defaultWidgetState();
+  }
+
+  try {
+    const parsed = JSON.parse(storedValue) as {
+      layout?: unknown;
+      visibleWidgetIds?: unknown;
+    };
+
+    if (
+      !Array.isArray(parsed.visibleWidgetIds) ||
+      !parsed.visibleWidgetIds.every((id): id is WidgetId => isWidgetId(id))
+    ) {
+      return defaultWidgetState();
+    }
+
+    if (parsed.layout !== null && !isValidLayoutNode(parsed.layout)) {
+      return defaultWidgetState();
+    }
+
+    const visibleWidgetIds = parsed.visibleWidgetIds;
+    return {
+      visibleWidgetIds,
+      layout: normalizeLayout(parsed.layout ?? null, visibleWidgetIds),
+    };
+  } catch {
+    return defaultWidgetState();
+  }
+}
+
 export default function DashboardWidgets() {
+  const [initialWidgetState] = useState(readStoredWidgetState);
   const [layout, setLayout] = useState<MosaicNode<WidgetId> | null>(
-    DEFAULT_LAYOUT,
+    initialWidgetState.layout,
   );
   const [visibleWidgetIds, setVisibleWidgetIds] = useState<WidgetId[]>(
-    DEFAULT_VISIBLE_WIDGETS,
+    initialWidgetState.visibleWidgetIds,
   );
 
   const visibleWidgets = useMemo(
@@ -170,9 +287,16 @@ export default function DashboardWidgets() {
   );
 
   const visibleLayout = useMemo(
-    () => pruneLayout(layout, visibleIdSet),
-    [layout, visibleIdSet],
+    () => normalizeLayout(layout, visibleWidgets.map((widget) => widget.id)),
+    [layout, visibleWidgets],
   );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ layout: visibleLayout, visibleWidgetIds }),
+    );
+  }, [visibleLayout, visibleWidgetIds]);
 
   function hideWidget(widgetId: WidgetId) {
     setVisibleWidgetIds((currentIds) => {
