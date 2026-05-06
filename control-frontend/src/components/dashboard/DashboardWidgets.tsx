@@ -1,40 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Mosaic,
-  MosaicWindow,
-  type MosaicNode,
-  type MosaicPath,
-} from "react-mosaic-component";
-import "react-mosaic-component/react-mosaic-component.css";
 
 import { CloseIcon } from "../../icons";
+import {
+  DASHBOARD_WIDGET_STORAGE_KEY,
+  defaultWidgetState,
+  hideWidgetInState,
+  readStoredWidgetState,
+  showWidgetInState,
+  type DashboardWidgetRow,
+  type DashboardWidgetState,
+} from "./dashboardLayout";
 import { DASHBOARD_WIDGETS, WIDGET_BY_ID } from "./widgetRegistry";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
-
-const DEFAULT_LAYOUT: MosaicNode<WidgetId> = {
-  direction: "column",
-  splitPercentage: 70,
-  first: {
-    direction: "row",
-    splitPercentage: 66,
-    first: "robot-map",
-    second: "robot-list",
-  },
-  second: {
-    direction: "row",
-    splitPercentage: 50,
-    first: "pos-orders",
-    second: "table-status",
-  },
-};
-
-const DEFAULT_VISIBLE_WIDGETS = DASHBOARD_WIDGETS.map((widget) => widget.id);
-const STORAGE_KEY = "dishpatch.control.dashboard.widgets.v1";
-
-interface DashboardWidgetState {
-  layout: MosaicNode<WidgetId> | null;
-  visibleWidgetIds: WidgetId[];
-}
 
 function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
@@ -66,21 +43,41 @@ function HideButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function renderToolbar(
-  widget: DashboardWidgetDefinition,
-  onHide: () => void,
-) {
-  return () => (
-    <div className="flex min-w-0 flex-1 items-start justify-between gap-3 px-4 py-3 sm:px-5">
+function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
+      {widget.render()}
+    </div>
+  );
+}
+
+function WidgetHeader({
+  widget,
+  onHide,
+}: {
+  widget: DashboardWidgetDefinition;
+  onHide: () => void;
+}) {
+  return (
+    <div className="flex min-h-[74px] items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-5">
       <ToolbarTitle widget={widget} />
       <HideButton onClick={onHide} />
     </div>
   );
 }
 
-function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
+function WidgetFrame({
+  widget,
+  onHide,
+}: {
+  widget: DashboardWidgetDefinition;
+  onHide: () => void;
+}) {
   return (
-    <div className="h-full overflow-auto p-4 sm:p-5">{widget.render()}</div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
+      <WidgetHeader widget={widget} onHide={onHide} />
+      <WidgetBody widget={widget} />
+    </div>
   );
 }
 
@@ -93,231 +90,71 @@ function MobileWidget({
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-5">
-        <ToolbarTitle widget={widget} />
-        <HideButton onClick={onHide} />
-      </div>
+      <WidgetHeader widget={widget} onHide={onHide} />
       <WidgetBody widget={widget} />
     </div>
   );
 }
 
-function isWidgetId(id: string): id is WidgetId {
-  return WIDGET_BY_ID.has(id as WidgetId);
+function DashboardRow({
+  row,
+  onHideWidget,
+}: {
+  row: DashboardWidgetRow;
+  onHideWidget: (widgetId: WidgetId) => void;
+}) {
+  return (
+    <div
+      className="grid gap-4"
+      style={{
+        gridTemplateColumns: row.columns
+          .map((column) => `minmax(0, ${column.width}fr)`)
+          .join(" "),
+        height: row.height,
+      }}
+    >
+      {row.columns.map((column) => {
+        const widget = WIDGET_BY_ID.get(column.widgetId);
+
+        if (!widget) {
+          return null;
+        }
+
+        return (
+          <div key={column.widgetId} className="min-h-0 min-w-0">
+            <WidgetFrame
+              widget={widget}
+              onHide={() => onHideWidget(column.widgetId)}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function isLeaf(node: MosaicNode<WidgetId>): node is WidgetId {
-  return typeof node === "string";
-}
-
-function pruneLayout(
-  node: MosaicNode<WidgetId> | null,
-  visibleIds: Set<WidgetId>,
-): MosaicNode<WidgetId> | null {
-  if (!node) {
-    return null;
+function DesktopWorkspace({
+  rows,
+  onHideWidget,
+}: {
+  rows: DashboardWidgetRow[];
+  onHideWidget: (widgetId: WidgetId) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-theme-sm text-gray-500 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-400">
+        Select at least one widget to build the dashboard.
+      </div>
+    );
   }
-
-  if (isLeaf(node)) {
-    return visibleIds.has(node) ? node : null;
-  }
-
-  const first = pruneLayout(node.first, visibleIds);
-  const second = pruneLayout(node.second, visibleIds);
-
-  if (first && second) {
-    return { ...node, first, second };
-  }
-
-  return first ?? second;
-}
-
-function removeWidgetFromLayout(
-  node: MosaicNode<WidgetId> | null,
-  widgetId: WidgetId,
-): MosaicNode<WidgetId> | null {
-  if (!node) {
-    return null;
-  }
-
-  if (isLeaf(node)) {
-    return node === widgetId ? null : node;
-  }
-
-  const first = removeWidgetFromLayout(node.first, widgetId);
-  const second = removeWidgetFromLayout(node.second, widgetId);
-
-  if (first && second) {
-    return { ...node, first, second };
-  }
-
-  return first ?? second;
-}
-
-function appendWidget(
-  layout: MosaicNode<WidgetId> | null,
-  widgetId: WidgetId,
-): MosaicNode<WidgetId> {
-  if (!layout) {
-    return widgetId;
-  }
-
-  return {
-    direction: "row",
-    splitPercentage: 72,
-    first: layout,
-    second: widgetId,
-  };
-}
-
-function isValidLayoutNode(value: unknown): value is MosaicNode<WidgetId> {
-  if (typeof value === "string") {
-    return isWidgetId(value);
-  }
-
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const node = value as {
-    direction?: unknown;
-    first?: unknown;
-    second?: unknown;
-    splitPercentage?: unknown;
-  };
-
-  const hasValidDirection =
-    node.direction === "row" || node.direction === "column";
-  const hasValidSplit =
-    node.splitPercentage === undefined ||
-    typeof node.splitPercentage === "number";
 
   return (
-    hasValidDirection &&
-    hasValidSplit &&
-    isValidLayoutNode(node.first) &&
-    isValidLayoutNode(node.second)
+    <div className="space-y-4">
+      {rows.map((row) => (
+        <DashboardRow key={row.id} row={row} onHideWidget={onHideWidget} />
+      ))}
+    </div>
   );
-}
-
-function collectLayoutWidgetIds(
-  node: MosaicNode<WidgetId> | null,
-  ids = new Set<WidgetId>(),
-) {
-  if (!node) {
-    return ids;
-  }
-
-  if (isLeaf(node)) {
-    ids.add(node);
-    return ids;
-  }
-
-  collectLayoutWidgetIds(node.first, ids);
-  collectLayoutWidgetIds(node.second, ids);
-  return ids;
-}
-
-function dedupeLayout(
-  node: MosaicNode<WidgetId> | null,
-  seenIds = new Set<WidgetId>(),
-): MosaicNode<WidgetId> | null {
-  if (!node) {
-    return null;
-  }
-
-  if (isLeaf(node)) {
-    if (seenIds.has(node)) {
-      return null;
-    }
-
-    seenIds.add(node);
-    return node;
-  }
-
-  const first = dedupeLayout(node.first, seenIds);
-  const second = dedupeLayout(node.second, seenIds);
-
-  if (first && second) {
-    return { ...node, first, second };
-  }
-
-  return first ?? second;
-}
-
-function uniqueWidgetIds(widgetIds: WidgetId[]) {
-  return widgetIds.filter(
-    (widgetId, index) => widgetIds.indexOf(widgetId) === index,
-  );
-}
-
-function sanitizeLayout(
-  layout: MosaicNode<WidgetId> | null,
-  visibleWidgetIds: WidgetId[],
-) {
-  const visibleIdSet = new Set(visibleWidgetIds);
-  return pruneLayout(dedupeLayout(layout), visibleIdSet);
-}
-
-function ensureVisibleLayout(
-  layout: MosaicNode<WidgetId> | null,
-  visibleWidgetIds: WidgetId[],
-) {
-  let nextLayout = sanitizeLayout(layout, visibleWidgetIds);
-  const layoutIds = collectLayoutWidgetIds(nextLayout);
-
-  for (const widgetId of visibleWidgetIds) {
-    if (!layoutIds.has(widgetId)) {
-      nextLayout = appendWidget(nextLayout, widgetId);
-      layoutIds.add(widgetId);
-    }
-  }
-
-  return nextLayout;
-}
-
-function defaultWidgetState(): DashboardWidgetState {
-  return {
-    layout: DEFAULT_LAYOUT,
-    visibleWidgetIds: [...DEFAULT_VISIBLE_WIDGETS],
-  };
-}
-
-function readStoredWidgetState(): DashboardWidgetState {
-  if (typeof window === "undefined") {
-    return defaultWidgetState();
-  }
-
-  const storedValue = window.localStorage.getItem(STORAGE_KEY);
-  if (!storedValue) {
-    return defaultWidgetState();
-  }
-
-  try {
-    const parsed = JSON.parse(storedValue) as {
-      layout?: unknown;
-      visibleWidgetIds?: unknown;
-    };
-
-    if (
-      !Array.isArray(parsed.visibleWidgetIds) ||
-      !parsed.visibleWidgetIds.every((id): id is WidgetId => isWidgetId(id))
-    ) {
-      return defaultWidgetState();
-    }
-
-    if (parsed.layout !== null && !isValidLayoutNode(parsed.layout)) {
-      return defaultWidgetState();
-    }
-
-    const visibleWidgetIds = uniqueWidgetIds(parsed.visibleWidgetIds);
-    return {
-      visibleWidgetIds,
-      layout: ensureVisibleLayout(parsed.layout ?? null, visibleWidgetIds),
-    };
-  } catch {
-    return defaultWidgetState();
-  }
 }
 
 export default function DashboardWidgets() {
@@ -325,12 +162,11 @@ export default function DashboardWidgets() {
   const [widgetState, setWidgetState] =
     useState<DashboardWidgetState>(initialWidgetState);
 
-  const { layout, visibleWidgetIds } = widgetState;
+  const { rows, visibleWidgetIds } = widgetState;
 
   const visibleWidgets = useMemo(
     () =>
       visibleWidgetIds
-        .filter(isWidgetId)
         .map((widgetId) => WIDGET_BY_ID.get(widgetId))
         .filter((widget): widget is DashboardWidgetDefinition => Boolean(widget)),
     [visibleWidgetIds],
@@ -341,94 +177,23 @@ export default function DashboardWidgets() {
     [visibleWidgets],
   );
 
-  const visibleLayout = useMemo(
-    () => sanitizeLayout(layout, visibleWidgets.map((widget) => widget.id)),
-    [layout, visibleWidgets],
-  );
-
   useEffect(() => {
     window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ layout: visibleLayout, visibleWidgetIds }),
+      DASHBOARD_WIDGET_STORAGE_KEY,
+      JSON.stringify(widgetState),
     );
-  }, [visibleLayout, visibleWidgetIds]);
+  }, [widgetState]);
 
   function hideWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => {
-      const visibleWidgetIds = currentState.visibleWidgetIds.filter(
-        (id) => id !== widgetId,
-      );
-
-      return {
-        visibleWidgetIds,
-        layout: sanitizeLayout(currentState.layout, visibleWidgetIds),
-      };
-    });
+    setWidgetState((currentState) => hideWidgetInState(currentState, widgetId));
   }
 
   function toggleWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => {
-      if (currentState.visibleWidgetIds.includes(widgetId)) {
-        const visibleWidgetIds = currentState.visibleWidgetIds.filter(
-          (id) => id !== widgetId,
-        );
-
-        return {
-          visibleWidgetIds,
-          layout: sanitizeLayout(currentState.layout, visibleWidgetIds),
-        };
-      }
-
-      const visibleWidgetIds = [...currentState.visibleWidgetIds, widgetId];
-      const currentVisibleLayout = ensureVisibleLayout(
-        currentState.layout,
-        currentState.visibleWidgetIds,
-      );
-
-      return {
-        visibleWidgetIds,
-        layout: appendWidget(
-          removeWidgetFromLayout(currentVisibleLayout, widgetId),
-          widgetId,
-        ),
-      };
-    });
+    setWidgetState((currentState) => showWidgetInState(currentState, widgetId));
   }
 
   function resetLayout() {
     setWidgetState(defaultWidgetState());
-  }
-
-  function handleLayoutChange(nextLayout: MosaicNode<WidgetId> | null) {
-    setWidgetState((currentState) => ({
-      ...currentState,
-      layout: sanitizeLayout(nextLayout, currentState.visibleWidgetIds),
-    }));
-  }
-
-  function handleLayoutRelease(nextLayout: MosaicNode<WidgetId> | null) {
-    setWidgetState((currentState) => ({
-      ...currentState,
-      layout: ensureVisibleLayout(nextLayout, currentState.visibleWidgetIds),
-    }));
-  }
-
-  function renderTile(widgetId: WidgetId, path: MosaicPath) {
-    const widget = WIDGET_BY_ID.get(widgetId);
-    if (!widget) {
-      return null;
-    }
-
-    return (
-      <MosaicWindow<WidgetId>
-        path={path}
-        title={widget.title}
-        toolbarControls={<HideButton onClick={() => hideWidget(widget.id)} />}
-        renderToolbar={renderToolbar(widget, () => hideWidget(widget.id))}
-      >
-        <WidgetBody widget={widget} />
-      </MosaicWindow>
-    );
   }
 
   return (
@@ -481,21 +246,8 @@ export default function DashboardWidgets() {
         ))}
       </div>
 
-      <div className="hidden h-[1120px] min-h-[calc(100vh-220px)] lg:block">
-        {visibleLayout ? (
-          <Mosaic<WidgetId>
-            className="dishpatch-widget-mosaic"
-            value={visibleLayout}
-            onChange={handleLayoutChange}
-            onRelease={handleLayoutRelease}
-            renderTile={renderTile}
-            resize={{ minimumPaneSizePercentage: 18 }}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-theme-sm text-gray-500 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-400">
-            Select at least one widget to build the dashboard.
-          </div>
-        )}
+      <div className="hidden lg:block">
+        <DesktopWorkspace rows={rows} onHideWidget={hideWidget} />
       </div>
     </div>
   );
