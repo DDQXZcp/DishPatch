@@ -2,7 +2,7 @@
   {
     id: 1,
     name: "Tomato and Mozzarella Pasta",
-    price: 18,
+    price: 17,
   },
   {
     id: 2,
