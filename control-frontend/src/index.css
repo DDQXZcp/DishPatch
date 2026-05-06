@@ -260,6 +260,103 @@ layer(base);
   @apply bg-brand-100 dark:bg-brand-500/20;
 }
 
+@layer components {
+  .dishpatch-widget-mosaic.mosaic {
+    background: transparent;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-root {
+    inset: -6px;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-tile {
+    margin: 6px;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-window,
+  .dishpatch-widget-mosaic .mosaic-preview {
+    overflow: hidden;
+    border: 1px solid var(--color-gray-200);
+    border-radius: 16px;
+    background: white;
+    box-shadow: var(--shadow-theme-xs);
+  }
+
+  .dishpatch-widget-mosaic .mosaic-window-toolbar,
+  .dishpatch-widget-mosaic .mosaic-preview .mosaic-window-toolbar {
+    height: 56px;
+    border-bottom: 1px solid var(--color-gray-100);
+    background: white;
+    box-shadow: none;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-window-toolbar.draggable {
+    cursor: grab;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-window-toolbar.draggable:active {
+    cursor: grabbing;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-window-body,
+  .dishpatch-widget-mosaic .mosaic-preview .mosaic-window-body {
+    background: white;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-split {
+    background: transparent;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-split:hover {
+    background: transparent;
+  }
+
+  .dishpatch-widget-mosaic .mosaic-split:hover .mosaic-split-line {
+    background: var(--color-brand-400);
+  }
+
+  .dishpatch-widget-mosaic .mosaic-split.-row .mosaic-split-line {
+    left: 2px;
+    right: 2px;
+    background: var(--color-gray-200);
+  }
+
+  .dishpatch-widget-mosaic .mosaic-split.-column .mosaic-split-line {
+    top: 2px;
+    bottom: 2px;
+    background: var(--color-gray-200);
+  }
+
+  .dishpatch-widget-mosaic.mosaic-drop-target .drop-target-container .drop-target,
+  .dishpatch-widget-mosaic .mosaic-drop-target .drop-target-container .drop-target {
+    border-color: var(--color-brand-500);
+    border-radius: 12px;
+    background: rgba(70, 95, 255, 0.12);
+  }
+
+  .dark .dishpatch-widget-mosaic .mosaic-window,
+  .dark .dishpatch-widget-mosaic .mosaic-preview {
+    border-color: var(--color-gray-800);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .dark .dishpatch-widget-mosaic .mosaic-window-toolbar,
+  .dark .dishpatch-widget-mosaic .mosaic-preview .mosaic-window-toolbar {
+    border-color: var(--color-gray-800);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .dark .dishpatch-widget-mosaic .mosaic-window-body,
+  .dark .dishpatch-widget-mosaic .mosaic-preview .mosaic-window-body {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .dark .dishpatch-widget-mosaic .mosaic-split.-row .mosaic-split-line,
+  .dark .dishpatch-widget-mosaic .mosaic-split.-column .mosaic-split-line {
+    background: var(--color-gray-800);
+  }
+}
+
 @utility menu-dropdown-badge-inactive {
   @apply bg-brand-50 group-hover:bg-brand-100 dark:bg-brand-500/15 dark:group-hover:bg-brand-500/20;
 }
