@@ -56,6 +56,30 @@ interface ColumnResizeState {
   rightWidth: number;
 }
 
+const DESKTOP_WIDGET_MEDIA_QUERY = "(min-width: 1024px)";
+
+function getMediaQueryMatches(query: string) {
+  return typeof window !== "undefined" && window.matchMedia(query).matches;
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => getMediaQueryMatches(query));
+
+  useEffect(() => {
+    const mediaQueryList = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQueryList.matches);
+
+    handleChange();
+    mediaQueryList.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQueryList.removeEventListener("change", handleChange);
+    };
+  }, [query]);
+
+  return matches;
+}
+
 function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
     <div className="min-w-0">
@@ -543,6 +567,7 @@ export default function DashboardWidgets() {
   );
   const [columnResizeState, setColumnResizeState] =
     useState<ColumnResizeState | null>(null);
+  const isDesktopWorkspace = useMediaQuery(DESKTOP_WIDGET_MEDIA_QUERY);
 
   const { rows, visibleWidgetIds } = widgetState;
 
@@ -565,6 +590,13 @@ export default function DashboardWidgets() {
       JSON.stringify(widgetState),
     );
   }, [widgetState]);
+
+  useEffect(() => {
+    setDraggedWidgetId(null);
+    setActiveDropTarget(null);
+    setRowResizeState(null);
+    setColumnResizeState(null);
+  }, [isDesktopWorkspace]);
 
   useEffect(() => {
     if (!rowResizeState) {
@@ -817,17 +849,7 @@ export default function DashboardWidgets() {
         </div>
       </div>
 
-      <div className="space-y-4 lg:hidden">
-        {visibleWidgets.map((widget) => (
-          <MobileWidget
-            key={widget.id}
-            widget={widget}
-            onHide={() => hideWidget(widget.id)}
-          />
-        ))}
-      </div>
-
-      <div className="hidden lg:block">
+      {isDesktopWorkspace ? (
         <DesktopWorkspace
           activeDropTarget={activeDropTarget}
           draggedWidgetId={draggedWidgetId}
@@ -841,7 +863,17 @@ export default function DashboardWidgets() {
           onSetActiveDropTarget={setActiveDropTarget}
           rows={rows}
         />
-      </div>
+      ) : (
+        <div className="space-y-4">
+          {visibleWidgets.map((widget) => (
+            <MobileWidget
+              key={widget.id}
+              widget={widget}
+              onHide={() => hideWidget(widget.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
