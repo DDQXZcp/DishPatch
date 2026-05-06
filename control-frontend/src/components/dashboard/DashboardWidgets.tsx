@@ -3,18 +3,22 @@ import {
   useMemo,
   useState,
   type DragEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
 import { CloseIcon } from "../../icons";
 import {
   DASHBOARD_WIDGET_STORAGE_KEY,
+  MIN_COLUMN_WIDTH,
   defaultWidgetState,
   hideWidgetInState,
   isWidgetId,
   moveWidgetNearTarget,
   moveWidgetToBottom,
   readStoredWidgetState,
+  setColumnPairWidths,
+  setRowHeight,
   showWidgetInState,
   type DropPosition,
   type DashboardWidgetRow,
@@ -35,6 +39,21 @@ interface DragHandleProps {
   draggable: true;
   onDragStart: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
+}
+
+interface RowResizeState {
+  rowId: string;
+  startY: number;
+  startHeight: number;
+}
+
+interface ColumnResizeState {
+  rowId: string;
+  columnIndex: number;
+  startX: number;
+  rowWidth: number;
+  leftWidth: number;
+  rightWidth: number;
 }
 
 function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
@@ -314,19 +333,62 @@ function WidgetTile({
   );
 }
 
+function RowResizeHandle({
+  onResizeStart,
+}: {
+  onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="absolute inset-x-5 -bottom-2 z-30 flex h-4 cursor-row-resize touch-none items-center justify-center rounded-full focus:outline-none"
+      onPointerDown={onResizeStart}
+      aria-label="Resize widget row"
+      title="Resize row"
+    >
+      <span className="h-px w-24 rounded-full bg-transparent transition hover:bg-brand-400" />
+    </button>
+  );
+}
+
+function ColumnResizeHandle({
+  onResizeStart,
+}: {
+  onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="group absolute -right-2 top-0 z-30 flex h-full w-4 cursor-col-resize touch-none items-center justify-center focus:outline-none"
+      onPointerDown={onResizeStart}
+      aria-label="Resize widget columns"
+      title="Resize columns"
+    >
+      <span className="h-12 w-px rounded-full bg-gray-200 transition group-hover:bg-brand-400 dark:bg-gray-700 dark:group-hover:bg-brand-400" />
+    </button>
+  );
+}
+
 function DashboardRow({
   row,
   activeDropTarget,
   draggedWidgetId,
+  onColumnResizeStart,
   onDragEnd,
   onDragStart,
   onDropOnWidget,
   onHideWidget,
+  onRowResizeStart,
   onSetActiveDropTarget,
 }: {
   row: DashboardWidgetRow;
   activeDropTarget: ActiveDropTarget | null;
   draggedWidgetId: WidgetId | null;
+  onColumnResizeStart: (
+    row: DashboardWidgetRow,
+    columnIndex: number,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => void;
   onDragEnd: () => void;
   onDragStart: (widgetId: WidgetId, event: DragEvent<HTMLDivElement>) => void;
   onDropOnWidget: (
@@ -335,40 +397,59 @@ function DashboardRow({
     event: DragEvent<HTMLDivElement>,
   ) => void;
   onHideWidget: (widgetId: WidgetId) => void;
+  onRowResizeStart: (
+    row: DashboardWidgetRow,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => void;
   onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
 }) {
   return (
     <div
-      className="grid gap-4"
+      className="relative"
+      data-dashboard-row="true"
       style={{
-        gridTemplateColumns: row.columns
-          .map((column) => `minmax(0, ${column.width}fr)`)
-          .join(" "),
         height: row.height,
       }}
     >
-      {row.columns.map((column) => {
-        const widget = WIDGET_BY_ID.get(column.widgetId);
+      <div
+        className="grid h-full gap-4"
+        style={{
+          gridTemplateColumns: row.columns
+            .map((column) => `minmax(0, ${column.width}fr)`)
+            .join(" "),
+        }}
+      >
+        {row.columns.map((column, columnIndex) => {
+          const widget = WIDGET_BY_ID.get(column.widgetId);
 
-        if (!widget) {
-          return null;
-        }
+          if (!widget) {
+            return null;
+          }
 
-        return (
-          <div key={column.widgetId} className="min-h-0 min-w-0">
-            <WidgetTile
-              widget={widget}
-              activeDropTarget={activeDropTarget}
-              draggedWidgetId={draggedWidgetId}
-              onDragEnd={onDragEnd}
-              onDragStart={onDragStart}
-              onDropOnWidget={onDropOnWidget}
-              onHide={() => onHideWidget(column.widgetId)}
-              onSetActiveDropTarget={onSetActiveDropTarget}
-            />
-          </div>
-        );
-      })}
+          return (
+            <div key={column.widgetId} className="relative min-h-0 min-w-0">
+              <WidgetTile
+                widget={widget}
+                activeDropTarget={activeDropTarget}
+                draggedWidgetId={draggedWidgetId}
+                onDragEnd={onDragEnd}
+                onDragStart={onDragStart}
+                onDropOnWidget={onDropOnWidget}
+                onHide={() => onHideWidget(column.widgetId)}
+                onSetActiveDropTarget={onSetActiveDropTarget}
+              />
+              {columnIndex < row.columns.length - 1 && (
+                <ColumnResizeHandle
+                  onResizeStart={(event) =>
+                    onColumnResizeStart(row, columnIndex, event)
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <RowResizeHandle onResizeStart={(event) => onRowResizeStart(row, event)} />
     </div>
   );
 }
@@ -376,16 +457,23 @@ function DashboardRow({
 function DesktopWorkspace({
   activeDropTarget,
   draggedWidgetId,
+  onColumnResizeStart,
   onDragEnd,
   onDragStart,
   onDropOnBottom,
   onDropOnWidget,
   rows,
   onHideWidget,
+  onRowResizeStart,
   onSetActiveDropTarget,
 }: {
   activeDropTarget: ActiveDropTarget | null;
   draggedWidgetId: WidgetId | null;
+  onColumnResizeStart: (
+    row: DashboardWidgetRow,
+    columnIndex: number,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => void;
   onDragEnd: () => void;
   onDragStart: (widgetId: WidgetId, event: DragEvent<HTMLDivElement>) => void;
   onDropOnBottom: (event: DragEvent<HTMLDivElement>) => void;
@@ -396,6 +484,10 @@ function DesktopWorkspace({
   ) => void;
   rows: DashboardWidgetRow[];
   onHideWidget: (widgetId: WidgetId) => void;
+  onRowResizeStart: (
+    row: DashboardWidgetRow,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => void;
   onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
 }) {
   if (rows.length === 0) {
@@ -414,10 +506,12 @@ function DesktopWorkspace({
           row={row}
           activeDropTarget={activeDropTarget}
           draggedWidgetId={draggedWidgetId}
+          onColumnResizeStart={onColumnResizeStart}
           onDragEnd={onDragEnd}
           onDragStart={onDragStart}
           onDropOnWidget={onDropOnWidget}
           onHideWidget={onHideWidget}
+          onRowResizeStart={onRowResizeStart}
           onSetActiveDropTarget={onSetActiveDropTarget}
         />
       ))}
@@ -444,6 +538,11 @@ export default function DashboardWidgets() {
   const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
   const [activeDropTarget, setActiveDropTarget] =
     useState<ActiveDropTarget | null>(null);
+  const [rowResizeState, setRowResizeState] = useState<RowResizeState | null>(
+    null,
+  );
+  const [columnResizeState, setColumnResizeState] =
+    useState<ColumnResizeState | null>(null);
 
   const { rows, visibleWidgetIds } = widgetState;
 
@@ -466,6 +565,98 @@ export default function DashboardWidgets() {
       JSON.stringify(widgetState),
     );
   }, [widgetState]);
+
+  useEffect(() => {
+    if (!rowResizeState) {
+      return;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(event: PointerEvent) {
+      const nextHeight =
+        rowResizeState.startHeight + event.clientY - rowResizeState.startY;
+
+      setWidgetState((currentState) => ({
+        ...currentState,
+        rows: setRowHeight(
+          currentState.rows,
+          rowResizeState.rowId,
+          nextHeight,
+        ),
+      }));
+    }
+
+    function handlePointerUp() {
+      setRowResizeState(null);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [rowResizeState]);
+
+  useEffect(() => {
+    if (!columnResizeState) {
+      return;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(event: PointerEvent) {
+      const deltaPercent =
+        ((event.clientX - columnResizeState.startX) /
+          columnResizeState.rowWidth) *
+        100;
+      const pairTotal =
+        columnResizeState.leftWidth + columnResizeState.rightWidth;
+      const pairMin = Math.min(MIN_COLUMN_WIDTH, pairTotal / 2);
+      const leftWidth = Math.min(
+        Math.max(columnResizeState.leftWidth + deltaPercent, pairMin),
+        pairTotal - pairMin,
+      );
+      const rightWidth = pairTotal - leftWidth;
+
+      setWidgetState((currentState) => ({
+        ...currentState,
+        rows: setColumnPairWidths(
+          currentState.rows,
+          columnResizeState.rowId,
+          columnResizeState.columnIndex,
+          leftWidth,
+          rightWidth,
+        ),
+      }));
+    }
+
+    function handlePointerUp() {
+      setColumnResizeState(null);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [columnResizeState]);
 
   function hideWidget(widgetId: WidgetId) {
     setWidgetState((currentState) => hideWidgetInState(currentState, widgetId));
@@ -546,6 +737,46 @@ export default function DashboardWidgets() {
     handleDragEnd();
   }
 
+  function handleRowResizeStart(
+    row: DashboardWidgetRow,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setRowResizeState({
+      rowId: row.id,
+      startY: event.clientY,
+      startHeight: row.height,
+    });
+  }
+
+  function handleColumnResizeStart(
+    row: DashboardWidgetRow,
+    columnIndex: number,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    const leftColumn = row.columns[columnIndex];
+    const rightColumn = row.columns[columnIndex + 1];
+    const rowElement = event.currentTarget.closest("[data-dashboard-row]");
+    const rowWidth = rowElement?.getBoundingClientRect().width ?? 0;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!leftColumn || !rightColumn || rowWidth <= 0) {
+      return;
+    }
+
+    setColumnResizeState({
+      rowId: row.id,
+      columnIndex,
+      startX: event.clientX,
+      rowWidth,
+      leftWidth: leftColumn.width,
+      rightWidth: rightColumn.width,
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900 lg:sticky lg:top-[88px] lg:z-9999 lg:flex-row lg:items-center lg:justify-between">
@@ -600,11 +831,13 @@ export default function DashboardWidgets() {
         <DesktopWorkspace
           activeDropTarget={activeDropTarget}
           draggedWidgetId={draggedWidgetId}
+          onColumnResizeStart={handleColumnResizeStart}
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
           onDropOnBottom={handleDropOnBottom}
           onDropOnWidget={handleDropOnWidget}
           onHideWidget={hideWidget}
+          onRowResizeStart={handleRowResizeStart}
           onSetActiveDropTarget={setActiveDropTarget}
           rows={rows}
         />
