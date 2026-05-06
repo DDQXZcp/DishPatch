@@ -284,7 +284,9 @@ layer(base);
 
   .dishpatch-widget-mosaic .mosaic-window-toolbar,
   .dishpatch-widget-mosaic .mosaic-preview .mosaic-window-toolbar {
-    height: 56px;
+    height: auto;
+    min-height: 74px;
+    align-items: stretch;
     border-bottom: 1px solid var(--color-gray-100);
     background: white;
     box-shadow: none;

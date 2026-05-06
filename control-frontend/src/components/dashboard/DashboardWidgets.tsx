@@ -7,7 +7,7 @@ import {
 } from "react-mosaic-component";
 import "react-mosaic-component/react-mosaic-component.css";
 
-import { CloseIcon, GridIcon } from "../../icons";
+import { CloseIcon } from "../../icons";
 import { DASHBOARD_WIDGETS, WIDGET_BY_ID } from "./widgetRegistry";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
@@ -71,13 +71,8 @@ function renderToolbar(
   onHide: () => void,
 ) {
   return () => (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="hidden text-gray-400 dark:text-gray-500 sm:block">
-          <GridIcon className="size-4" />
-        </span>
-        <ToolbarTitle widget={widget} />
-      </div>
+    <div className="flex min-w-0 flex-1 items-start justify-between gap-3 px-4 py-3 sm:px-5">
+      <ToolbarTitle widget={widget} />
       <HideButton onClick={onHide} />
     </div>
   );
