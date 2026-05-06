@@ -137,6 +137,28 @@ function pruneLayout(
   return first ?? second;
 }
 
+function removeWidgetFromLayout(
+  node: MosaicNode<WidgetId> | null,
+  widgetId: WidgetId,
+): MosaicNode<WidgetId> | null {
+  if (!node) {
+    return null;
+  }
+
+  if (isLeaf(node)) {
+    return node === widgetId ? null : node;
+  }
+
+  const first = removeWidgetFromLayout(node.first, widgetId);
+  const second = removeWidgetFromLayout(node.second, widgetId);
+
+  if (first && second) {
+    return { ...node, first, second };
+  }
+
+  return first ?? second;
+}
+
 function appendWidget(
   layout: MosaicNode<WidgetId> | null,
   widgetId: WidgetId,
@@ -201,12 +223,52 @@ function collectLayoutWidgetIds(
   return ids;
 }
 
-function normalizeLayout(
+function dedupeLayout(
+  node: MosaicNode<WidgetId> | null,
+  seenIds = new Set<WidgetId>(),
+): MosaicNode<WidgetId> | null {
+  if (!node) {
+    return null;
+  }
+
+  if (isLeaf(node)) {
+    if (seenIds.has(node)) {
+      return null;
+    }
+
+    seenIds.add(node);
+    return node;
+  }
+
+  const first = dedupeLayout(node.first, seenIds);
+  const second = dedupeLayout(node.second, seenIds);
+
+  if (first && second) {
+    return { ...node, first, second };
+  }
+
+  return first ?? second;
+}
+
+function uniqueWidgetIds(widgetIds: WidgetId[]) {
+  return widgetIds.filter(
+    (widgetId, index) => widgetIds.indexOf(widgetId) === index,
+  );
+}
+
+function sanitizeLayout(
   layout: MosaicNode<WidgetId> | null,
   visibleWidgetIds: WidgetId[],
 ) {
   const visibleIdSet = new Set(visibleWidgetIds);
-  let nextLayout = pruneLayout(layout, visibleIdSet);
+  return pruneLayout(dedupeLayout(layout), visibleIdSet);
+}
+
+function ensureVisibleLayout(
+  layout: MosaicNode<WidgetId> | null,
+  visibleWidgetIds: WidgetId[],
+) {
+  let nextLayout = sanitizeLayout(layout, visibleWidgetIds);
   const layoutIds = collectLayoutWidgetIds(nextLayout);
 
   for (const widgetId of visibleWidgetIds) {
@@ -253,10 +315,10 @@ function readStoredWidgetState(): DashboardWidgetState {
       return defaultWidgetState();
     }
 
-    const visibleWidgetIds = parsed.visibleWidgetIds;
+    const visibleWidgetIds = uniqueWidgetIds(parsed.visibleWidgetIds);
     return {
       visibleWidgetIds,
-      layout: normalizeLayout(parsed.layout ?? null, visibleWidgetIds),
+      layout: ensureVisibleLayout(parsed.layout ?? null, visibleWidgetIds),
     };
   } catch {
     return defaultWidgetState();
@@ -265,12 +327,10 @@ function readStoredWidgetState(): DashboardWidgetState {
 
 export default function DashboardWidgets() {
   const [initialWidgetState] = useState(readStoredWidgetState);
-  const [layout, setLayout] = useState<MosaicNode<WidgetId> | null>(
-    initialWidgetState.layout,
-  );
-  const [visibleWidgetIds, setVisibleWidgetIds] = useState<WidgetId[]>(
-    initialWidgetState.visibleWidgetIds,
-  );
+  const [widgetState, setWidgetState] =
+    useState<DashboardWidgetState>(initialWidgetState);
+
+  const { layout, visibleWidgetIds } = widgetState;
 
   const visibleWidgets = useMemo(
     () =>
@@ -287,7 +347,7 @@ export default function DashboardWidgets() {
   );
 
   const visibleLayout = useMemo(
-    () => normalizeLayout(layout, visibleWidgets.map((widget) => widget.id)),
+    () => sanitizeLayout(layout, visibleWidgets.map((widget) => widget.id)),
     [layout, visibleWidgets],
   );
 
@@ -299,31 +359,63 @@ export default function DashboardWidgets() {
   }, [visibleLayout, visibleWidgetIds]);
 
   function hideWidget(widgetId: WidgetId) {
-    setVisibleWidgetIds((currentIds) => {
-      const nextIds = currentIds.filter((id) => id !== widgetId);
-      const nextIdSet = new Set(nextIds);
-      setLayout((currentLayout) => pruneLayout(currentLayout, nextIdSet));
-      return nextIds;
+    setWidgetState((currentState) => {
+      const visibleWidgetIds = currentState.visibleWidgetIds.filter(
+        (id) => id !== widgetId,
+      );
+
+      return {
+        visibleWidgetIds,
+        layout: sanitizeLayout(currentState.layout, visibleWidgetIds),
+      };
     });
   }
 
   function toggleWidget(widgetId: WidgetId) {
-    setVisibleWidgetIds((currentIds) => {
-      if (currentIds.includes(widgetId)) {
-        const nextIds = currentIds.filter((id) => id !== widgetId);
-        const nextIdSet = new Set(nextIds);
-        setLayout((currentLayout) => pruneLayout(currentLayout, nextIdSet));
-        return nextIds;
+    setWidgetState((currentState) => {
+      if (currentState.visibleWidgetIds.includes(widgetId)) {
+        const visibleWidgetIds = currentState.visibleWidgetIds.filter(
+          (id) => id !== widgetId,
+        );
+
+        return {
+          visibleWidgetIds,
+          layout: sanitizeLayout(currentState.layout, visibleWidgetIds),
+        };
       }
 
-      setLayout((currentLayout) => appendWidget(currentLayout, widgetId));
-      return [...currentIds, widgetId];
+      const visibleWidgetIds = [...currentState.visibleWidgetIds, widgetId];
+      const currentVisibleLayout = ensureVisibleLayout(
+        currentState.layout,
+        currentState.visibleWidgetIds,
+      );
+
+      return {
+        visibleWidgetIds,
+        layout: appendWidget(
+          removeWidgetFromLayout(currentVisibleLayout, widgetId),
+          widgetId,
+        ),
+      };
     });
   }
 
   function resetLayout() {
-    setLayout(DEFAULT_LAYOUT);
-    setVisibleWidgetIds(DEFAULT_VISIBLE_WIDGETS);
+    setWidgetState(defaultWidgetState());
+  }
+
+  function handleLayoutChange(nextLayout: MosaicNode<WidgetId> | null) {
+    setWidgetState((currentState) => ({
+      ...currentState,
+      layout: sanitizeLayout(nextLayout, currentState.visibleWidgetIds),
+    }));
+  }
+
+  function handleLayoutRelease(nextLayout: MosaicNode<WidgetId> | null) {
+    setWidgetState((currentState) => ({
+      ...currentState,
+      layout: ensureVisibleLayout(nextLayout, currentState.visibleWidgetIds),
+    }));
   }
 
   function renderTile(widgetId: WidgetId, path: MosaicPath) {
@@ -399,7 +491,8 @@ export default function DashboardWidgets() {
           <Mosaic<WidgetId>
             className="dishpatch-widget-mosaic"
             value={visibleLayout}
-            onChange={setLayout}
+            onChange={handleLayoutChange}
+            onRelease={handleLayoutRelease}
             renderTile={renderTile}
             resize={{ minimumPaneSizePercentage: 18 }}
           />
