@@ -584,6 +584,11 @@ export default function DashboardWidgets() {
     [visibleWidgets],
   );
 
+  function clearDragState() {
+    setDraggedWidgetId(null);
+    setActiveDropTarget(null);
+  }
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -601,6 +606,30 @@ export default function DashboardWidgets() {
     setRowResizeState(null);
     setColumnResizeState(null);
   }, [isDesktopWorkspace]);
+
+  useEffect(() => {
+    if (!draggedWidgetId) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        clearDragState();
+      }
+    }
+
+    window.addEventListener("dragend", clearDragState);
+    window.addEventListener("drop", clearDragState);
+    window.addEventListener("blur", clearDragState);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("dragend", clearDragState);
+      window.removeEventListener("drop", clearDragState);
+      window.removeEventListener("blur", clearDragState);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [draggedWidgetId]);
 
   useEffect(() => {
     if (!rowResizeState) {
@@ -750,8 +779,7 @@ export default function DashboardWidgets() {
   }
 
   function handleDragEnd() {
-    setDraggedWidgetId(null);
-    setActiveDropTarget(null);
+    clearDragState();
   }
 
   function handleDropOnWidget(
