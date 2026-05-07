@@ -94,22 +94,23 @@ jobs:
           echo "S3 bucket: $BUCKET"
           echo "CloudFront distribution: $DIST"
           echo "Site URL: $URL"
-      
+
       - name: Setup Node (Yarn)
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: yarn
+          cache-dependency-path: pos-frontend/yarn.lock
 
       - name: Install deps
         working-directory: pos-frontend
         run: |
           # Yarn 1.x
           if yarn --version | grep -q '^1\.'; then
-            yarn install
+            yarn install --frozen-lockfile
           else
             corepack enable
-            YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
+            yarn install --immutable
           fi
 
       - name: Build
