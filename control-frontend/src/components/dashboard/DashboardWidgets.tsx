@@ -614,8 +614,20 @@ export default function DashboardWidgets() {
 
     let cleanupTimeout: number | null = null;
 
-    function clearDragStateAfterEvent() {
-      cleanupTimeout = window.setTimeout(clearDragState, 0);
+    function clearCleanupTimeout() {
+      if (cleanupTimeout !== null) {
+        window.clearTimeout(cleanupTimeout);
+        cleanupTimeout = null;
+      }
+    }
+
+    function scheduleDragStateCleanup(delay = 1200) {
+      clearCleanupTimeout();
+      cleanupTimeout = window.setTimeout(clearDragState, delay);
+    }
+
+    function clearDragStateAfterCurrentEvent() {
+      scheduleDragStateCleanup(0);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -624,22 +636,26 @@ export default function DashboardWidgets() {
       }
     }
 
+    scheduleDragStateCleanup();
+
+    window.addEventListener("drag", scheduleDragStateCleanup);
     window.addEventListener("dragend", clearDragState);
+    window.addEventListener("dragover", scheduleDragStateCleanup);
     window.addEventListener("drop", clearDragState);
-    window.addEventListener("pointerup", clearDragStateAfterEvent);
-    window.addEventListener("mouseup", clearDragStateAfterEvent);
+    window.addEventListener("pointerup", clearDragStateAfterCurrentEvent);
+    window.addEventListener("mouseup", clearDragStateAfterCurrentEvent);
     window.addEventListener("blur", clearDragState);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      if (cleanupTimeout !== null) {
-        window.clearTimeout(cleanupTimeout);
-      }
+      clearCleanupTimeout();
 
+      window.removeEventListener("drag", scheduleDragStateCleanup);
       window.removeEventListener("dragend", clearDragState);
+      window.removeEventListener("dragover", scheduleDragStateCleanup);
       window.removeEventListener("drop", clearDragState);
-      window.removeEventListener("pointerup", clearDragStateAfterEvent);
-      window.removeEventListener("mouseup", clearDragStateAfterEvent);
+      window.removeEventListener("pointerup", clearDragStateAfterCurrentEvent);
+      window.removeEventListener("mouseup", clearDragStateAfterCurrentEvent);
       window.removeEventListener("blur", clearDragState);
       window.removeEventListener("keydown", handleKeyDown);
     };
