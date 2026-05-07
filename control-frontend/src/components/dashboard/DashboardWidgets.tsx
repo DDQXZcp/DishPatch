@@ -584,11 +584,6 @@ export default function DashboardWidgets() {
     [visibleWidgets],
   );
 
-  function clearDragState() {
-    setDraggedWidgetId(null);
-    setActiveDropTarget(null);
-  }
-
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -606,60 +601,6 @@ export default function DashboardWidgets() {
     setRowResizeState(null);
     setColumnResizeState(null);
   }, [isDesktopWorkspace]);
-
-  useEffect(() => {
-    if (!draggedWidgetId) {
-      return;
-    }
-
-    let cleanupTimeout: number | null = null;
-
-    function clearCleanupTimeout() {
-      if (cleanupTimeout !== null) {
-        window.clearTimeout(cleanupTimeout);
-        cleanupTimeout = null;
-      }
-    }
-
-    function scheduleDragStateCleanup(delay = 1200) {
-      clearCleanupTimeout();
-      cleanupTimeout = window.setTimeout(clearDragState, delay);
-    }
-
-    function clearDragStateAfterCurrentEvent() {
-      scheduleDragStateCleanup(0);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        clearDragState();
-      }
-    }
-
-    scheduleDragStateCleanup();
-
-    window.addEventListener("drag", scheduleDragStateCleanup);
-    window.addEventListener("dragend", clearDragState);
-    window.addEventListener("dragover", scheduleDragStateCleanup);
-    window.addEventListener("drop", clearDragState);
-    window.addEventListener("pointerup", clearDragStateAfterCurrentEvent);
-    window.addEventListener("mouseup", clearDragStateAfterCurrentEvent);
-    window.addEventListener("blur", clearDragState);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      clearCleanupTimeout();
-
-      window.removeEventListener("drag", scheduleDragStateCleanup);
-      window.removeEventListener("dragend", clearDragState);
-      window.removeEventListener("dragover", scheduleDragStateCleanup);
-      window.removeEventListener("drop", clearDragState);
-      window.removeEventListener("pointerup", clearDragStateAfterCurrentEvent);
-      window.removeEventListener("mouseup", clearDragStateAfterCurrentEvent);
-      window.removeEventListener("blur", clearDragState);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [draggedWidgetId]);
 
   useEffect(() => {
     if (!rowResizeState) {
@@ -809,7 +750,8 @@ export default function DashboardWidgets() {
   }
 
   function handleDragEnd() {
-    clearDragState();
+    setDraggedWidgetId(null);
+    setActiveDropTarget(null);
   }
 
   function handleDropOnWidget(
