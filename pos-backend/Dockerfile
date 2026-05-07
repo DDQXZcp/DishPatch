@@ -5,7 +5,7 @@ FROM public.ecr.aws/lambda/nodejs:20
 RUN npm install -g yarn
 
 # Copy dependency files first
-COPY package.json ./
+COPY package.json yarn.lock ./
 
 # Install production dependencies using Yarn
 RUN yarn install --production
