@@ -612,6 +612,12 @@ export default function DashboardWidgets() {
       return;
     }
 
+    let cleanupTimeout: number | null = null;
+
+    function clearDragStateAfterEvent() {
+      cleanupTimeout = window.setTimeout(clearDragState, 0);
+    }
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         clearDragState();
@@ -620,12 +626,20 @@ export default function DashboardWidgets() {
 
     window.addEventListener("dragend", clearDragState);
     window.addEventListener("drop", clearDragState);
+    window.addEventListener("pointerup", clearDragStateAfterEvent);
+    window.addEventListener("mouseup", clearDragStateAfterEvent);
     window.addEventListener("blur", clearDragState);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
+      if (cleanupTimeout !== null) {
+        window.clearTimeout(cleanupTimeout);
+      }
+
       window.removeEventListener("dragend", clearDragState);
       window.removeEventListener("drop", clearDragState);
+      window.removeEventListener("pointerup", clearDragStateAfterEvent);
+      window.removeEventListener("mouseup", clearDragStateAfterEvent);
       window.removeEventListener("blur", clearDragState);
       window.removeEventListener("keydown", handleKeyDown);
     };
