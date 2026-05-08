@@ -9,6 +9,10 @@ import useDragScroll from "../../hooks/useDragScroll";
 // S3 Base URL for menu item images
 const MENU_IMAGES_BASE_URL = import.meta.env.VITE_MENU_IMAGES_BASE_URL;
 
+const getMenuItemImageUrl = (uuid) => {
+  return `${MENU_IMAGES_BASE_URL}/${uuid}.png`;
+};
+
 const MenuContainer = () => {
   const [menus, setMenus] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -90,50 +94,55 @@ const MenuContainer = () => {
         ref={dragScrollRef}
         className="flex flex-wrap gap-4 px-10 py-4 cursor-grab scrollbar-hide select-none"
       >
-        {selected?.items?.map((item, index) => (
-          <div
-            key={index}
-            className="flex flex-col items-start justify-between p-4 rounded-lg h-[150px] w-[240px] cursor-pointer hover:bg-[#2a2a2a] bg-[#1a1a1a]"
-          >
-            <div className="flex items-start justify-between w-full">
-              <h1 className="text-[#f5f5f5] text-lg font-semibold">
-                {item.name}
-              </h1>
-            </div>
+      {selected?.items?.map((item) => (
+        <div
+          key={item.uuid}
+          className="flex flex-col items-start justify-between p-4 rounded-lg h-[220px] w-[240px] cursor-pointer bg-yellow-100/80 hover:bg-yellow-100 border border-yellow-700/20"
+        >
+          <div className="flex items-start justify-between w-full">
+            <h1 className="text-[#6b3f12] text-lg font-semibold">
+              {item.name}
+            </h1>
+          </div>
+
+          <div className="w-full h-[80px] flex items-center justify-center overflow-hidden">
             <img
-              src={`${import.meta.env.VITE_MENU_IMAGES_BASE_URL}/${item.uuid}.jpg`}
+              src={getMenuItemImageUrl(item.uuid)}
               alt={item.name}
+              className="max-w-full max-h-full object-contain"
             />
+          </div>
 
-            <div className="flex items-center justify-between w-full">
-              <p className="text-[#f5f5f5] text-xl font-bold">
-                {AUDFormatter.format(item.price)}
-              </p>
-              <div className="flex items-center justify-between bg-[#1f1f1f] px-2 py-2 rounded-lg w-[90px]">
-                <button
-                  onClick={() => handleDecrement(item)}
-                  className={`text-yellow-500 text-xl font-bold ${
-                    getCartQty(item) === 0 ? "opacity-30 cursor-not-allowed" : ""
-                  }`}
-                  disabled={getCartQty(item) === 0}
-                >
-                  &minus;
-                </button>
+          <div className="flex items-center justify-between w-full">
+            <p className="text-[#6b3f12] text-xl font-bold">
+              {AUDFormatter.format(item.price)}
+            </p>
 
-                <span className="text-white text-base font-semibold w-[20px] text-center">
-                  {getCartQty(item)}
-                </span>
+            <div className="flex items-center justify-between bg-yellow-50/80 px-2 py-2 rounded-lg w-[90px] border border-yellow-700/20">
+              <button
+                onClick={() => handleDecrement(item)}
+                className={`text-[#6b3f12] text-xl font-bold ${
+                  getCartQty(item) === 0 ? "opacity-30 cursor-not-allowed" : ""
+                }`}
+                disabled={getCartQty(item) === 0}
+              >
+                &minus;
+              </button>
 
-                <button
-                  onClick={() => handleIncrement(item)}
-                  className="text-yellow-500 text-xl font-bold"
-                >
-                  &#43;
-                </button>
-              </div>
+              <span className="text-[#6b3f12] text-base font-semibold w-[20px] text-center">
+                {getCartQty(item)}
+              </span>
+
+              <button
+                onClick={() => handleIncrement(item)}
+                className="text-[#6b3f12] text-xl font-bold"
+              >
+                &#43;
+              </button>
             </div>
           </div>
-        ))}
+        </div>
+      ))}
       </div>
     </>
   );
