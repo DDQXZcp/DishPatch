@@ -49,7 +49,6 @@ const MenuContainer = () => {
         pricePerQuantity: item.price,
       })
     );
-    console.log(`${import.meta.env.VITE_MENU_IMAGES_BASE_URL}/${item.uuid}.png`);
   };
 
   // ✅ When user clicks –
