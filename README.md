@@ -272,11 +272,11 @@ AWS_SECRET_ACCESS_KEY=<Your AWS Secret Access Key>
 AWS_REGION=ap-southeast-2
 
 # Replace with your table name
-USERS_TABLE=dishPatch-pos-backend-Users
-ORDERS_TABLE=dishPatch-pos-backend-Orders
-PAYMENTS_TABLE=dishPatch-pos-backend-Payments
-TABLES_TABLE=dishPatch-pos-backend-Tables
-MENU_ITEMS_TABLE=dishPatch-pos-backend-MenuItems
+USERS_TABLE=dishpatch-pos-backend-Users
+ORDERS_TABLE=dishpatch-pos-backend-Orders
+PAYMENTS_TABLE=dishpatch-pos-backend-Payments
+TABLES_TABLE=dishpatch-pos-backend-Tables
+MENU_ITEMS_TABLE=dishpatch-pos-backend-MenuItems
 ```
 ### Seed Data to DynamoDB
 
