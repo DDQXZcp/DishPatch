@@ -11,8 +11,9 @@ async function seedTables() {
       return {
         PutRequest: {
           Item: {
+            uuid: t.uuid,
             tableNo: t.tableNo,          // partition key
-            seats: t.seats,              // 4
+            seats: t.seats,
             status: "Available",
             customerName: null,
             customerPhone: null,
