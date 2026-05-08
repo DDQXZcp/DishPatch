@@ -41,13 +41,13 @@ export const desserts = [
   {
     id: 2,
     uuid: "6ea2fc52-1510-4ea5-9081-eb3e2fbc7ffc",
-    name: "Tiramisu",
+    name: "Mocha Cake",
     price: 12,
   },
   {
     id: 3,
     uuid: "02941f9a-27d6-4c5a-981f-bbc1698c9e8f",
-    name: "Waguri Tarte",
+    name: "Citron Cake",
     price: 12,
   },
   {
