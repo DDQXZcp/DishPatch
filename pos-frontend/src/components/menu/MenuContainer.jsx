@@ -6,6 +6,9 @@ import { AUDFormatter } from "../../utils/currency";
 import { getMenus } from "../../https"; // ✅ API helper
 import useDragScroll from "../../hooks/useDragScroll";
 
+// S3 Base URL for menu item images
+const MENU_IMAGES_BASE_URL = import.meta.env.VITE_MENU_IMAGES_BASE_URL;
+
 const MenuContainer = () => {
   const [menus, setMenus] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -42,6 +45,7 @@ const MenuContainer = () => {
         pricePerQuantity: item.price,
       })
     );
+    console.log(`${import.meta.env.VITE_MENU_IMAGES_BASE_URL}/${item.uuid}.jpg`);
   };
 
   // ✅ When user clicks –
@@ -96,6 +100,10 @@ const MenuContainer = () => {
                 {item.name}
               </h1>
             </div>
+            <img
+              src={`${import.meta.env.VITE_MENU_IMAGES_BASE_URL}/${item.uuid}.jpg`}
+              alt={item.name}
+            />
 
             <div className="flex items-center justify-between w-full">
               <p className="text-[#f5f5f5] text-xl font-bold">

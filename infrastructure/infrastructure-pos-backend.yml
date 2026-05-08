@@ -73,7 +73,7 @@ Resources:
         BlockPublicAcls: true
         BlockPublicPolicy: false
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false
       VersioningConfiguration:
         Status: Enabled
       CorsConfiguration:
