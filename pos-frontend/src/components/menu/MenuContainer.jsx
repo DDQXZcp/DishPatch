@@ -37,7 +37,7 @@ const MenuContainer = () => {
   const handleIncrement = (item) => {
     dispatch(
       addItems({
-        id: item.id,
+        uuid: item.uuid,
         name: item.name,
         pricePerQuantity: item.price,
       })

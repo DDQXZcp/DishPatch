@@ -32,7 +32,7 @@ const CartInfo = () => {
         {cartData.map((item) => {
           return (
             <div
-              key={item.id}     // ✅ Add this line
+              key={item.uuid}     // ✅ Add this line
               className="bg-[#1f1f1f] rounded-lg px-4 py-4 mb-2"
             >
               <div className="flex items-center justify-between">
@@ -44,7 +44,7 @@ const CartInfo = () => {
               <div className="flex items-center justify-between mt-3">
                 <div className="flex items-center gap-3">
                   <RiDeleteBin2Fill
-                    onClick={() => handleRemove(item.id)}
+                    onClick={() => handleRemove(item.uuid)}
                     className="text-[#ababab] cursor-pointer"
                     size={20}
                   />
