@@ -53,7 +53,7 @@ const MenuContainer = () => {
 
   // ✅ When user clicks –
   const handleDecrement = (item) => {
-    dispatch(removeItem({ name: item.name }));
+    dispatch(removeItem({ uuid: item.uuid }));
   };
 
   if (menus.length === 0) {
