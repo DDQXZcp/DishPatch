@@ -260,7 +260,7 @@ ros2 topic list -t
 ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
 
-## Local Testing - POS System
+## Local Testing - POS Backend
 
 For local development, we need to manually create an **.env** in pos-backend folder as some credentials are hided in Repository Secret or AWS System Manager Parameter Stores for security reason.
 
@@ -292,3 +292,29 @@ node .\seedMenus.js
 node .\seedTables.js
 ```
 The scripts will fetch the data defined in constants/index.js and upload to DynamoDB tables.
+
+## States
+
+For each order
+- created
+- paid
+- cancelled
+- completed
+
+For each order, it will have multiple items. For each item, it has its own states
+- pending
+- preparing
+- ready
+- delivering
+- served
+- cancelled
+
+## Local Testing - POS Frontend
+
+```
+# .env
+# Replace with your local backend setting
+VITE_BACKEND_URL=http://localhost:3000/
+# Replace with your S3 bucket that stores menu photo
+VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southeast-2.amazonaws.com
+```
