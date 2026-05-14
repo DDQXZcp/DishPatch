@@ -607,6 +607,7 @@ export default function DashboardWidgets() {
       return;
     }
 
+    const { rowId, startHeight, startY } = rowResizeState;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
@@ -614,16 +615,11 @@ export default function DashboardWidgets() {
     document.body.style.userSelect = "none";
 
     function handlePointerMove(event: PointerEvent) {
-      const nextHeight =
-        rowResizeState.startHeight + event.clientY - rowResizeState.startY;
+      const nextHeight = startHeight + event.clientY - startY;
 
       setWidgetState((currentState) => ({
         ...currentState,
-        rows: setRowHeight(
-          currentState.rows,
-          rowResizeState.rowId,
-          nextHeight,
-        ),
+        rows: setRowHeight(currentState.rows, rowId, nextHeight),
       }));
     }
 
@@ -659,6 +655,14 @@ export default function DashboardWidgets() {
       return;
     }
 
+    const {
+      columnIndex,
+      leftWidth: startLeftWidth,
+      rightWidth: startRightWidth,
+      rowId,
+      rowWidth,
+      startX,
+    } = columnResizeState;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
@@ -666,15 +670,11 @@ export default function DashboardWidgets() {
     document.body.style.userSelect = "none";
 
     function handlePointerMove(event: PointerEvent) {
-      const deltaPercent =
-        ((event.clientX - columnResizeState.startX) /
-          columnResizeState.rowWidth) *
-        100;
-      const pairTotal =
-        columnResizeState.leftWidth + columnResizeState.rightWidth;
+      const deltaPercent = ((event.clientX - startX) / rowWidth) * 100;
+      const pairTotal = startLeftWidth + startRightWidth;
       const pairMin = Math.min(MIN_COLUMN_WIDTH, pairTotal / 2);
       const leftWidth = Math.min(
-        Math.max(columnResizeState.leftWidth + deltaPercent, pairMin),
+        Math.max(startLeftWidth + deltaPercent, pairMin),
         pairTotal - pairMin,
       );
       const rightWidth = pairTotal - leftWidth;
@@ -683,8 +683,8 @@ export default function DashboardWidgets() {
         ...currentState,
         rows: setColumnPairWidths(
           currentState.rows,
-          columnResizeState.rowId,
-          columnResizeState.columnIndex,
+          rowId,
+          columnIndex,
           leftWidth,
           rightWidth,
         ),
