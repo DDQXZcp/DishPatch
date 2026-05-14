@@ -5,9 +5,7 @@ name: Deploy POS Frontend
 
 on:
   push:
-    branches: 
-      - main 
-      - pos-system-restructure
+    branches: [ main ]
     paths:
       - 'pos-frontend/**'
       - 'infrastructure/infrastructure-pos-frontend.yml'
@@ -96,7 +94,7 @@ jobs:
           echo "S3 bucket: $BUCKET"
           echo "CloudFront distribution: $DIST"
           echo "Site URL: $URL"
-      
+
       - name: Setup Node (Yarn)
         uses: actions/setup-node@v4
         with:
