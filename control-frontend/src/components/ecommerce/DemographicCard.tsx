@@ -5,7 +5,11 @@ import { MoreDotIcon } from "../../icons";
 import RestaurantMap from "../maps/RestaurantMap";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 
-export default function DemographicCard() {
+interface DemographicCardProps {
+  framed?: boolean;
+}
+
+export default function DemographicCard({ framed = true }: DemographicCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { robots } = useRobotContext();
 
@@ -27,43 +31,9 @@ export default function DemographicCard() {
   const getPercent = (count: number) =>
     total === 0 ? 0 : Math.round((count / total) * 100);
 
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
-      <div className="flex justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Robot Operational Map
-          </h3>
-          <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-            Robot operational status in the restaurant
-          </p>
-        </div>
-        <div className="relative inline-block">
-          <button className="dropdown-toggle" onClick={toggleDropdown}>
-            <MoreDotIcon className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 size-6" />
-          </button>
-          <Dropdown
-            isOpen={isOpen}
-            onClose={closeDropdown}
-            className="w-40 p-2 z-[1001]"
-          >
-            <DropdownItem
-              onItemClick={closeDropdown}
-              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
-              View More
-            </DropdownItem>
-            <DropdownItem
-              onItemClick={closeDropdown}
-              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
-              Delete
-            </DropdownItem>
-          </Dropdown>
-        </div>
-      </div>
-
-      <div className="my-6 overflow-hidden border border-gray-200 rounded-2xl dark:border-gray-800">
+  const content = (
+    <>
+      <div className={`${framed ? "my-6" : "mb-6"} overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800`}>
         <div id="mapOne" className="mapOne map-btn h-[500px] w-full">
           <RestaurantMap />
         </div>
@@ -210,6 +180,50 @@ export default function DemographicCard() {
           </div>
         </div>
       </div>
+    </>
+  );
+
+  if (!framed) {
+    return content;
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
+      <div className="flex justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Robot Operational Map
+          </h3>
+          <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
+            Robot operational status in the restaurant
+          </p>
+        </div>
+        <div className="relative inline-block">
+          <button className="dropdown-toggle" onClick={toggleDropdown}>
+            <MoreDotIcon className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 size-6" />
+          </button>
+          <Dropdown
+            isOpen={isOpen}
+            onClose={closeDropdown}
+            className="w-40 p-2 z-[1001]"
+          >
+            <DropdownItem
+              onItemClick={closeDropdown}
+              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+            >
+              View More
+            </DropdownItem>
+            <DropdownItem
+              onItemClick={closeDropdown}
+              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+            >
+              Delete
+            </DropdownItem>
+          </Dropdown>
+        </div>
+      </div>
+
+      {content}
     </div>
   );
 }

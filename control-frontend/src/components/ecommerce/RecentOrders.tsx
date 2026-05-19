@@ -21,7 +21,11 @@ const STATUS_COLORS: Record<RobotStatus, string> = {
   Maintenance: 'bg-red-500',
 };
 
-export default function RecentOrders() {
+interface RecentOrdersProps {
+  framed?: boolean;
+}
+
+export default function RecentOrders({ framed = true }: RecentOrdersProps) {
   const { robots } = useRobotContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<RobotStatus>>(new Set());
@@ -46,14 +50,18 @@ export default function RecentOrders() {
     ? robots
     : robots.filter((r) => activeFilters.has(r.status));
 
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
-      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Robot
-          </h3>
-        </div>
+  const content = (
+    <>
+      <div className={`mb-4 flex flex-col gap-2 sm:flex-row sm:items-center ${
+        framed ? "sm:justify-between" : "sm:justify-end"
+      }`}>
+        {framed && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+              Robot
+            </h3>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -229,6 +237,16 @@ export default function RecentOrders() {
           </TableBody>
         </Table>
       </div>
+    </>
+  );
+
+  if (!framed) {
+    return content;
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6">
+      {content}
     </div>
   );
 }
