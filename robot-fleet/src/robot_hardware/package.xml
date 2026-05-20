@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>robot_core</name>
+  <name>robot_hardware</name>
   <version>0.0.1</version>
-  <description>Core node for DishPatch robot — state machine and battery simulation</description>
+  <description>Hardware simulator node for DishPatch robot — battery and sensor</description>
   <maintainer email="dishpatch@todo.todo">DishPatch</maintainer>
   <license>Apache-2.0</license>
 

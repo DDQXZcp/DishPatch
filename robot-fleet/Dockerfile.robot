@@ -49,11 +49,4 @@ RUN source /opt/ros/jazzy/setup.bash && \
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 # ROBOT_NAMESPACE must be set (e.g. robot1, robot2).
 # AUTO_CYCLE=true  → robot simulates realistic state transitions automatically.
-CMD ["bash", "-c", \
-  "source /opt/ros/jazzy/setup.bash && \
-   source /ros2_ws/install/setup.bash && \
-   exec ros2 launch robot_bringup robot_launch.py \
-     namespace:=${ROBOT_NAMESPACE:-robot} \
-     robot_id:=${ROBOT_NAMESPACE:-robot} \
-     auto_cycle:=${AUTO_CYCLE:-true} \
-     initial_battery:=${INITIAL_BATTERY:-100.0}"]
+CMD ["bash", "-c", "source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && exec ros2 launch robot_bringup robot_launch.py namespace:=${ROBOT_NAMESPACE:-robot} robot_id:=${ROBOT_NAMESPACE:-robot} initial_battery:=${INITIAL_BATTERY:-100.0}"]
