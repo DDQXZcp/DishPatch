@@ -85,6 +85,7 @@ def generate_launch_description():
         parameters=[
             {"robot_namespace": ns},
             {"robot_id": robot_id},
+            {"initial_battery": initial_battery},
         ],
         output="screen",
         emulate_tty=True,

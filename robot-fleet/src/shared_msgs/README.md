@@ -12,9 +12,10 @@ Custom ROS2 message definitions shared across all robot packages.
 Published on `/{ns}/status` by `robot_status`. Consumed by rosbridge and forwarded to the Java backend.
 
 ```
-string robot_id        # Unique robot identifier, e.g. "robot1"
-string state           # One of: Waiting | Pickup | Serving | Returning | Maintenance
-float32 battery        # Battery percentage 0.0 – 100.0
+string robot_id          # Unique robot identifier, e.g. "robot1"
+float32 battery          # Battery percentage 0.0 – 100.0
+float32 speed            # Linear speed in m/s (from odometry)
+bool sensor              # Hardware sensor input (placeholder)
 geometry_msgs/Pose pose  # Current position and orientation in the map frame
 ```
 
