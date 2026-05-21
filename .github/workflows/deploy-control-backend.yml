@@ -8,7 +8,7 @@ name: Build and Deploy Backend (Maven → EC2)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, control-backend-RosBridgeService ]
     paths:
       - 'control-backend/**'
       - 'control-backend/virtual-robots/**'

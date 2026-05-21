@@ -102,6 +102,7 @@ public class ScooterService {
         stats.put("timestamp", new Date());
     }
 
+
     /**
      * Updates a single field of a scooter from a rosbridge message.
      * If the scooter does not exist, it is created with the given id.
@@ -123,14 +124,17 @@ public class ScooterService {
                         return ns;
                     });
 
-            switch (field) {
-                case "status"   -> scooter.setStatus(msg.get("data").getAsString());
-                case "battery"  -> scooter.setBattery(msg.get("data").getAsInt());
-                case "position" -> {
-                    scooter.setX(msg.get("x").getAsDouble());
-                    scooter.setY(msg.get("y").getAsDouble());
-                }
-            }
+            scooter.setBattery(msg.get("battery").getAsInt());
+            scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
+            scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
+            // switch (field) {
+            //     // case "status"   -> scooter.setStatus(msg.get("state").getAsString()); // FIX
+            //     case "battery"  -> scooter.setBattery(msg.get("battery").getAsInt());
+            //     case "position" -> {
+            //         scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
+            //         scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
+            //     }
+            // }
 
             scooterLastUpdMap.put(id, System.currentTimeMillis());
         }

@@ -79,13 +79,14 @@ public class RosBridgeService extends TextWebSocketHandler {
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
 
         for (int i = 1; i <= robotCount; i++) {
-            subscribe("/robot/robot_" + i + "/status",   "std_msgs/String");
-            subscribe("/robot/robot_" + i + "/position", "geometry_msgs/Point");
-            subscribe("/robot/robot_" + i + "/battery",  "std_msgs/Float32");
+            subscribe("/robot_" + i + "/status",   "std_msgs/String");
+            subscribe("/robot_" + i + "/position", "geometry_msgs/Point");
+            subscribe("/robot_" + i + "/battery",  "std_msgs/Float32");
         }
 
         logger.info("Subscribed to " + (robotCount * 3) + " ROS2 topics.");
     }
+
 
     /**
      * Called on each incoming message from rosbridge.
@@ -94,6 +95,7 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
+            console.log(message);
             JsonObject json = JsonParser.parseString(message.getPayload()).getAsJsonObject();
 
             if (!"publish".equals(json.get("op").getAsString())) return;
@@ -101,9 +103,9 @@ public class RosBridgeService extends TextWebSocketHandler {
             String     topic = json.get("topic").getAsString();
             JsonObject msg   = json.getAsJsonObject("msg");
 
-            // Topic format: /robot/robot_{id}/{field}
-            String[] parts = topic.split("/"); // ["", "robot", "robot_1", "field"]
-            if (parts.length < 4) return;
+            // Topic format: /robot_{id}/{field}
+            String[] parts = topic.split("/"); // ["", "robot_1", "field"]
+            if (parts.length < 3) return;
 
             int    id    = Integer.parseInt(parts[2].replace("robot_", ""));
             String field = parts[3];
