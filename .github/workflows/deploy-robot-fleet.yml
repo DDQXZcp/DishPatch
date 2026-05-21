@@ -12,9 +12,9 @@ permissions:
   contents: read
 
 env:
-  EC2_HOST: ${{ vars.ROS_EC2_HOST || '52.63.53.185' }}
-  EC2_USER: ${{ vars.ROS_EC2_USER || 'ec2-user' }}
-  REMOTE_DIR: ${{ vars.ROS_REMOTE_DIR || '/home/ec2-user/robot-fleet' }}
+  EC2_HOST: ${{ vars.ROS_EC2_HOST || 'ec2-15-135-131-146.ap-southeast-2.compute.amazonaws.com' }}
+  EC2_USER: ${{ vars.ROS_EC2_USER || 'ubuntu' }}
+  REMOTE_DIR: ${{ vars.ROS_REMOTE_DIR || '/home/ubuntu/robot-fleet' }}
   SERVICE_NAME: dishpatch-robot-fleet
 
 jobs:
@@ -102,7 +102,7 @@ jobs:
             -o IdentitiesOnly=yes \
             -i key.pem \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
+            "REMOTE_DIR='${{ env.REMOTE_DIR }}' SERVICE_USER='${{ env.EC2_USER }}' bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
 
       - name: Verify robot fleet service
         run: |

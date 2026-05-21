@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SERVICE_NAME=dishpatch-robot-fleet
-REMOTE_DIR=/home/ec2-user/robot-fleet
+REMOTE_DIR=${REMOTE_DIR:-/home/ubuntu/robot-fleet}
+SERVICE_USER=${SERVICE_USER:-ubuntu}
 SERVICE_FILE=/etc/systemd/system/${SERVICE_NAME}.service
 COMPOSE_FILE=${REMOTE_DIR}/docker-compose.yml
 
@@ -98,7 +99,7 @@ install_compose_plugin
 
 DOCKER_BIN=$(command -v docker)
 
-sudo chown -R ec2-user:ec2-user "${REMOTE_DIR}"
+sudo chown -R "${SERVICE_USER}:${SERVICE_USER}" "${REMOTE_DIR}"
 sudo "${DOCKER_BIN}" compose -f "${COMPOSE_FILE}" config >/dev/null
 
 sudo tee "${SERVICE_FILE}" >/dev/null <<EOF
