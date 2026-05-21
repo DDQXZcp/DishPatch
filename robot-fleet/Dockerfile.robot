@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     python3-rosdep \
     ros-jazzy-tf2-ros \
     ros-jazzy-nav-msgs \
+    ros-jazzy-nav2-bringup \
     ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 

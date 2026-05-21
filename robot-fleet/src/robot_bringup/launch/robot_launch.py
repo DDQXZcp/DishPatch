@@ -56,6 +56,18 @@ def generate_launch_description():
         emulate_tty=True,
     )
 
+    goal_relay_node = Node(
+        package="robot_navigation",
+        executable="goal_relay_node",
+        name="goal_relay_node",
+        namespace=ns,
+        parameters=[
+            {"robot_namespace": ns},
+        ],
+        output="screen",
+        emulate_tty=True,
+    )
+
     nav_node = Node(
         package="robot_navigation",
         executable="nav_node",
@@ -88,6 +100,7 @@ def generate_launch_description():
             initial_battery_arg,
             hardware_node,
             nav_node,
+            goal_relay_node,
             status_node,
         ]
     )
