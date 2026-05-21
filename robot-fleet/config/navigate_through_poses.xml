@@ -1,7 +1,7 @@
 <root BTCPP_format="4">
-  <BehaviorTree ID="MainBT">
+  <BehaviorTree ID="NavThroughPoses">
     <Sequence>
-      <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+      <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
       <FollowPath path="{path}" controller_id="FollowPath"/>
     </Sequence>
   </BehaviorTree>
