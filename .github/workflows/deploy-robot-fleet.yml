@@ -1,0 +1,79 @@
+name: Deploy Robot Fleet (Docker Compose -> EC2)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'robot-fleet/**'
+      - '.github/workflows/deploy-robot-fleet.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  EC2_HOST: 52.63.53.185
+  EC2_USER: ec2-user
+  EC2_SSH_KEY_SECRET: ROS_SSH_KEY
+  REMOTE_DIR: /home/ec2-user/robot-fleet
+  SERVICE_NAME: dishpatch-robot-fleet
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dishpatch-robot-fleet-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        working-directory: robot-fleet
+        run: docker compose -f docker-compose.yml config >/dev/null
+
+      - name: Prepare SSH key
+        run: |
+          set -euo pipefail
+          echo "${{ secrets[env.EC2_SSH_KEY_SECRET] }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Package robot fleet
+        run: |
+          set -euo pipefail
+          tar -czf robot-fleet.tar.gz -C robot-fleet .
+
+      - name: Copy robot fleet package to EC2
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=no -i key.pem robot-fleet.tar.gz \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/tmp/robot-fleet.tar.gz"
+
+      - name: Unpack robot fleet on EC2
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "set -euo pipefail
+             test -n '${{ env.REMOTE_DIR }}'
+             test '${{ env.REMOTE_DIR }}' != '/'
+             rm -rf '${{ env.REMOTE_DIR }}.next'
+             mkdir -p '${{ env.REMOTE_DIR }}.next'
+             tar -xzf /tmp/robot-fleet.tar.gz -C '${{ env.REMOTE_DIR }}.next'
+             rm -f /tmp/robot-fleet.tar.gz
+             rm -rf '${{ env.REMOTE_DIR }}'
+             mv '${{ env.REMOTE_DIR }}.next' '${{ env.REMOTE_DIR }}'"
+
+      - name: Install and restart robot fleet service
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
+
+      - name: Verify robot fleet service
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "sudo systemctl --no-pager status '${{ env.SERVICE_NAME }}.service'
+             cd '${{ env.REMOTE_DIR }}'
+             sudo docker compose -f docker-compose.yml ps"
