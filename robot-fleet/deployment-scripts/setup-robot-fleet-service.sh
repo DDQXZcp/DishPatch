@@ -109,12 +109,13 @@ After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 WorkingDirectory=${REMOTE_DIR}
-RemainAfterExit=yes
 ExecStartPre=-${DOCKER_BIN} compose -f ${COMPOSE_FILE} down --remove-orphans
-ExecStart=${DOCKER_BIN} compose -f ${COMPOSE_FILE} up -d --build --remove-orphans
+ExecStart=${DOCKER_BIN} compose -f ${COMPOSE_FILE} up --build --remove-orphans
 ExecStop=${DOCKER_BIN} compose -f ${COMPOSE_FILE} down
+Restart=on-failure
+RestartSec=10
 TimeoutStartSec=0
 
 [Install]
