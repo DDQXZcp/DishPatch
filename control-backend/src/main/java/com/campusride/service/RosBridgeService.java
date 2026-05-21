@@ -95,7 +95,6 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
-            logger.info(message);
             JsonObject json = JsonParser.parseString(message.getPayload()).getAsJsonObject();
 
             if (!"publish".equals(json.get("op").getAsString())) return;
