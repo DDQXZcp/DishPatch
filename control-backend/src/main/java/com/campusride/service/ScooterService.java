@@ -125,8 +125,8 @@ public class ScooterService {
                     });
 
             scooter.setBattery(msg.get("battery").getAsInt());
-            scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
-            scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
+            scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
+            scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
             // switch (field) {
             //     // case "status"   -> scooter.setStatus(msg.get("state").getAsString()); // FIX
             //     case "battery"  -> scooter.setBattery(msg.get("battery").getAsInt());
