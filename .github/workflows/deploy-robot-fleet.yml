@@ -12,10 +12,9 @@ permissions:
   contents: read
 
 env:
-  EC2_HOST: 52.63.53.185
-  EC2_USER: ec2-user
-  EC2_SSH_KEY_SECRET: ROS_SSH_KEY
-  REMOTE_DIR: /home/ec2-user/robot-fleet
+  EC2_HOST: ${{ vars.ROS_EC2_HOST || '52.63.53.185' }}
+  EC2_USER: ${{ vars.ROS_EC2_USER || 'ec2-user' }}
+  REMOTE_DIR: ${{ vars.ROS_REMOTE_DIR || '/home/ec2-user/robot-fleet' }}
   SERVICE_NAME: dishpatch-robot-fleet
 
 jobs:
@@ -34,10 +33,33 @@ jobs:
         run: docker compose -f docker-compose.yml config >/dev/null
 
       - name: Prepare SSH key
+        env:
+          ROS_SSH_KEY: ${{ secrets.ROS_SSH_KEY }}
         run: |
           set -euo pipefail
-          echo "${{ secrets[env.EC2_SSH_KEY_SECRET] }}" > key.pem
+          if [ -z "${ROS_SSH_KEY}" ]; then
+            echo "::error::GitHub secret ROS_SSH_KEY is missing or empty."
+            exit 1
+          fi
+          printf '%s\n' "${ROS_SSH_KEY}" | tr -d '\r' > key.pem
           chmod 600 key.pem
+          if ! grep -q 'BEGIN .*PRIVATE KEY' key.pem; then
+            echo "::error::ROS_SSH_KEY must contain the private key, not the public key."
+            exit 1
+          fi
+          ssh-keygen -y -f key.pem > key.pub
+          echo "Using ROS_SSH_KEY public fingerprint:"
+          ssh-keygen -lf key.pub
+
+      - name: Validate SSH connection
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${EC2_USER}@${EC2_HOST}" \
+            "echo Connected to \$(hostname) as \$(whoami)"
 
       - name: Package robot fleet
         run: |
@@ -47,13 +69,21 @@ jobs:
       - name: Copy robot fleet package to EC2
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=no -i key.pem robot-fleet.tar.gz \
+          scp -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            robot-fleet.tar.gz \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/tmp/robot-fleet.tar.gz"
 
       - name: Unpack robot fleet on EC2
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
             "set -euo pipefail
              test -n '${{ env.REMOTE_DIR }}'
              test '${{ env.REMOTE_DIR }}' != '/'
@@ -67,13 +97,21 @@ jobs:
       - name: Install and restart robot fleet service
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
             "bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
 
       - name: Verify robot fleet service
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -i key.pem "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
             "sudo systemctl --no-pager status '${{ env.SERVICE_NAME }}.service'
              cd '${{ env.REMOTE_DIR }}'
              sudo docker compose -f docker-compose.yml ps"
