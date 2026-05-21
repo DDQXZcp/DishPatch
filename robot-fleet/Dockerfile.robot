@@ -30,6 +30,12 @@ RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then rosdep init
 
 # ── Copy workspace source ──────────────────────────────────────────────────────
 COPY src ./src
+COPY config ./config
+COPY scripts/robot_entrypoint.sh ./scripts/robot_entrypoint.sh
+RUN chmod +x /ros2_ws/scripts/robot_entrypoint.sh
+
+# ── Generate empty map (200x200 all free, 10m x 10m) ──────────────────────────
+RUN python3 -c "open('/ros2_ws/config/map.pgm','wb').write(b'P5\n200 200\n255\n'+bytes([254]*200*200))"
 
 # ── Install ROS dependencies declared in package.xml files ────────────────────
 RUN rosdep update && \
