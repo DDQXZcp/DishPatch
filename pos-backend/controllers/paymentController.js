@@ -31,13 +31,13 @@ exports.createPayment = async (req, res) => {
       MessageBody: JSON.stringify(message),
     });
 
-    await sqs.send(command);
-    console.log("✅ Payment message sent:", message);
+    // await sqs.send(command);
+    // console.log("✅ Payment message sent:", message);
 
-    res.status(200).json({
-      message: "Payment message successfully sent to SQS",
-      data: message,
-    });
+    // res.status(200).json({
+    //   message: "Payment message successfully sent to SQS",
+    //   data: message,
+    // });
   } catch (error) {
     console.error("❌ Failed to send payment message:", error);
     res.status(500).json({ message: "Error sending payment message", error });
