@@ -134,6 +134,21 @@ The control system coordinates orders and fleet operations. It is intended to in
 - real-time status streaming via WebSocket/MQTT
 - scheduling strategies (FIFO, priority-based, zone-aware, load balancing)
 
+**Order States**
+
+- created
+- paid
+- cancelled
+- completed
+
+<!-- For each order, it will have multiple items. For each item, it has its own states
+- pending
+- preparing
+- ready
+- delivering
+- served
+- cancelled -->
+
 ---
 
 ### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
@@ -260,9 +275,13 @@ ros2 topic list -t
 ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
 
-## Local Testing - POS Backend
+## Local Testing
 
-For local development, we need to manually create an **.env** in pos-backend folder as some credentials are hided in Repository Secret or AWS System Manager Parameter Stores for security reason.
+For local development, we need to manually create an **.env** in each component as it need AWS permissions to execute certain operations. Permissions for cloud resources e.g. Lambda, EC2 are managed directly via IAM.
+
+### Local Testing - POS Backend
+
+Create this **.env** file in pos-backend folder.
 
 ```
 # .env
@@ -278,38 +297,20 @@ PAYMENTS_TABLE=dishpatch-pos-backend-Payments
 TABLES_TABLE=dishpatch-pos-backend-Tables
 MENU_ITEMS_TABLE=dishpatch-pos-backend-MenuItems
 ```
-### Seed Data to DynamoDB
+**Seed Initial Menu & Table Data to DynamoDB**
 
-When you first create the stack, all DynamoDB is empty. You may wish to seed data to the DynamoDB table.
+When you first create the stack, all DynamoDB is empty. You may wish to seed initial menu and table data to the DynamoDB table.
 
-To allow the script to access to AWS resources, you may need to install and configure AWS CLI via
-```
-aws configure
-```
-Inside **pos-backend** folder, run the scripts using node.js
+Inside **pos-backend/scripts/** folder, run the following node.js scripts
 ```
 node .\seedMenus.js
 node .\seedTables.js
 ```
-The scripts will fetch the data defined in constants/index.js and upload to DynamoDB tables.
+The scripts will fetch the data defined in pos-backend/constants/index.js and upload to DynamoDB tables.
 
-## States
+### Local Testing - POS Frontend
 
-For each order
-- created
-- paid
-- cancelled
-- completed
-
-For each order, it will have multiple items. For each item, it has its own states
-- pending
-- preparing
-- ready
-- delivering
-- served
-- cancelled
-
-## Local Testing - POS Frontend
+Create this **.env** file in pos-frontend folder.
 
 ```
 # .env
