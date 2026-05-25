@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     python3-rosdep \
     ros-jazzy-tf2-ros \
     ros-jazzy-nav-msgs \
+    ros-jazzy-nav2-bringup \
     ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,6 +30,12 @@ RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then rosdep init
 
 # ── Copy workspace source ──────────────────────────────────────────────────────
 COPY src ./src
+COPY config ./config
+COPY scripts/robot_entrypoint.sh ./scripts/robot_entrypoint.sh
+RUN chmod +x /ros2_ws/scripts/robot_entrypoint.sh
+
+# ── Generate empty map (200x200 all free, 10m x 10m) ──────────────────────────
+RUN python3 -c "open('/ros2_ws/config/map.pgm','wb').write(b'P5\n200 200\n255\n'+bytes([254]*200*200))"
 
 # ── Install ROS dependencies declared in package.xml files ────────────────────
 RUN rosdep update && \
@@ -49,11 +56,4 @@ RUN source /opt/ros/jazzy/setup.bash && \
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 # ROBOT_NAMESPACE must be set (e.g. robot1, robot2).
 # AUTO_CYCLE=true  → robot simulates realistic state transitions automatically.
-CMD ["bash", "-c", \
-  "source /opt/ros/jazzy/setup.bash && \
-   source /ros2_ws/install/setup.bash && \
-   exec ros2 launch robot_bringup robot_launch.py \
-     namespace:=${ROBOT_NAMESPACE:-robot} \
-     robot_id:=${ROBOT_NAMESPACE:-robot} \
-     auto_cycle:=${AUTO_CYCLE:-true} \
-     initial_battery:=${INITIAL_BATTERY:-100.0}"]
+CMD ["/ros2_ws/scripts/robot_entrypoint.sh"]

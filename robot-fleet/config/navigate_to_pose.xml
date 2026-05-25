@@ -1,0 +1,8 @@
+<root BTCPP_format="4">
+  <BehaviorTree ID="MainBT">
+    <Sequence>
+      <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+      <FollowPath path="{path}" controller_id="FollowPath"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

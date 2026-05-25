@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "nav_node = robot_navigation.nav_node:main",
+            "goal_relay_node = robot_navigation.goal_relay_node:main",
         ],
     },
 )

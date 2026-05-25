@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "robot_core"
+package_name = "robot_hardware"
 
 setup(
     name=package_name,
@@ -14,12 +14,12 @@ setup(
     zip_safe=True,
     maintainer="DishPatch",
     maintainer_email="dishpatch@todo.todo",
-    description="Core state machine node for DishPatch robot fleet",
+    description="Hardware simulator node for DishPatch robot — battery and sensor",
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "core_node = robot_core.core_node:main",
+            "hardware_node = robot_hardware.hardware_node:main",
         ],
     },
 )

@@ -1,0 +1,117 @@
+name: Deploy Robot Fleet (Docker Compose -> EC2)
+
+on:
+  push:
+    branches: [ ROS-goal-pose-command ]
+    paths:
+      - 'robot-fleet/**'
+      - '.github/workflows/deploy-robot-fleet.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  EC2_HOST: ${{ vars.ROS_EC2_HOST || 'ec2-15-135-131-146.ap-southeast-2.compute.amazonaws.com' }}
+  EC2_USER: ${{ vars.ROS_EC2_USER || 'ubuntu' }}
+  REMOTE_DIR: ${{ vars.ROS_REMOTE_DIR || '/home/ubuntu/robot-fleet' }}
+  SERVICE_NAME: dishpatch-robot-fleet
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dishpatch-robot-fleet-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        working-directory: robot-fleet
+        run: docker compose -f docker-compose.yml config >/dev/null
+
+      - name: Prepare SSH key
+        env:
+          ROS_SSH_KEY: ${{ secrets.ROS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROS_SSH_KEY}" ]; then
+            echo "::error::GitHub secret ROS_SSH_KEY is missing or empty."
+            exit 1
+          fi
+          printf '%s\n' "${ROS_SSH_KEY}" | tr -d '\r' > key.pem
+          chmod 600 key.pem
+          if ! grep -q 'BEGIN .*PRIVATE KEY' key.pem; then
+            echo "::error::ROS_SSH_KEY must contain the private key, not the public key."
+            exit 1
+          fi
+          ssh-keygen -y -f key.pem > key.pub
+          echo "Using ROS_SSH_KEY public fingerprint:"
+          ssh-keygen -lf key.pub
+
+      - name: Validate SSH connection
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${EC2_USER}@${EC2_HOST}" \
+            "echo Connected to \$(hostname) as \$(whoami)"
+
+      - name: Package robot fleet
+        run: |
+          set -euo pipefail
+          tar -czf robot-fleet.tar.gz -C robot-fleet .
+
+      - name: Copy robot fleet package to EC2
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            robot-fleet.tar.gz \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/tmp/robot-fleet.tar.gz"
+
+      - name: Unpack robot fleet on EC2
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "set -euo pipefail
+             test -n '${{ env.REMOTE_DIR }}'
+             test '${{ env.REMOTE_DIR }}' != '/'
+             rm -rf '${{ env.REMOTE_DIR }}.next'
+             mkdir -p '${{ env.REMOTE_DIR }}.next'
+             tar -xzf /tmp/robot-fleet.tar.gz -C '${{ env.REMOTE_DIR }}.next'
+             rm -f /tmp/robot-fleet.tar.gz
+             rm -rf '${{ env.REMOTE_DIR }}'
+             mv '${{ env.REMOTE_DIR }}.next' '${{ env.REMOTE_DIR }}'"
+
+      - name: Install and restart robot fleet service
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "REMOTE_DIR='${{ env.REMOTE_DIR }}' SERVICE_USER='${{ env.EC2_USER }}' bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
+
+      - name: Verify robot fleet service
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "sudo systemctl --no-pager status '${{ env.SERVICE_NAME }}.service'
+             cd '${{ env.REMOTE_DIR }}'
+             sudo docker compose -f docker-compose.yml ps"

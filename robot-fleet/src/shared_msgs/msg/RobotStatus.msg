@@ -1,4 +1,5 @@
 string robot_id
-string state
 float32 battery
+float32 speed
+bool sensor
 geometry_msgs/Pose pose

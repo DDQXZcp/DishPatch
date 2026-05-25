@@ -1,6 +1,6 @@
 # robot_bringup
 
-Launch package that starts all three robot nodes together for a single robot instance.
+Launch package that starts all robot nodes together for a single robot instance.
 
 **Launch file:** `launch/robot_launch.py`
 
@@ -16,7 +16,6 @@ ros2 launch robot_bringup robot_launch.py namespace:=robot1
 |---|---|---|
 | `namespace` | `"robot"` | Namespace prefix for all topics and nodes (e.g. `robot1`, `robot2`) |
 | `robot_id` | *(same as namespace)* | Human-readable ID written into status messages |
-| `auto_cycle` | `"true"` | Enable automatic demo state cycling in `robot_core` |
 | `initial_battery` | `"100.0"` | Starting battery level (0–100) |
 
 ## Nodes Launched
@@ -25,7 +24,7 @@ ros2 launch robot_bringup robot_launch.py namespace:=robot1
 |---|---|---|
 | `core_node` | `robot_core` | publishes `/{ns}/status_update`, subscribes `/{ns}/task_command` |
 | `nav_node` | `robot_navigation` | publishes `/{ns}/odom`, subscribes `/{ns}/cmd_vel` |
-| `status_node` | `robot_status` | publishes `/{ns}/status`, subscribes `/{ns}/status_update`, `/{ns}/odom` |
+| `status_node` | `robot_status` | publishes `/{ns}/status`, `/{ns}/battery`, subscribes `/{ns}/odom`, `/{ns}/sensor` |
 
 ## Adding a New Robot
 
