@@ -30,6 +30,8 @@ install_docker() {
 
   if command -v amazon-linux-extras >/dev/null 2>&1; then
     sudo amazon-linux-extras install -y docker
+  elif command -v apt-get >/dev/null 2>&1; then
+    install_package docker.io
   else
     install_package docker
   fi
@@ -101,6 +103,7 @@ DOCKER_BIN=$(command -v docker)
 
 sudo chown -R "${SERVICE_USER}:${SERVICE_USER}" "${REMOTE_DIR}"
 sudo "${DOCKER_BIN}" compose -f "${COMPOSE_FILE}" config >/dev/null
+sudo "${DOCKER_BIN}" compose -f "${COMPOSE_FILE}" build
 
 sudo tee "${SERVICE_FILE}" >/dev/null <<EOF
 [Unit]
@@ -113,7 +116,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=${REMOTE_DIR}
 ExecStartPre=-${DOCKER_BIN} compose -f ${COMPOSE_FILE} down --remove-orphans
-ExecStart=${DOCKER_BIN} compose -f ${COMPOSE_FILE} up --build --remove-orphans
+ExecStart=${DOCKER_BIN} compose -f ${COMPOSE_FILE} up --remove-orphans
 ExecStop=${DOCKER_BIN} compose -f ${COMPOSE_FILE} down
 Restart=on-failure
 RestartSec=10
