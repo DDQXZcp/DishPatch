@@ -35,10 +35,27 @@ services:
       - PYTHONUNBUFFERED=1
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9090 || exit 0"]
+      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9090), 2); s.close()\""]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── Nav2 stack (shared by all robots) ──────────────────────────────────────
+  nav2:
+    build:
+      context: .
+      dockerfile: Dockerfile.nav2
+    container_name: nav2
+    restart: unless-stopped
+    networks:
+      - ros_net
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
+      - ROBOT_NAMESPACES=robot1,robot2
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    depends_on:
+      - rosbridge
 
   # ── Robot 1 ───────────────────────────────────────────────────────────────
   robot1:
@@ -58,25 +75,27 @@ services:
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     depends_on:
       - rosbridge
+      - nav2
 
-  # # ── Robot 2 ───────────────────────────────────────────────────────────────
-  # robot2:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.robot
-  #   container_name: robot2
-  #   restart: unless-stopped
-  #   networks:
-  #     - ros_net
-  #   environment:
-  #     - ROS_DOMAIN_ID=0
-  #     - PYTHONUNBUFFERED=1
-  #     - ROBOT_NAMESPACE=robot2
-  #     - AUTO_CYCLE=true
-  #     - INITIAL_BATTERY=75.0    # start at different battery level for variety
-  #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-  #   depends_on:
-  #     - rosbridge
+  # ── Robot 2 ───────────────────────────────────────────────────────────────
+  robot2:
+    build:
+      context: .
+      dockerfile: Dockerfile.robot
+    container_name: robot2
+    restart: unless-stopped
+    networks:
+      - ros_net
+    environment:
+      - ROS_DOMAIN_ID=0
+      - PYTHONUNBUFFERED=1
+      - ROBOT_NAMESPACE=robot2
+      - AUTO_CYCLE=true
+      - INITIAL_BATTERY=75.0    # start at different battery level for variety
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    depends_on:
+      - rosbridge
+      - nav2
 
   #     # ── Robot 3 ───────────────────────────────────────────────────────────────
   # robot3:
@@ -96,3 +115,4 @@ services:
   #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   #   depends_on:
   #     - rosbridge
+  #     - nav2

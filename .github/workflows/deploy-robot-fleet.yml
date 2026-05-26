@@ -2,7 +2,7 @@ name: Deploy Robot Fleet (Docker Compose -> EC2)
 
 on:
   push:
-    branches: [ ROS-goal-pose-command ]
+    branches: [ main ]
     paths:
       - 'robot-fleet/**'
       - '.github/workflows/deploy-robot-fleet.yml'
@@ -84,15 +84,23 @@ jobs:
             -o IdentitiesOnly=yes \
             -i key.pem \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "set -euo pipefail
-             test -n '${{ env.REMOTE_DIR }}'
-             test '${{ env.REMOTE_DIR }}' != '/'
-             rm -rf '${{ env.REMOTE_DIR }}.next'
-             mkdir -p '${{ env.REMOTE_DIR }}.next'
-             tar -xzf /tmp/robot-fleet.tar.gz -C '${{ env.REMOTE_DIR }}.next'
-             rm -f /tmp/robot-fleet.tar.gz
-             rm -rf '${{ env.REMOTE_DIR }}'
-             mv '${{ env.REMOTE_DIR }}.next' '${{ env.REMOTE_DIR }}'"
+            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          test -n "${REMOTE_DIR}"
+          test "${REMOTE_DIR}" != "/"
+
+          sudo systemctl stop "${SERVICE_NAME}.service" || true
+          if command -v docker >/dev/null 2>&1 && [ -f "${REMOTE_DIR}/docker-compose.yml" ]; then
+            sudo docker compose -f "${REMOTE_DIR}/docker-compose.yml" down --remove-orphans || true
+          fi
+
+          rm -rf "${REMOTE_DIR}.next"
+          mkdir -p "${REMOTE_DIR}.next"
+          tar -xzf /tmp/robot-fleet.tar.gz -C "${REMOTE_DIR}.next"
+          rm -f /tmp/robot-fleet.tar.gz
+          rm -rf "${REMOTE_DIR}"
+          mv "${REMOTE_DIR}.next" "${REMOTE_DIR}"
+          REMOTE_SCRIPT
 
       - name: Install and restart robot fleet service
         run: |
@@ -112,6 +120,69 @@ jobs:
             -o IdentitiesOnly=yes \
             -i key.pem \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "sudo systemctl --no-pager status '${{ env.SERVICE_NAME }}.service'
-             cd '${{ env.REMOTE_DIR }}'
-             sudo docker compose -f docker-compose.yml ps"
+            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd "${REMOTE_DIR}"
+
+          for attempt in $(seq 1 30); do
+            if sudo systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+              break
+            fi
+            if [ "${attempt}" -eq 30 ]; then
+              echo "::error::${SERVICE_NAME}.service did not become active."
+              sudo systemctl --no-pager status "${SERVICE_NAME}.service" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          for attempt in $(seq 1 60); do
+            missing=""
+            for container in rosbridge nav2 robot1 robot2; do
+              if [ "$(sudo docker inspect -f '{{.State.Running}}' "${container}" 2>/dev/null || true)" != "true" ]; then
+                missing="${missing} ${container}"
+              fi
+            done
+            if [ -z "${missing}" ]; then
+              break
+            fi
+            if [ "${attempt}" -eq 60 ]; then
+              echo "::error::Timed out waiting for containers to run:${missing}"
+              sudo docker compose -f docker-compose.yml ps || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          check_ros_graph() {
+            local topics actions topic action
+            topics=$(sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' 2>/dev/null) || return 1
+            actions=$(sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' 2>/dev/null) || return 1
+
+            for topic in /robot1/status /robot2/status /robot1/goal_pose /robot2/goal_pose; do
+              if ! printf '%s\n' "${topics}" | grep -Fx "${topic}" >/dev/null; then
+                return 1
+              fi
+            done
+
+            for action in /robot1/navigate_to_pose /robot2/navigate_to_pose; do
+              if ! printf '%s\n' "${actions}" | grep -Fx "${action}" >/dev/null; then
+                return 1
+              fi
+            done
+          }
+
+          for attempt in $(seq 1 60); do
+            if check_ros_graph; then
+              sudo systemctl --no-pager status "${SERVICE_NAME}.service"
+              sudo docker compose -f docker-compose.yml ps
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "::error::Timed out waiting for expected ROS topics and actions."
+          sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' || true
+          sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' || true
+          exit 1
+          REMOTE_SCRIPT
