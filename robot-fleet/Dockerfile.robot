@@ -21,15 +21,20 @@ RUN apt-get update && apt-get install -y \
     python3-rosdep \
     ros-jazzy-tf2-ros \
     ros-jazzy-nav-msgs \
-    ros-jazzy-nav2-bringup \
+    ros-jazzy-nav2-msgs \
     ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
 # ── rosdep initialisation ──────────────────────────────────────────────────────
 RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then rosdep init; fi
 
-# ── Copy workspace source ──────────────────────────────────────────────────────
-COPY src ./src
+# ── Copy workspace source (robot-only packages, no nav2_launcher) ─────────────
+COPY src/shared_msgs ./src/shared_msgs
+COPY src/robot_bringup ./src/robot_bringup
+COPY src/robot_hardware ./src/robot_hardware
+COPY src/robot_location_publisher ./src/robot_location_publisher
+COPY src/robot_navigation ./src/robot_navigation
+COPY src/robot_status ./src/robot_status
 COPY config ./config
 COPY scripts/robot_entrypoint.sh ./scripts/robot_entrypoint.sh
 RUN chmod +x /ros2_ws/scripts/robot_entrypoint.sh
