@@ -2,7 +2,7 @@ name: Deploy Robot Fleet (Docker Compose -> EC2)
 
 on:
   push:
-    branches: [ main, ROS-nav2-container ]
+    branches: [ main ]
     paths:
       - 'robot-fleet/**'
       - '.github/workflows/deploy-robot-fleet.yml'
