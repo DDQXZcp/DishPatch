@@ -1,0 +1,83 @@
+map: the-hive-landscape-mask-nav2.yaml
+frame_id: map
+source_image: ../control-frontend/public/maps/the-hive-floorplan-landscape.webp
+image_size_px: [5084, 3302]
+resolution: 0.011802
+origin: [0.0, 0.0, 0.0]
+coordinate_note: "pixel coordinates are from the image top-left; map poses are meters in the ROS map frame"
+drop_points:
+  - id: drop_01
+    pixel: [1535.5, 1595.5]
+    pose: {x: 18.128, y: 20.134, yaw: 0.0}
+  - id: drop_02
+    pixel: [1967.5, 1595.5]
+    pose: {x: 23.226, y: 20.134, yaw: 0.0}
+  - id: drop_03
+    pixel: [2376.5, 1595.5]
+    pose: {x: 28.053, y: 20.134, yaw: 0.0}
+  - id: drop_04
+    pixel: [3070.5, 1595.5]
+    pose: {x: 36.244, y: 20.134, yaw: 0.0}
+  - id: drop_05
+    pixel: [3530.5, 1595.5]
+    pose: {x: 41.673, y: 20.134, yaw: 0.0}
+  - id: drop_06
+    pixel: [4024.5, 1595.5]
+    pose: {x: 47.503, y: 20.134, yaw: 0.0}
+  - id: drop_07
+    pixel: [4526.5, 1595.5]
+    pose: {x: 53.428, y: 20.134, yaw: 0.0}
+  - id: drop_08
+    pixel: [3597.5, 1647.5]
+    pose: {x: 42.464, y: 19.521, yaw: 0.0}
+  - id: drop_09
+    pixel: [3818.5, 1647.5]
+    pose: {x: 45.072, y: 19.520, yaw: 0.0}
+  - id: drop_10
+    pixel: [4172.5, 1647.5]
+    pose: {x: 49.250, y: 19.520, yaw: 0.0}
+  - id: drop_11
+    pixel: [1455.5, 1647.6]
+    pose: {x: 17.184, y: 19.519, yaw: 0.0}
+  - id: drop_12
+    pixel: [3486.5, 2053.5]
+    pose: {x: 41.154, y: 14.729, yaw: 0.0}
+  - id: drop_13
+    pixel: [1455.5, 2461.5]
+    pose: {x: 17.184, y: 9.914, yaw: 0.0}
+  - id: drop_14
+    pixel: [3597.5, 2461.5]
+    pose: {x: 42.464, y: 9.914, yaw: 0.0}
+  - id: drop_15
+    pixel: [3818.5, 2461.5]
+    pose: {x: 45.072, y: 9.914, yaw: 0.0}
+  - id: drop_16
+    pixel: [4172.5, 2461.5]
+    pose: {x: 49.250, y: 9.914, yaw: 0.0}
+  - id: drop_17
+    pixel: [754.5, 2518.5]
+    pose: {x: 8.911, y: 9.241, yaw: 0.0}
+  - id: drop_18
+    pixel: [1109.5, 2518.5]
+    pose: {x: 13.100, y: 9.241, yaw: 0.0}
+  - id: drop_19
+    pixel: [1535.5, 2518.5]
+    pose: {x: 18.128, y: 9.241, yaw: 0.0}
+  - id: drop_20
+    pixel: [1967.5, 2518.5]
+    pose: {x: 23.226, y: 9.241, yaw: 0.0}
+  - id: drop_21
+    pixel: [2376.5, 2518.5]
+    pose: {x: 28.053, y: 9.241, yaw: 0.0}
+  - id: drop_22
+    pixel: [3070.5, 2518.5]
+    pose: {x: 36.244, y: 9.241, yaw: 0.0}
+  - id: drop_23
+    pixel: [3530.5, 2518.5]
+    pose: {x: 41.673, y: 9.241, yaw: 0.0}
+  - id: drop_24
+    pixel: [4024.5, 2518.5]
+    pose: {x: 47.503, y: 9.241, yaw: 0.0}
+  - id: drop_25
+    pixel: [4526.5, 2518.5]
+    pose: {x: 53.428, y: 9.241, yaw: 0.0}
