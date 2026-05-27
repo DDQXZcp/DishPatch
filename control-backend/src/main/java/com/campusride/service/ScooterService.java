@@ -120,7 +120,7 @@ public class ScooterService {
                         Scooter ns = new Scooter();
                         ns.setId(id);
                         ns.setName("Robot " + id);
-                        ns.setStatus("Waiting");
+                        ns.setStatus("Waiting"); // Possibly Change
                         scooters.add(ns);
                         return ns;
                     });
@@ -133,6 +133,7 @@ public class ScooterService {
                     scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
                     scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
                 }
+                // Add logic for updating z, speed, status, etc when its possible
             }
             scooterLastUpdMap.put(id, System.currentTimeMillis());
         }
