@@ -120,6 +120,7 @@ public class ScooterService {
                         Scooter ns = new Scooter();
                         ns.setId(id);
                         ns.setName("Robot " + id);
+                        ns.setStatus("Waiting");
                         scooters.add(ns);
                         return ns;
                     });
@@ -141,9 +142,9 @@ public class ScooterService {
             scooterLastUpdMap.put(id, System.currentTimeMillis());
         }
 
-        // updateStats();
-        // messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
-        // messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
+        updateStats();
+        messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
+        messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
     }
 
     public List<Scooter> getAllScooters() {
