@@ -19,13 +19,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * Connects to rosbridge as a WebSocket client and subscribes to ROS2 topics
- * published by the simulation node.
+ * Connects to rosbridge as a WebSocket client to exchange ROS2 topics with the
+ * robot fleet.
  *
- * Topics subscribed (per robot id 1..robotCount):
- *   /robot/robot_{id}/status    std_msgs/String
- *   /robot/robot_{id}/position  geometry_msgs/Point
- *   /robot/robot_{id}/battery   std_msgs/Float32
+ * Subscribes (per robot id 1..robotCount):
+ *   /robot{id}/status    shared_msgs/msg/RobotStatus   (robot_id, battery, speed, sensor, pose)
+ *
+ * Publishes (on demand, via {@link #publishGoal}):
+ *   /robot{id}/goal_pose geometry_msgs/PoseStamped     navigation goal in the "map" frame
  *
  * Configure in application.properties:
  *   rosbridge.url=ws://<IP>:9090
