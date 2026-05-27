@@ -79,9 +79,9 @@ public class RosBridgeService extends TextWebSocketHandler {
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
 
         for (int i = 1; i <= robotCount; i++) {
-            subscribe("/robot_" + i + "/status",   "std_msgs/String");
-            subscribe("/robot_" + i + "/position", "geometry_msgs/Point");
-            subscribe("/robot_" + i + "/battery",  "std_msgs/Float32");
+            subscribe("/robot" + i + "/status",   "std_msgs/String");
+            subscribe("/robot" + i + "/position", "geometry_msgs/Point");
+            subscribe("/robot" + i + "/battery",  "std_msgs/Float32");
         }
 
         logger.info("Subscribed to " + (robotCount * 3) + " ROS2 topics.");
