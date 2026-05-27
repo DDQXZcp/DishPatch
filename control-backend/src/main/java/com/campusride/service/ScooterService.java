@@ -129,7 +129,7 @@ public class ScooterService {
                 case "battery" -> scooter.setBattery(msg.get("data").getAsInt());
                 case "status" -> {
                     scooter.setBattery(msg.get("battery").getAsInt());
-                    scooter.setSpeed(msg.get("speed").getAsInt());
+                    scooter.setSpeed(msg.get("speed").getAsFloat());
                     scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
                     scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
                 }
