@@ -8,6 +8,7 @@ Parameters:
   namespace       — ROS namespace prefix, e.g. "robot1"
   robot_id        — Human-readable ID, defaults to <namespace>
   initial_battery — Starting battery percentage (0-100)
+  initial_x/y/theta — Initial map-frame pose for the fake odometry driver
 
 Note: The Nav2 stack (map_server, planner_server, controller_server,
 bt_navigator, lifecycle_manager) runs in a separate `nav2` container.
@@ -37,11 +38,29 @@ def generate_launch_description():
         default_value="100.0",
         description="Starting battery percentage (0-100)",
     )
+    initial_x_arg = DeclareLaunchArgument(
+        "initial_x",
+        default_value="0.0",
+        description="Initial robot x position in the map frame",
+    )
+    initial_y_arg = DeclareLaunchArgument(
+        "initial_y",
+        default_value="0.0",
+        description="Initial robot y position in the map frame",
+    )
+    initial_theta_arg = DeclareLaunchArgument(
+        "initial_theta",
+        default_value="0.0",
+        description="Initial robot yaw in radians",
+    )
 
     # ── Shared substitutions ───────────────────────────────────────────
     ns = LaunchConfiguration("namespace")
     robot_id = LaunchConfiguration("robot_id")
     initial_battery = LaunchConfiguration("initial_battery")
+    initial_x = LaunchConfiguration("initial_x")
+    initial_y = LaunchConfiguration("initial_y")
+    initial_theta = LaunchConfiguration("initial_theta")
 
     ns_odom = PythonExpression(["'", ns, "/odom'"])
 
@@ -66,7 +85,12 @@ def generate_launch_description():
         executable="nav_node",
         name="nav_node",
         namespace=ns,
-        parameters=[{"robot_namespace": ns}],
+        parameters=[
+            {"robot_namespace": ns},
+            {"initial_x": initial_x},
+            {"initial_y": initial_y},
+            {"initial_theta": initial_theta},
+        ],
         output="screen",
         emulate_tty=True,
     )
@@ -108,6 +132,9 @@ def generate_launch_description():
         ns_arg,
         robot_id_arg,
         initial_battery_arg,
+        initial_x_arg,
+        initial_y_arg,
+        initial_theta_arg,
         # custom nodes
         hardware_node,
         nav_node,
