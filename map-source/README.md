@@ -46,6 +46,7 @@ From the repo root:
 bash robot-fleet/scripts/stage_nav2_map.sh
 bash robot-fleet/scripts/stage_nav2_map.sh --check
 docker compose -f robot-fleet/docker-compose.yml config >/dev/null
+docker compose -f robot-fleet/docker-compose.yml up --build
 ```
 
 If those pass, the map files are staged correctly for the Robot Fleet Docker build.
