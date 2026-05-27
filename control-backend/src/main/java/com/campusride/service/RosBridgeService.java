@@ -80,10 +80,9 @@ public class RosBridgeService extends TextWebSocketHandler {
 
         for (int i = 1; i <= robotCount; i++) {
             subscribe("/robot" + i + "/status",   "shared_msgs/msg/RobotStatus");
-            subscribe("/robot" + i + "/battery",  "std_msgs/msg/Float32");
         }
 
-        logger.info("Subscribed to " + (robotCount * 2) + " ROS2 topics.");
+        logger.info("Subscribed to " + robotCount + " ROS2 topics.");
     }
 
 
