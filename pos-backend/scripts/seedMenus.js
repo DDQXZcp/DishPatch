@@ -18,23 +18,23 @@ const docClient = require("../config/database");
 // Import your local menu data
 const { menus } = require("../constants/index.js"); // adjust path if needed
 
-const TABLE_NAME = "DishPatch-Pos-Backend-MenuItems"; // Replace with your actual table name
+const TABLE_NAME = "dishpatch-pos-backend-MenuItems"; // Replace with your actual table name
 
 async function seedMenus() {
   try {
-    const items = menus.map(menu => {
-      const { id, ...menuWithoutId } = menu; // remove local id if present
-      return {
-        PutRequest: {
-          Item: {
-            menuName: menuWithoutId.name,
-            bgColor: menuWithoutId.bgColor,
-            icon: menuWithoutId.icon,
-            items: menuWithoutId.items,
-          },
+      const items = menus.map(menu => {
+    return {
+      PutRequest: {
+        Item: {
+          uuid: menu.uuid,
+          menuName: menu.name,
+          bgColor: menu.bgColor,
+          icon: menu.icon,
+          items: menu.items,
         },
-      };
-    });
+      },
+    };
+  });
 
     // DynamoDB allows max 25 writes per batch
     const batches = [];

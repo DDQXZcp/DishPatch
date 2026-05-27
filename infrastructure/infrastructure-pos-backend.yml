@@ -64,6 +64,41 @@ Conditions:
 # Resources
 # ===========================
 Resources:
+  # ---------------- S3 Bucket for Menu Photos ----------------
+  MenuPhotoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-menu-photo"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - "*"
+            MaxAge: 3000
+
+  MenuPhotoBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MenuPhotoBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "${MenuPhotoBucket.Arn}/*"
+
   # ---------------- DynamoDB ----------------
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -152,32 +187,32 @@ Resources:
       BillingMode: PAY_PER_REQUEST
 
   # ---------------- SQS ----------------
-  PaymentQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub "${AWS::StackName}-pos-payment-queue"
-      VisibilityTimeout: 30
-      MessageRetentionPeriod: 86400
-      ReceiveMessageWaitTimeSeconds: 10
+  # PaymentQueue:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     QueueName: !Sub "${AWS::StackName}-pos-payment-queue"
+  #     VisibilityTimeout: 30
+  #     MessageRetentionPeriod: 86400
+  #     ReceiveMessageWaitTimeSeconds: 10
 
-  # NOTE: Prefer restricting who can send messages. This keeps original behavior (open send),
-  # but you should tighten it once you know the sender identity (e.g., Lambda role, specific AWS account, etc.)
-  PaymentQueuePolicy:
-    Type: AWS::SQS::QueuePolicy
-    Properties:
-      Queues:
-        - !Ref PaymentQueue
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowSendMessage
-            Effect: Allow
-            Principal: "*"
-            Action:
-              - "sqs:SendMessage"
-              - "sqs:GetQueueUrl"
-              - "sqs:GetQueueAttributes"
-            Resource: !GetAtt PaymentQueue.Arn
+  # # NOTE: Prefer restricting who can send messages. This keeps original behavior (open send),
+  # # but you should tighten it once you know the sender identity (e.g., Lambda role, specific AWS account, etc.)
+  # PaymentQueuePolicy:
+  #   Type: AWS::SQS::QueuePolicy
+  #   Properties:
+  #     Queues:
+  #       - !Ref PaymentQueue
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Sid: AllowSendMessage
+  #           Effect: Allow
+  #           Principal: "*"
+  #           Action:
+  #             - "sqs:SendMessage"
+  #             - "sqs:GetQueueUrl"
+  #             - "sqs:GetQueueAttributes"
+  #           Resource: !GetAtt PaymentQueue.Arn
 
   # ---------------- IAM Role for Lambda ----------------
   PosBackendLambdaRole:
@@ -232,13 +267,13 @@ Resources:
                   - !GetAtt MenuItemsTable.Arn
                   - !Sub "${MenuItemsTable.Arn}/index/*"
 
-              # SQS Access
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                  - sqs:GetQueueUrl
-                  - sqs:GetQueueAttributes
-                Resource: !GetAtt PaymentQueue.Arn
+              # # SQS Access
+              # - Effect: Allow
+              #   Action:
+              #     - sqs:SendMessage
+              #     - sqs:GetQueueUrl
+              #     - sqs:GetQueueAttributes
+              #   Resource: !GetAtt PaymentQueue.Arn
 
   # ---------------- Lambda Function ----------------
   BackendLambda:
@@ -256,12 +291,13 @@ Resources:
           STAGE: !Ref StageName
 
           # Resource identifiers for your code (prefer reading from env, not hardcoding in code)
-          PAYMENT_QUEUE_URL: !Ref PaymentQueue
+          # PAYMENT_QUEUE_URL: !Ref PaymentQueue
           USERS_TABLE: !Ref UsersTable
           ORDERS_TABLE: !Ref OrdersTable
           PAYMENTS_TABLE: !Ref PaymentsTable
           TABLES_TABLE: !Ref TablesTable
           MENU_ITEMS_TABLE: !Ref MenuItemsTable
+          MENU_PHOTO_BUCKET: !Ref MenuPhotoBucket
 
           # Optional: if your code fetches JWT secret from SSM, it can use this name
           JWT_SECRET_PARAM: !Ref JwtSecretSsmParamName
@@ -363,6 +399,14 @@ Resources:
 # Outputs
 # ===========================
 Outputs:
+  MenuPhotoBucketName:
+    Description: The name of the S3 bucket for menu photos
+    Value: !Ref MenuPhotoBucket
+
+  MenuPhotoBucketArn:
+    Description: The ARN of the S3 bucket for menu photos
+    Value: !GetAtt MenuPhotoBucket.Arn
+
   UsersTableName:
     Value: !Ref UsersTable
   OrdersTableName:
@@ -374,13 +418,13 @@ Outputs:
   MenuItemsTableName:
     Value: !Ref MenuItemsTable
 
-  PaymentQueueUrl:
-    Description: The URL of the SQS queue used for payments
-    Value: !Ref PaymentQueue
+  # PaymentQueueUrl:
+  #   Description: The URL of the SQS queue used for payments
+  #   Value: !Ref PaymentQueue
 
-  PaymentQueueArn:
-    Description: The ARN of the SQS queue
-    Value: !GetAtt PaymentQueue.Arn
+  # PaymentQueueArn:
+  #   Description: The ARN of the SQS queue
+  #   Value: !GetAtt PaymentQueue.Arn
 
   ApiBaseUrl:
     Description: Base URL of the POS Backend API

@@ -134,6 +134,21 @@ The control system coordinates orders and fleet operations. It is intended to in
 - real-time status streaming via WebSocket/MQTT
 - scheduling strategies (FIFO, priority-based, zone-aware, load balancing)
 
+**Order States**
+
+- created
+- paid
+- cancelled
+- completed
+
+<!-- For each order, it will have multiple items. For each item, it has its own states
+- pending
+- preparing
+- ready
+- delivering
+- served
+- cancelled -->
+
 ---
 
 ### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
@@ -173,7 +188,7 @@ Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for g
 ![Status](https://img.shields.io/badge/status-experimental-orange?labelColor=555555) -->
 
 
-## Dependencies
+## Dependencies - POS and Control System
 
 ### Step 1 - Install Node.js as Pre-build
 
@@ -228,4 +243,79 @@ This will install all the dependencies in node_modules folder.
 **Step 4.3** - Launch the component
 ```
 yarn start
+```
+
+## Dependencies - Robot Fleet
+
+### Step 1 - Prepare EC2 Ubuntu 24.04 LTS
+
+The robot is running on ROS 2 Jazzy. An instance with Ubuntu 24.04 LTS is recommended.
+
+### Step 2 - Install Docker
+
+Install docker in EC2 instance following the official guide. [Docker Installation in Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+
+Grant docker permission to access API.
+```
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
+### Step 3 - Launch Robot Fleet in Containers
+
+Go inside **robot-fleet** folder. This folder is the root folder of all ROS packages. This command will launch virtual robots inside EC2.
+```
+docker compose up --build
+```
+This will create several docker images. To verify the published topics:
+
+```
+docker ps # Find the running container
+docker exec -it <container_name_or_id> /bin/bash
+ros2 topic list -t
+ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
+```
+
+## Local Testing
+
+For local development, we need to manually create an **.env** in each component as it need AWS permissions to execute certain operations. Permissions for cloud resources e.g. Lambda, EC2 are managed directly via IAM.
+
+### Local Testing - POS Backend
+
+Create this **.env** file in pos-backend folder.
+
+```
+# .env
+# Replace with your credentials and region
+AWS_ACCESS_KEY_ID=<Your AWS Access Key>
+AWS_SECRET_ACCESS_KEY=<Your AWS Secret Access Key>
+AWS_REGION=ap-southeast-2
+
+# Replace with your table name
+USERS_TABLE=dishpatch-pos-backend-Users
+ORDERS_TABLE=dishpatch-pos-backend-Orders
+PAYMENTS_TABLE=dishpatch-pos-backend-Payments
+TABLES_TABLE=dishpatch-pos-backend-Tables
+MENU_ITEMS_TABLE=dishpatch-pos-backend-MenuItems
+```
+**Seed Initial Menu & Table Data to DynamoDB**
+
+When you first create the stack, all DynamoDB is empty. You may wish to seed initial menu and table data to the DynamoDB table.
+
+Inside **pos-backend/scripts/** folder, run the following node.js scripts
+```
+node .\seedMenus.js
+node .\seedTables.js
+```
+The scripts will fetch the data defined in pos-backend/constants/index.js and upload to DynamoDB tables.
+
+### Local Testing - POS Frontend
+
+Create this **.env** file in pos-frontend folder.
+
+```
+# .env
+# Replace with your local backend setting
+VITE_BACKEND_URL=http://localhost:3000/
+# Replace with your S3 bucket that stores menu photo
+VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southeast-2.amazonaws.com
 ```

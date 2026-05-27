@@ -1,15 +1,14 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, ImageOverlay, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
-const FLOORPLAN_URL = "/maps/the-hive-floorplan.webp";
+const FLOORPLAN_URL = "/maps/the-hive-floorplan-landscape.webp";
 type FloorplanBounds = [[number, number], [number, number]];
 
-// Fix for default markers in react-leaflet
+// Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -35,12 +34,46 @@ function getRobotIcon(status: RobotStatus) {
   });
 }
 
-function RecenterButton({ bounds }: { bounds: FloorplanBounds }) {
-  const map = useMap();
+function getRobotStatusClassName(status: RobotStatus) {
+  if (status === 'Serving') return 'bg-green-100 text-green-800';
+  if (status === 'Pickup') return 'bg-yellow-100 text-yellow-800';
+  if (status === 'Returning') return 'bg-blue-100 text-blue-800';
+  if (status === 'Waiting') return 'bg-purple-100 text-purple-800';
+  return 'bg-red-100 text-red-800';
+}
+
+function createRobotPopup(robot: Robot) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'text-sm';
+
+  const name = document.createElement('strong');
+  name.textContent = robot.name;
+  wrapper.appendChild(name);
+  wrapper.appendChild(document.createElement('br'));
+
+  const status = document.createElement('span');
+  status.className = `inline-block px-2 py-1 rounded-full text-xs ${getRobotStatusClassName(robot.status)}`;
+  status.textContent = robot.status;
+  wrapper.appendChild(status);
+
+  return wrapper;
+}
+
+function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[]) {
+  markerGroup.clearLayers();
+
+  robots.forEach((robot: Robot) => {
+    L.marker([robot.x, robot.y], { icon: getRobotIcon(robot.status) })
+      .bindPopup(createRobotPopup(robot))
+      .addTo(markerGroup);
+  });
+}
+
+function RecenterButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="absolute top-4 right-4 z-[1000]">
       <button
-        onClick={() => map.fitBounds(bounds)}
+        onClick={onClick}
         className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-lg dark:bg-gray-800 dark:hover:bg-gray-700 dark:border-gray-600"
         title="Recenter"
       >
@@ -55,58 +88,107 @@ function RecenterButton({ bounds }: { bounds: FloorplanBounds }) {
 
 export default function RestaurantMap() {
   const { robots } = useRobotContext();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerGroupRef = useRef<L.LayerGroup | null>(null);
+  const frameRef = useRef<number | null>(null);
   const [bounds, setBounds] = useState<FloorplanBounds | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     const image = new Image();
-    image.src = FLOORPLAN_URL;
+
     image.onload = () => {
-      setBounds([[0, 0], [image.naturalHeight, image.naturalWidth]]);
+      if (isMounted) {
+        setBounds([[0, 0], [image.naturalHeight, image.naturalWidth]]);
+      }
+    };
+    image.src = FLOORPLAN_URL;
+
+    return () => {
+      isMounted = false;
+      image.onload = null;
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+
+    if (!bounds || !container) {
+      return;
+    }
+
+    const map = L.map(container, {
+      crs: L.CRS.Simple,
+      maxBounds: bounds,
+      maxBoundsViscosity: 1,
+      minZoom: -3,
+      maxZoom: 2,
+      attributionControl: false,
+    });
+
+    mapRef.current = map;
+    L.imageOverlay(FLOORPLAN_URL, bounds).addTo(map);
+    const markerGroup = L.layerGroup().addTo(map);
+    markerGroupRef.current = markerGroup;
+    syncRobotMarkers(markerGroup, robots);
+    map.fitBounds(bounds);
+
+    const refreshMapSize = () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+
+      frameRef.current = window.requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false });
+        map.fitBounds(bounds);
+        frameRef.current = null;
+      });
+    };
+
+    refreshMapSize();
+
+    const resizeObserver = new ResizeObserver(refreshMapSize);
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+
+      markerGroupRef.current?.clearLayers();
+      markerGroupRef.current = null;
+      mapRef.current = null;
+
+      try {
+        map.remove();
+      } catch (error) {
+        console.warn("Leaflet map cleanup failed", error);
+      }
+    };
+  }, [bounds]);
+
+  useEffect(() => {
+    const markerGroup = markerGroupRef.current;
+
+    if (!markerGroup) {
+      return;
+    }
+
+    syncRobotMarkers(markerGroup, robots);
+  }, [robots]);
 
   if (!bounds) {
     return <div className="h-full w-full rounded-lg bg-gray-100" />;
   }
 
   return (
-    <div className="h-full w-full rounded-lg overflow-hidden">
-      <MapContainer
-        crs={L.CRS.Simple}
-        bounds={bounds}
-        maxBounds={bounds}
-        maxBoundsViscosity={1}
-        minZoom={-3}
-        maxZoom={2}
-        style={{ height: '100%', width: '100%' }}
-        className="rounded-lg bg-gray-100"
-        attributionControl={false}
-      >
-        <RecenterButton bounds={bounds} />
-        <ImageOverlay
-          url={FLOORPLAN_URL}
-          bounds={bounds}
-        />
-        {robots.map((robot: Robot) => (
-          <Marker key={robot.id} position={[robot.x, robot.y]} icon={getRobotIcon(robot.status)}>
-            <Popup>
-              <div className="text-sm">
-                <strong>{robot.name}</strong>
-                <br />
-                <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                  robot.status === 'Serving' ? 'bg-green-100 text-green-800' :
-                  robot.status === 'Pickup' ? 'bg-yellow-100 text-yellow-800' :
-                  robot.status === 'Returning' ? 'bg-blue-100 text-blue-800' :
-                  robot.status === 'Waiting' ? 'bg-purple-100 text-purple-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {robot.status}
-                </span>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="relative h-full w-full overflow-hidden rounded-lg">
+      <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
+      <RecenterButton onClick={() => mapRef.current?.fitBounds(bounds)} />
     </div>
   );
 }
