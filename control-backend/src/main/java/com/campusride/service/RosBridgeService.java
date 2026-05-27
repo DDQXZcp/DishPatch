@@ -91,6 +91,10 @@ public class RosBridgeService extends TextWebSocketHandler {
         }
 
         logger.info("Subscribed to " + robotCount + " ROS2 topics.");
+
+        // TEMP smoke-test: publish one goal to robot1 on connect — REMOVE after verifying
+        Thread.sleep(3000); // give Nav2 action server time to come up before goal_relay_node forwards
+        publishGoal(1, 4.0, 4.0, 0.0);
     }
 
 
