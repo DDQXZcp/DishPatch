@@ -130,8 +130,8 @@ public class ScooterService {
                 case "status" -> {
                     scooter.setBattery(msg.get("battery").getAsInt());
                     scooter.setSpeed(msg.get("speed").getAsInt());
-                    scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
-                    scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
+                    scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
+                    scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
                 }
             }
             scooterLastUpdMap.put(id, System.currentTimeMillis());
