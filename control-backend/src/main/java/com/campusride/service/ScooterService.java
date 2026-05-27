@@ -124,9 +124,9 @@ public class ScooterService {
                         return ns;
                     });
 
-            scooter.setBattery(msg.get("battery").getAsInt());
-            scooter.setX((double) 200);
-            scooter.setY((double) 200);
+            scooter.setBattery(msg.get("data").getAsInt());
+            // scooter.setX((double) 200);
+            // scooter.setY((double) 200);
             // scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
             // scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
             // switch (field) {
