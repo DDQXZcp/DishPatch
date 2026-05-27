@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'robot-fleet/**'
+      - 'map-source/**'
       - '.github/workflows/deploy-robot-fleet.yml'
   workflow_dispatch: {}
 
@@ -27,6 +28,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Stage Nav2 map source
+        run: bash robot-fleet/scripts/stage_nav2_map.sh
+
+      - name: Validate staged Nav2 map source
+        run: bash robot-fleet/scripts/stage_nav2_map.sh --check
 
       - name: Validate Docker Compose config
         working-directory: robot-fleet
@@ -172,8 +179,19 @@ jobs:
             done
           }
 
+          check_nav2_map_files() {
+            sudo docker exec nav2 bash -lc '
+              set -euo pipefail
+              test -f /ros2_ws/config/map.yaml
+              test -f /ros2_ws/config/map.png
+              grep -Fx "image: map.png" /ros2_ws/config/map.yaml >/dev/null
+              grep -Fx "resolution: 0.011802" /ros2_ws/config/map.yaml >/dev/null
+              python3 -c "import struct; f=open(\"/ros2_ws/config/map.png\", \"rb\"); f.seek(16); width, height = struct.unpack(\">II\", f.read(8)); assert (width, height) == (5084, 3302), (width, height)"
+            '
+          }
+
           for attempt in $(seq 1 60); do
-            if check_ros_graph; then
+            if check_ros_graph && check_nav2_map_files; then
               sudo systemctl --no-pager status "${SERVICE_NAME}.service"
               sudo docker compose -f docker-compose.yml ps
               exit 0

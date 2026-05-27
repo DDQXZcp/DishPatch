@@ -25,6 +25,9 @@ class NavNode(Node):
         # ── parameters ────────────────────────────────────────────────
         self.declare_parameter("robot_namespace", "robot")
         self.declare_parameter("publish_rate", 10.0)  # Hz
+        self.declare_parameter("initial_x", 0.0)
+        self.declare_parameter("initial_y", 0.0)
+        self.declare_parameter("initial_theta", 0.0)
 
         ns = self.get_parameter("robot_namespace").value
         rate = self.get_parameter("publish_rate").value
@@ -32,9 +35,9 @@ class NavNode(Node):
         self._dt = 1.0 / rate
 
         # ── state ─────────────────────────────────────────────────────
-        self.x: float = 0.0
-        self.y: float = 0.0
-        self.theta: float = 0.0
+        self.x: float = float(self.get_parameter("initial_x").value)
+        self.y: float = float(self.get_parameter("initial_y").value)
+        self.theta: float = float(self.get_parameter("initial_theta").value)
         self.linear_x: float = 0.0
         self.angular_z: float = 0.0
 
@@ -47,7 +50,7 @@ class NavNode(Node):
 
         self.timer = self.create_timer(self._dt, self.publish_odom)
         self.get_logger().info(
-            f"nav_node started — odom → /{ns}/odom (Nav2 fake driver)"
+            f"nav_node started at x={self.x:.3f}, y={self.y:.3f}, theta={self.theta:.3f} — odom → /{ns}/odom"
         )
 
     # ── callbacks ─────────────────────────────────────────────────────

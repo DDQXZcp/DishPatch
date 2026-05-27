@@ -34,9 +34,6 @@ COPY config ./config
 COPY scripts/nav2_entrypoint.sh ./scripts/nav2_entrypoint.sh
 RUN chmod +x /ros2_ws/scripts/nav2_entrypoint.sh
 
-# ── Generate empty map (200x200 all free, 10m x 10m) ──────────────────────────
-RUN python3 -c "open('/ros2_ws/config/map.pgm','wb').write(b'P5\n200 200\n255\n'+bytes([254]*200*200))"
-
 # ── Build shared_msgs + nav2_launcher ─────────────────────────────────────────
 RUN rosdep update && \
     rosdep install --from-paths src --ignore-src -r -y && \

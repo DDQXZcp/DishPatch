@@ -106,7 +106,7 @@ Type `exit` to leave the container.
 
 ## 5. Send a Navigation Goal
 
-Move `robot1` to `(2.0, 1.5)` in the `map` frame:
+Move `robot1` to a known free Hive map point:
 
 ```bash
 docker exec -it robot1 bash
@@ -114,18 +114,18 @@ source /opt/ros/jazzy/setup.bash
 source /ros2_ws/install/setup.bash
 
 ros2 topic pub --once /robot1/goal_pose geometry_msgs/msg/PoseStamped \
-  "{header: {frame_id: 'map'}, pose: {position: {x: 2.0, y: 1.5, z: 0.0}, orientation: {w: 1.0}}}"
+  "{header: {frame_id: 'map'}, pose: {position: {x: 18.128, y: 20.134, z: 0.0}, orientation: {w: 1.0}}}"
 ```
 
 Move `robot2` by changing the namespace and target coordinates:
 
 ```bash
 ros2 topic pub --once /robot2/goal_pose geometry_msgs/msg/PoseStamped \
-  "{header: {frame_id: 'map'}, pose: {position: {x: -1.5, y: 2.0, z: 0.0}, orientation: {w: 1.0}}}"
+  "{header: {frame_id: 'map'}, pose: {position: {x: 23.226, y: 20.134, z: 0.0}, orientation: {w: 1.0}}}"
 ```
 
-The generated test map is 10m x 10m with origin `[-5, -5]`, so use goal
-coordinates roughly between `-5` and `5` for both `x` and `y`.
+The Hive map uses real map-frame coordinates from `map-source/the-hive-drop-points.yaml`.
+Use those drop-point poses for reliable navigation tests.
 
 If a goal is sent too early, `goal_relay_node` can drop it while waiting for the
 Nav2 action server. Wait a few seconds after startup and publish the goal again.
@@ -187,7 +187,7 @@ Subscribe to robot status:
 Publish a navigation goal:
 
 ```json
-{"op":"publish","topic":"/robot1/goal_pose","type":"geometry_msgs/msg/PoseStamped","msg":{"header":{"frame_id":"map","stamp":{"sec":0,"nanosec":0}},"pose":{"position":{"x":2.0,"y":1.5,"z":0.0},"orientation":{"x":0.0,"y":0.0,"z":0.0,"w":1.0}}}}
+{"op":"publish","topic":"/robot1/goal_pose","type":"geometry_msgs/msg/PoseStamped","msg":{"header":{"frame_id":"map","stamp":{"sec":0,"nanosec":0}},"pose":{"position":{"x":18.128,"y":20.134,"z":0.0},"orientation":{"x":0.0,"y":0.0,"z":0.0,"w":1.0}}}}
 ```
 
 Expected status messages arrive about once per second and show changing `speed`
