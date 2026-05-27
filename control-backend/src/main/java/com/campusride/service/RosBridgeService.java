@@ -13,6 +13,9 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import org.springframework.web.socket.CloseStatus;
 
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
@@ -43,6 +46,9 @@ public class RosBridgeService extends TextWebSocketHandler {
     private ScooterService scooterService;
 
     private WebSocketSession session;
+
+    /** Robot ids whose goal_pose topic has been advertised on the current session. */
+    private final Set<Integer> advertisedGoals = ConcurrentHashMap.newKeySet();
 
     /**
      * Initiates a WebSocket connection to rosbridge on startup.
@@ -76,6 +82,7 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.session = session;
+        advertisedGoals.clear(); // new session — previous advertisements no longer valid
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
 
         for (int i = 1; i <= robotCount; i++) {
@@ -140,5 +147,43 @@ public class RosBridgeService extends TextWebSocketHandler {
             "{\"op\":\"subscribe\",\"topic\":\"%s\",\"type\":\"%s\"}", topic, type
         );
         session.sendMessage(new TextMessage(payload));
+    }
+
+    /**
+     * Publishes a navigation goal to {@code /robot{id}/goal_pose} via rosbridge.
+     * The topic is advertised once per robot before its first publish on the
+     * current session.
+     *
+     * @param id  robot id (matches the {@code /robot{id}} namespace)
+     * @param x   goal X in the "map" frame
+     * @param y   goal Y in the "map" frame
+     * @param yaw goal heading in radians (0 = facing +X); converted to a 2D quaternion
+     */
+    public void publishGoal(int id, double x, double y, double yaw) throws Exception {
+        if (session == null || !session.isOpen()) {
+            logger.warning("Cannot publish goal for robot " + id + " — rosbridge not connected");
+            return;
+        }
+
+        String topic = "/robot" + id + "/goal_pose";
+
+        if (advertisedGoals.add(id)) {
+            session.sendMessage(new TextMessage(String.format(
+                "{\"op\":\"advertise\",\"topic\":\"%s\",\"type\":\"geometry_msgs/PoseStamped\"}", topic
+            )));
+        }
+
+        double oz = Math.sin(yaw / 2.0);
+        double ow = Math.cos(yaw / 2.0);
+
+        String payload = String.format(Locale.US,
+            "{\"op\":\"publish\",\"topic\":\"%s\",\"msg\":{" +
+            "\"header\":{\"stamp\":{\"sec\":0,\"nanosec\":0},\"frame_id\":\"map\"}," +
+            "\"pose\":{\"position\":{\"x\":%f,\"y\":%f,\"z\":0.0}," +
+            "\"orientation\":{\"x\":0.0,\"y\":0.0,\"z\":%f,\"w\":%f}}}}",
+            topic, x, y, oz, ow
+        );
+        session.sendMessage(new TextMessage(payload));
+        logger.info("Published goal for robot " + id + " → (" + x + ", " + y + ", yaw=" + yaw + ")");
     }
 }
