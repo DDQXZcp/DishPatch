@@ -99,12 +99,8 @@ public class RosBridgeService extends TextWebSocketHandler {
 
             if (!"publish".equals(json.get("op").getAsString())) return;
 
-            logger.info("JSON: " + json);
             String     topic = json.get("topic").getAsString();
             JsonObject msg   = json.getAsJsonObject("msg");
-
-            logger.info("ROSBRIDGE Received message on topic: " + topic);
-            logger.info("ROSBRIDGE Message payload: " + msg.toString());
 
             // Topic format: /robot{id}/{field}
             String[] parts = topic.split("/"); // ["", "robot1", "field"]
@@ -112,8 +108,6 @@ public class RosBridgeService extends TextWebSocketHandler {
 
             int    id    = Integer.parseInt(parts[1].replace("robot", ""));
             String field = parts[2];
-
-            logger.info("Parsed - id: " + id + ", field: " + field);
 
             scooterService.updateField(id, field, msg);
 

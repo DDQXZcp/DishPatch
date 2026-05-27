@@ -125,20 +125,15 @@ public class ScooterService {
                         return ns;
                     });
 
-            scooter.setBattery(msg.get("data").getAsInt());
-            // scooter.setX((double) 200);
-            // scooter.setY((double) 200);
-            // scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
-            // scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
-            // switch (field) {
-            //     // case "status"   -> scooter.setStatus(msg.get("state").getAsString()); // FIX
-            //     case "battery"  -> scooter.setBattery(msg.get("battery").getAsInt());
-            //     case "position" -> {
-            //         scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
-            //         scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
-            //     }
-            // }
-
+            switch (field) {
+                case "battery" -> scooter.setBattery(msg.get("data").getAsInt());
+                case "status" -> {
+                    scooter.setBattery(msg.get("battery").getAsInt());
+                    scooter.setSpeed(msg.get("speed").getAsInt());
+                    scooter.setX(msg.getAsJsonField("pose").getAsJsonField("position").get("x").getAsDouble());
+                    scooter.setY(msg.getAsJsonField("pose").getAsJsonField("position").get("y").getAsDouble());
+                }
+            }
             scooterLastUpdMap.put(id, System.currentTimeMillis());
         }
 
