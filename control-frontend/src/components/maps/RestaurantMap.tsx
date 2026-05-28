@@ -73,11 +73,10 @@ function createRobotPopup(robot: Robot) {
 }
 
 function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number, number] {
-  const imageHeight = manifest.imageSizePx[1];
-  const pixelX = (robot.x - manifest.origin[0]) / manifest.resolution;
-  const pixelY = imageHeight - ((robot.y - manifest.origin[1]) / manifest.resolution);
+  const floorplanX = (robot.x - manifest.origin[0]) / manifest.resolution;
+  const floorplanY = (robot.y - manifest.origin[1]) / manifest.resolution;
 
-  return [pixelY, pixelX];
+  return [floorplanY, floorplanX];
 }
 
 function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[], manifest: MapManifest) {
