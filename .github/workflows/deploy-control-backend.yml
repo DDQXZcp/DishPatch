@@ -76,15 +76,6 @@ jobs:
       run: |
         scp -o StrictHostKeyChecking=no -i key.pem control-backend/deployment-scripts/setup-control-backend-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
 
-    # Copy virtual robots setup script to EC2
-    - name: Copy virtual robots setup script to EC2
-      run: |
-        scp -o StrictHostKeyChecking=no -i key.pem control-backend/deployment-scripts/setup-virtual-robots-service.sh ${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/
-
     - name: Run setup script on EC2
       run: |
         ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-control-backend-service.sh '${{ secrets.MQTT_USERNAME }}' '${{ secrets.MQTT_PASSWORD }}'"
-
-    - name: Run virtual robot setup script on EC2
-      run: |
-        ssh -o StrictHostKeyChecking=no -i key.pem ${{ env.EC2_USER }}@${{ env.EC2_HOST }} "bash /home/ec2-user/setup-virtual-robots-service.sh"

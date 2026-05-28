@@ -2,6 +2,7 @@ package com.campusride.service;
 
 import com.campusride.model.Scooter;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -99,6 +100,47 @@ public class ScooterService {
         stats.put("maintenance", maintenance);
         stats.put("total", total);
         stats.put("timestamp", new Date());
+    }
+
+
+    /**
+     * Updates a single field of a scooter from a rosbridge message.
+     * If the scooter does not exist, it is created with the given id.
+     *
+     * @param id    robot ID extracted from the ROS2 topic name
+     * @param field topic field name: "status", "position", or "battery"
+     * @param msg   rosbridge message payload as a JsonObject
+     */
+    public void updateField(int id, String field, JsonObject msg) {
+        synchronized (scooters) {
+            Scooter scooter = scooters.stream()
+                    .filter(s -> s.getId() == id)
+                    .findFirst()
+                    .orElseGet(() -> {
+                        Scooter ns = new Scooter();
+                        ns.setId(id);
+                        ns.setName("Robot " + id);
+                        ns.setStatus("Waiting"); // Possibly Change
+                        scooters.add(ns);
+                        return ns;
+                    });
+
+            switch (field) {
+                case "battery" -> scooter.setBattery(msg.get("data").getAsInt());
+                case "status" -> {
+                    scooter.setBattery(msg.get("battery").getAsInt());
+                    scooter.setSpeed(msg.get("speed").getAsFloat());
+                    scooter.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
+                    scooter.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
+                }
+                // Add logic for updating z, speed, status, etc when its possible
+            }
+            scooterLastUpdMap.put(id, System.currentTimeMillis());
+        }
+
+        updateStats();
+        messagingTemplate.convertAndSend("/topic/scooter-locations", getScootersSortedByStatus());
+        messagingTemplate.convertAndSend("/topic/scooter-stats", stats);
     }
 
     public List<Scooter> getAllScooters() {
