@@ -8,6 +8,7 @@ on:
     branches: [ main ]
     paths:
       - 'control-frontend/**'
+      - 'map-source/**'
       - 'infrastructure/infrastructure-control-frontend.yml'
       - '.github/workflows/deploy-control-frontend.yml'
   workflow_dispatch: {}
@@ -115,6 +116,9 @@ jobs:
             corepack enable
             yarn install --immutable
           fi
+
+      - name: Stage map assets
+        run: bash map-source/stage-map-assets.sh
 
       - name: Build
         working-directory: control-frontend
