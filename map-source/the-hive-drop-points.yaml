@@ -1,6 +1,6 @@
 map: the-hive-landscape-mask-nav2.yaml
 frame_id: map
-source_image: ../control-frontend/public/maps/the-hive-floorplan-landscape.webp
+source_image: the-hive-floorplan-landscape.webp
 image_size_px: [5084, 3302]
 resolution: 0.011802
 origin: [0.0, 0.0, 0.0]
