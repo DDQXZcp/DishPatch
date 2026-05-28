@@ -5,7 +5,7 @@ name: Deploy Control Frontend (Vite → S3 + CloudFront)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, control-frontend-normalise-map-coordinates ]
     paths:
       - 'control-frontend/**'
       - 'map-source/**'
@@ -97,7 +97,7 @@ jobs:
           echo "S3 bucket: $BUCKET"
           echo "CloudFront distribution: $DIST"
           echo "Site URL: $URL"
-      
+
       - name: Setup Node (Yarn)
         uses: actions/setup-node@v4
         with:

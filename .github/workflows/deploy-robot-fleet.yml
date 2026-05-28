@@ -2,7 +2,7 @@ name: Deploy Robot Fleet (Docker Compose -> EC2)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, control-frontend-normalise-map-coordinates ]
     paths:
       - 'robot-fleet/**'
       - 'map-source/**'
