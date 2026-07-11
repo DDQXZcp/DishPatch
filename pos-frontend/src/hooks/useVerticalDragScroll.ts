@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const useVerticalDragScroll = () => {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+
+  const scrollRef = useCallback((node: HTMLDivElement | null) => {
+    setElement(node);
+  }, []);
 
   useEffect(() => {
-    const element = scrollRef.current;
-
     if (!element) return;
 
     let isDragging = false;
@@ -15,10 +17,11 @@ const useVerticalDragScroll = () => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
 
-      // Quantity controls are inside data-no-drag.
+      if (event.pointerType === "touch") return;
+
       if (
         target.closest(
-          "[data-no-drag], input, select, textarea, a"
+          "[data-no-drag], button, input, select, textarea, a"
         )
       ) {
         return;
@@ -35,6 +38,8 @@ const useVerticalDragScroll = () => {
 
     const handlePointerMove = (event: PointerEvent) => {
       if (!isDragging) return;
+
+      event.preventDefault();
 
       const distance = event.clientY - startY;
       element.scrollTop = startScrollTop - distance;
@@ -64,7 +69,7 @@ const useVerticalDragScroll = () => {
       element.removeEventListener("pointerup", stopDragging);
       element.removeEventListener("pointercancel", stopDragging);
     };
-  }, []);
+  }, [element]);
 
   return scrollRef;
 };

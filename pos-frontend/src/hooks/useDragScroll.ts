@@ -1,81 +1,85 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const useDragScroll = () => {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+
+  const scrollRef = useCallback((node: HTMLDivElement | null) => {
+    setElement(node);
+  }, []);
 
   useEffect(() => {
-    const element = scrollRef.current;
-
     if (!element) return;
 
+    let isPointerDown = false;
     let isDragging = false;
     let startX = 0;
     let startScrollLeft = 0;
-    let moved = false;
+
+    const dragThreshold = 8;
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
 
-      // Ignore only explicitly marked controls.
       if (target.closest("[data-no-drag]")) return;
 
-      isDragging = true;
-      moved = false;
+      isPointerDown = true;
+      isDragging = false;
       startX = event.clientX;
       startScrollLeft = element.scrollLeft;
-
-      element.setPointerCapture(event.pointerId);
-      element.style.cursor = "grabbing";
-      element.style.userSelect = "none";
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (!isDragging) return;
+      if (!isPointerDown) return;
 
       const distance = event.clientX - startX;
 
-      if (Math.abs(distance) > 4) {
-        moved = true;
+      if (!isDragging && Math.abs(distance) >= dragThreshold) {
+        isDragging = true;
+        element.style.cursor = "grabbing";
+        element.style.userSelect = "none";
       }
 
+      if (!isDragging) return;
+
+      event.preventDefault();
       element.scrollLeft = startScrollLeft - distance;
     };
 
-    const stopDragging = (event: PointerEvent) => {
-      if (!isDragging) return;
-
-      isDragging = false;
-
-      if (element.hasPointerCapture(event.pointerId)) {
-        element.releasePointerCapture(event.pointerId);
-      }
+    const handlePointerUp = () => {
+      isPointerDown = false;
 
       element.style.cursor = "grab";
       element.style.removeProperty("user-select");
+
+      // Keep the drag state until the generated click event is processed.
+      window.setTimeout(() => {
+        isDragging = false;
+      }, 0);
     };
 
-    const preventClickAfterDrag = (event: MouseEvent) => {
-      if (moved) {
-        event.preventDefault();
-        event.stopPropagation();
-        moved = false;
-      }
+    const handleClick = (event: MouseEvent) => {
+      if (!isDragging) return;
+
+      event.preventDefault();
+      event.stopPropagation();
     };
 
     element.addEventListener("pointerdown", handlePointerDown);
-    element.addEventListener("pointermove", handlePointerMove);
-    element.addEventListener("pointerup", stopDragging);
-    element.addEventListener("pointercancel", stopDragging);
-    element.addEventListener("click", preventClickAfterDrag, true);
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: false,
+    });
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    element.addEventListener("click", handleClick, true);
 
     return () => {
       element.removeEventListener("pointerdown", handlePointerDown);
-      element.removeEventListener("pointermove", handlePointerMove);
-      element.removeEventListener("pointerup", stopDragging);
-      element.removeEventListener("pointercancel", stopDragging);
-      element.removeEventListener("click", preventClickAfterDrag, true);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      element.removeEventListener("click", handleClick, true);
     };
-  }, []);
+  }, [element]);
 
   return scrollRef;
 };

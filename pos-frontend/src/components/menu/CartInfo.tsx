@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { RiDeleteBin2Fill } from "react-icons/ri";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -31,18 +31,42 @@ const CartInfo = () => {
   ) as CartItem[];
 
   const dispatch = useDispatch<AppDispatch>();
-  const scrollRef = useVerticalDragScroll();
+
+  /*
+    useVerticalDragScroll now returns a callback ref rather than an object
+    containing `.current`.
+  */
+  const dragScrollRef = useVerticalDragScroll();
+
+  /*
+    Keep a separate normal ref so this component can access the element
+    for automatic scrolling.
+  */
+  const scrollElementRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+    Pass the same DOM element to both refs:
+    1. scrollElementRef gives this component access through `.current`.
+    2. dragScrollRef lets the custom hook attach drag listeners.
+  */
+  const setScrollRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      scrollElementRef.current = node;
+      dragScrollRef(node);
+    },
+    [dragScrollRef]
+  );
 
   useEffect(() => {
-    const scrollContainer = scrollRef.current;
+    const scrollContainer = scrollElementRef.current;
 
-    if (scrollContainer) {
-      scrollContainer.scrollTo({
-        top: scrollContainer.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [cartData, scrollRef]);
+    if (!scrollContainer) return;
+
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [cartData]);
 
   const handleRemove = (item: CartItem): void => {
     dispatch(
@@ -96,8 +120,8 @@ const CartInfo = () => {
 
       {/* Cart items */}
       <div
-        ref={scrollRef}
-        style={{ touchAction: "pan-x" }}
+        ref={setScrollRef}
+        style={{ touchAction: "pan-y" }}
         className="
           mt-4 min-h-0 flex-1
           cursor-grab space-y-3
