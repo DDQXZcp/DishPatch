@@ -27,7 +27,7 @@ function Layout() {
           path="/"
           element={
             <ProtectedRoutes>
-              <Home />
+              <Menu />
             </ProtectedRoutes>
           }
         />
