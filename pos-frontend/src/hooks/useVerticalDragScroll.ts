@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const useDragScroll = () => {
+const useVerticalDragScroll = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -9,20 +9,24 @@ const useDragScroll = () => {
     if (!element) return;
 
     let isDragging = false;
-    let startX = 0;
-    let startScrollLeft = 0;
-    let moved = false;
+    let startY = 0;
+    let startScrollTop = 0;
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
 
-      // Ignore only explicitly marked controls.
-      if (target.closest("[data-no-drag]")) return;
+      // Quantity controls are inside data-no-drag.
+      if (
+        target.closest(
+          "[data-no-drag], input, select, textarea, a"
+        )
+      ) {
+        return;
+      }
 
       isDragging = true;
-      moved = false;
-      startX = event.clientX;
-      startScrollLeft = element.scrollLeft;
+      startY = event.clientY;
+      startScrollTop = element.scrollTop;
 
       element.setPointerCapture(event.pointerId);
       element.style.cursor = "grabbing";
@@ -32,13 +36,8 @@ const useDragScroll = () => {
     const handlePointerMove = (event: PointerEvent) => {
       if (!isDragging) return;
 
-      const distance = event.clientX - startX;
-
-      if (Math.abs(distance) > 4) {
-        moved = true;
-      }
-
-      element.scrollLeft = startScrollLeft - distance;
+      const distance = event.clientY - startY;
+      element.scrollTop = startScrollTop - distance;
     };
 
     const stopDragging = (event: PointerEvent) => {
@@ -54,30 +53,20 @@ const useDragScroll = () => {
       element.style.removeProperty("user-select");
     };
 
-    const preventClickAfterDrag = (event: MouseEvent) => {
-      if (moved) {
-        event.preventDefault();
-        event.stopPropagation();
-        moved = false;
-      }
-    };
-
     element.addEventListener("pointerdown", handlePointerDown);
     element.addEventListener("pointermove", handlePointerMove);
     element.addEventListener("pointerup", stopDragging);
     element.addEventListener("pointercancel", stopDragging);
-    element.addEventListener("click", preventClickAfterDrag, true);
 
     return () => {
       element.removeEventListener("pointerdown", handlePointerDown);
       element.removeEventListener("pointermove", handlePointerMove);
       element.removeEventListener("pointerup", stopDragging);
       element.removeEventListener("pointercancel", stopDragging);
-      element.removeEventListener("click", preventClickAfterDrag, true);
     };
   }, []);
 
   return scrollRef;
 };
 
-export default useDragScroll;
+export default useVerticalDragScroll;
