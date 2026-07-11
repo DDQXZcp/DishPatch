@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { GrRadialSelected } from "react-icons/gr";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addItems, removeItem } from "../../redux/slices/cartSlice";
@@ -117,7 +116,7 @@ const MenuContainer = () => {
             className="
               flex w-full gap-3 overflow-x-auto pb-2
               cursor-grab select-none scrollbar-hide
-              touch-pan-x overscroll-x-contain
+              touch-pan-y overscroll-x-contain
               active:cursor-grabbing
             "
           >
@@ -143,24 +142,15 @@ const MenuContainer = () => {
                     }
                   `}
                 >
-                  <div className="flex w-full items-start justify-between gap-3">
-                    <h2 className="text-base font-semibold leading-5">
-                      {menu.icon && (
-                        <span className="mr-2">
-                          {menu.icon}
-                        </span>
-                      )}
-
-                      {menu.menuName}
-                    </h2>
-
-                    {active && (
-                      <GrRadialSelected
-                        size={18}
-                        className="shrink-0 text-primary"
-                      />
+                  <h2 className="text-base font-semibold leading-5">
+                    {menu.icon && (
+                      <span className="mr-2">
+                        {menu.icon}
+                      </span>
                     )}
-                  </div>
+
+                    {menu.menuName}
+                  </h2>
 
                   <p
                     className={`mt-4 text-sm font-medium ${
