@@ -116,7 +116,7 @@ const MenuContainer = () => {
             className="
               flex w-full gap-3 overflow-x-auto pb-2
               cursor-grab select-none scrollbar-hide
-              touch-pan-y overscroll-x-contain
+              touch-pan-x overscroll-x-contain
               active:cursor-grabbing
             "
           >

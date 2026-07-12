@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 
 import {
@@ -34,6 +34,8 @@ interface CartItem {
 const OrderSummary = () => {
   const dispatch = useDispatch<AppDispatch>();
 
+  const queryClient = useQueryClient();
+
   const customerData = useSelector(
     (state: RootState) => state.customer
   ) as CustomerState;
@@ -62,13 +64,17 @@ const OrderSummary = () => {
   const orderMutation = useMutation({
     mutationFn: (requestData: unknown) => addOrder(requestData),
 
-    onSuccess: (response: any) => {
+    onSuccess: async (response: any) => {
       const { data } = response.data;
 
       tableUpdateMutation.mutate({
         status: "Occupied",
         orderId: data.orderId,
         tableNo: customerData.table?.tableNo || data.table,
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: ["orders"],
       });
 
       enqueueSnackbar("Order placed successfully!", {
