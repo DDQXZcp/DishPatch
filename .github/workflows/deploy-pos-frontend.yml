@@ -7,7 +7,7 @@ on:
   push:
     branches: 
       - main 
-      - pos-data-restructure
+      - pos-frontend-improvement
     paths:
       - 'pos-frontend/**'
       - 'infrastructure/infrastructure-pos-frontend.yml'
