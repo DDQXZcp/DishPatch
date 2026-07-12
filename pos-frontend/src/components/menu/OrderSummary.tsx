@@ -31,9 +31,17 @@ interface CartItem {
   pricePerQuantity?: number;
 }
 
+interface AddOrderResponse {
+  data: {
+    data: {
+      orderId: string;
+      table?: string;
+    };
+  };
+}
+
 const OrderSummary = () => {
   const dispatch = useDispatch<AppDispatch>();
-
   const queryClient = useQueryClient();
 
   const customerData = useSelector(
@@ -44,11 +52,8 @@ const OrderSummary = () => {
     (state: RootState) => state.cart
   ) as CartItem[];
 
+  // Menu prices already include GST.
   const total = useSelector(getTotalPrice);
-
-  const taxRate = 10;
-  const tax = (total * taxRate) / 100;
-  const totalPriceWithTax = total + tax;
 
   const [isPlacingOrder, setIsPlacingOrder] =
     useState<boolean>(false);
@@ -62,15 +67,21 @@ const OrderSummary = () => {
   });
 
   const orderMutation = useMutation({
-    mutationFn: (requestData: unknown) => addOrder(requestData),
+    mutationFn: (requestData: unknown) =>
+      addOrder(requestData),
 
-    onSuccess: async (response: any) => {
+    onSuccess: async (
+      response: AddOrderResponse
+    ) => {
       const { data } = response.data;
 
       tableUpdateMutation.mutate({
         status: "Occupied",
         orderId: data.orderId,
-        tableNo: customerData.table?.tableNo || data.table,
+        tableNo:
+          customerData.table?.tableNo ??
+          data.table ??
+          "",
       });
 
       await queryClient.invalidateQueries({
@@ -87,7 +98,7 @@ const OrderSummary = () => {
       setIsPlacingOrder(false);
     },
 
-    onError: (error) => {
+    onError: (error: unknown) => {
       console.error(error);
 
       enqueueSnackbar("Failed to place order.", {
@@ -115,10 +126,11 @@ const OrderSummary = () => {
 
       orderStatus: "Preparing",
 
+      // Prices already include GST.
       bills: {
         total,
-        tax,
-        totalWithTax: totalPriceWithTax,
+        tax: 0,
+        totalWithTax: total,
       },
 
       items: cartData,
@@ -132,31 +144,6 @@ const OrderSummary = () => {
 
   return (
     <section className="bg-surface px-5 py-4">
-      {/* Summary */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-text-secondary">
-            Items ({cartData.length})
-          </p>
-
-          <p className="text-sm font-semibold text-text-primary">
-            {AUDFormatter.format(total)}
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-text-secondary">
-            GST (10%)
-          </p>
-
-          <p className="text-sm font-semibold text-text-primary">
-            {AUDFormatter.format(tax)}
-          </p>
-        </div>
-      </div>
-
-      <div className="my-4 border-t border-dashed border-border" />
-
       {/* Total */}
       <div className="flex items-end justify-between">
         <div>
@@ -170,7 +157,7 @@ const OrderSummary = () => {
         </div>
 
         <p className="text-xl font-bold text-text-primary">
-          {AUDFormatter.format(totalPriceWithTax)}
+          {AUDFormatter.format(total)}
         </p>
       </div>
 
