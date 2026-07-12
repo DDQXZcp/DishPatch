@@ -1,4 +1,9 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addItems, removeItem } from "../../redux/slices/cartSlice";
@@ -51,8 +56,23 @@ const MenuContainer = () => {
   const categoryDragScrollRef = useDragScroll();
   const itemDragScrollRef = useVerticalDragScroll();
 
+  /*
+   * useVerticalDragScroll returns a callback ref.
+   * This additional normal ref lets us reset scrollTop when
+   * the customer changes category.
+   */
+  const itemScrollElementRef = useRef<HTMLDivElement | null>(null);
+
+  const setItemScrollRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      itemScrollElementRef.current = node;
+      itemDragScrollRef(node);
+    },
+    [itemDragScrollRef]
+  );
+
   useEffect(() => {
-    const loadMenus = async () => {
+    const loadMenus = async (): Promise<void> => {
       try {
         const response = await getMenus();
 
@@ -71,6 +91,34 @@ const MenuContainer = () => {
 
     void loadMenus();
   }, []);
+
+  const handleSelectCategory = (
+    menu: MenuCategory
+  ): void => {
+    if (selected?.menuName === menu.menuName) {
+      return;
+    }
+
+    /*
+     * Stop any remaining vertical scrolling before changing
+     * the displayed category.
+     */
+    if (itemScrollElementRef.current) {
+      itemScrollElementRef.current.scrollTop = 0;
+    }
+
+    setSelected(menu);
+
+    /*
+     * Reset again after React renders the new category items.
+     * This avoids retaining the previous category's position.
+     */
+    requestAnimationFrame(() => {
+      if (itemScrollElementRef.current) {
+        itemScrollElementRef.current.scrollTop = 0;
+      }
+    });
+  };
 
   const getCartQty = (item: MenuItem): number => {
     const cartItem = cart.find(
@@ -102,7 +150,7 @@ const MenuContainer = () => {
     return (
       <p className="mt-10 text-center text-sm text-text-secondary">
         Loading menus...
-      </p>
+      </p >
     );
   }
 
@@ -113,6 +161,9 @@ const MenuContainer = () => {
         <div className="min-w-0 px-4 py-4 sm:px-6 lg:px-4">
           <div
             ref={categoryDragScrollRef}
+            style={{
+              WebkitOverflowScrolling: "touch",
+            }}
             className="
               flex w-full gap-3 overflow-x-auto pb-2
               cursor-grab select-none scrollbar-hide
@@ -129,7 +180,7 @@ const MenuContainer = () => {
                   key={menu.menuName}
                   type="button"
                   draggable={false}
-                  onClick={() => setSelected(menu)}
+                  onClick={() => handleSelectCategory(menu)}
                   className={`
                     flex min-h-[90px] min-w-[170px] shrink-0
                     flex-col items-start justify-between
@@ -160,7 +211,7 @@ const MenuContainer = () => {
                     }`}
                   >
                     {menu.items?.length ?? 0} Items
-                  </p>
+                  </p >
                 </button>
               );
             })}
@@ -172,7 +223,11 @@ const MenuContainer = () => {
 
       {/* Independently scrollable menu items */}
       <div
-        ref={itemDragScrollRef}
+        ref={setItemScrollRef}
+        style={{
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+        }}
         className="
           min-h-0 flex-1 cursor-grab
           overflow-y-auto overscroll-contain
@@ -181,7 +236,12 @@ const MenuContainer = () => {
           lg:pb-6
         "
       >
+        {/*
+          Changing this key remounts the grid whenever a different
+          category is selected, preventing stale item content.
+        */}
         <div
+          key={selected?.menuName ?? "no-category"}
           className="
             grid gap-4 px-4 py-5
             sm:grid-cols-2 sm:px-6
@@ -221,13 +281,14 @@ const MenuContainer = () => {
                 <div className="mt-auto flex items-center justify-between gap-3">
                   <p className="text-lg font-bold text-text-primary">
                     {AUDFormatter.format(item.price)}
-                  </p>
+                  </p >
 
                   <div
                     data-no-drag
                     className="flex items-center rounded-xl border border-border bg-background"
                   >
                     <button
+                      data-no-drag
                       type="button"
                       onClick={() => handleDecrement(item)}
                       disabled={quantity === 0}
@@ -250,6 +311,7 @@ const MenuContainer = () => {
                     </span>
 
                     <button
+                      data-no-drag
                       type="button"
                       onClick={() => handleIncrement(item)}
                       className="
@@ -267,6 +329,14 @@ const MenuContainer = () => {
               </article>
             );
           })}
+
+          {selected?.items?.length === 0 && (
+            <div className="col-span-full flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-border bg-surface">
+              <p className="text-sm text-text-secondary">
+                No items available in this category.
+              </p >
+            </div>
+          )}
         </div>
       </div>
     </div>
