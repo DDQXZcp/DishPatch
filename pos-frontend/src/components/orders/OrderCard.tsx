@@ -1,118 +1,175 @@
-import React from "react";
 import { FaCheckDouble, FaCircle } from "react-icons/fa";
+import { IoClose } from "react-icons/io5";
+
 import { formatDateAndTime } from "../../utils";
-import { Order } from "../../types/order";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateOrderStatus } from "../../https"; // ✅ API call
-import { useSnackbar } from "notistack";
+import type { Order } from "../../types/order";
 
 interface OrderCardProps {
   order: Order;
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order }) => {
-  const queryClient = useQueryClient();
-  const { enqueueSnackbar } = useSnackbar();
+type CustomerOrderStatus =
+  | "Preparing"
+  | "Completed"
+  | "Cancelled";
 
-  // ✅ mutation for updating order status
-  const mutation = useMutation({
-    mutationFn: ({ orderId, orderStatus }: { orderId: string; orderStatus: string }) =>
-      updateOrderStatus({ orderId, orderStatus }),
-    onSuccess: () => {
-      enqueueSnackbar("Order updated successfully", { variant: "success" });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    },
-    onError: () => {
-      enqueueSnackbar("Failed to update order", { variant: "error" });
-    },
-  });
+const MENU_IMAGES_BASE_URL: string =
+  import.meta.env.VITE_MENU_IMAGES_BASE_URL ?? "";
 
-  const handleUpdate = (status: string) => {
-    mutation.mutate({ orderId: order.orderId, orderStatus: status });
+const getMenuItemImageUrl = (uuid: string): string => {
+  return `${MENU_IMAGES_BASE_URL}/${uuid}.png`;
+};
+
+const OrderCard = ({ order }: OrderCardProps) => {
+  const tableNumber =
+    typeof order.table === "string"
+      ? order.table
+      : order.table?.tableNo ?? "Not assigned";
+
+  const itemCount =
+    order.items?.reduce(
+      (sum, item) => sum + (item.quantity ?? 0),
+      0
+    ) ?? 0;
+
+  const orderStatus =
+    order.orderStatus as CustomerOrderStatus;
+
+  const getStatusClasses = (
+    status: CustomerOrderStatus
+  ): string => {
+    switch (status) {
+      case "Preparing":
+        return "border-amber-200 bg-amber-50 text-amber-700";
+
+      case "Completed":
+        return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+      case "Cancelled":
+        return "border-red-200 bg-red-50 text-red-700";
+    }
+  };
+
+  const renderStatusIcon = (
+    status: CustomerOrderStatus
+  ) => {
+    switch (status) {
+      case "Preparing":
+        return <FaCircle className="text-[8px]" />;
+
+      case "Completed":
+        return <FaCheckDouble className="text-sm" />;
+
+      case "Cancelled":
+        return <IoClose className="text-sm" />;
+    }
   };
 
   return (
-    <div className="w-[360px] bg-[#262626] p-4 rounded-lg mb-4">
-      {/* Top section */}
-      <div className="flex items-start justify-between">
-        {/* Left: Info */}
-        <div className="flex flex-col items-start gap-1">
-          <p className="text-[#ababab] text-sm">#{order.displayId} / Dine in</p>
-          <p className="text-[#ababab] text-sm">
-            Table {typeof order.table === "string" ? order.table : order.table?.tableNo}
-          </p>
+    <article
+      className="
+        flex min-h-[280px] w-full flex-col
+        rounded-2xl border border-border
+        bg-surface p-4 shadow-sm
+        transition duration-200
+        hover:-translate-y-0.5
+        hover:border-primary/40
+        hover:shadow-card
+      "
+    >
+      {/* Order information */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary">
+            Order #{order.displayId}
+          </p >
+
+          <p className="mt-1 text-xs text-text-secondary">
+            Dine in · Table {tableNumber}
+          </p >
         </div>
 
-        {/* Right: status + cancel button */}
-        <div className="flex items-center gap-2">
-          {order.orderStatus === "Served" && (
-            <p className="text-green-600 bg-[#2e4a40] px-2 py-1 rounded-lg text-sm">
-              <FaCheckDouble className="inline mr-2" /> {order.orderStatus}
-            </p>
-          )}
-
-          {order.orderStatus === "Preparing" && (
-            <p className="text-yellow-600 bg-[#4a452e] px-2 py-1 rounded-lg text-sm">
-              <FaCircle className="inline mr-2" /> {order.orderStatus}
-            </p>
-          )}
-
-          {order.orderStatus === "Paid" && (
-            <p className="text-blue-400 bg-[#1e3a8a] px-2 py-1 rounded-lg text-sm">
-              💳 {order.orderStatus}
-            </p>
-          )}
-
-          {order.orderStatus === "Cancelled" && (
-            <p className="text-red-500 bg-[#4a1e1e] px-2 py-1 rounded-lg text-sm">
-              ✕ {order.orderStatus}
-            </p>
-          )}
-
-          {order.orderStatus !== "Served" && order.orderStatus !== "Cancelled" && (
-            <button
-              onClick={() => handleUpdate("Cancelled")}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded-lg"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        <span
+          className={`
+            inline-flex shrink-0 items-center gap-1.5
+            rounded-full border px-2.5 py-1
+            text-xs font-semibold
+            ${getStatusClasses(orderStatus)}
+          `}
+        >
+          {renderStatusIcon(orderStatus)}
+          {orderStatus}
+        </span>
       </div>
 
-      {/* Date + Items count */}
-      <div className="flex justify-between items-center mt-2 text-[#ababab]">
-        <p>{formatDateAndTime(order.orderDate)}</p>
-        <p className="text-yellow-400">
-          {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0} Items
-        </p>
+      {/* Date + Item count */}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-xs text-text-secondary">
+          {formatDateAndTime(order.orderDate)}
+        </p >
+
+        <span className="shrink-0 rounded-full bg-primary-light px-2.5 py-1 text-xs font-semibold text-primary">
+          {itemCount}{" "}
+          {itemCount === 1 ? "item" : "items"}
+        </span>
       </div>
 
-      <hr className="w-full mt-4 border-t-1 border-gray-500" />
+      <div className="my-4 border-t border-dashed border-border" />
 
-      {/* Items list */}
-      <div className="mt-3 text-gray-300 text-sm">
-        <ul className="list-disc list-inside">
-          {order.items?.map((item, idx) => (
-            <li key={idx}>
-              {item.name} x {item.quantity}
-            </li>
-          ))}
-        </ul>
+      {/* Ordered items */}
+      <div className="min-h-0 flex-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          Order items
+        </h3>
+
+        {order.items?.length ? (
+          <ul className="mt-3 space-y-3">
+            {order.items.map((item, index) => (
+              <li
+                key={`${item.uuid}-${index}`}
+                className="
+                  flex items-center gap-3
+                  rounded-xl bg-background
+                  px-3 py-2
+                "
+              >
+                {/* Item image */}
+                <div
+                  className="
+                    flex h-10 w-10 shrink-0
+                    items-center justify-center
+                    overflow-hidden rounded-full
+                    border border-border
+                    bg-surface
+                  "
+                >
+                  <img
+                    src={getMenuItemImageUrl(item.uuid)}
+                    alt={item.name}
+                    className="h-full w-full object-contain p-1"
+                    draggable={false}
+                  />
+                </div>
+
+                {/* Item name */}
+                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                  {item.name}
+                </span>
+
+                {/* Quantity */}
+                <span className="shrink-0 rounded-full bg-primary-light px-2 py-1 text-xs font-semibold text-primary">
+                  ×{item.quantity}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-text-muted">
+            No items recorded.
+          </p >
+        )}
       </div>
-
-      {/* Bottom button */}
-      {order.orderStatus === "Preparing" && (
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={() => handleUpdate("Served")}
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg"
-          >
-            Served
-          </button>
-        </div>
-      )}
-    </div>
+    </article>
   );
 };
 

@@ -21,6 +21,7 @@ const TableInfo = () => {
   const [tables, setTables] = useState<Table[]>([]);
 
   const dispatch = useDispatch<AppDispatch>();
+
   const customerData = useSelector(
     (state: RootState) => state.customer
   );
@@ -29,6 +30,7 @@ const TableInfo = () => {
     const fetchTables = async () => {
       try {
         const response = await getTables();
+
         const responseData = response.data as TablesResponse;
         const tableData = responseData.data ?? [];
 
@@ -51,7 +53,7 @@ const TableInfo = () => {
         });
 
         setTables(sortedTables);
-      } catch (error: unknown) {
+      } catch (error) {
         console.error("Failed to fetch tables:", error);
       }
     };
@@ -63,6 +65,7 @@ const TableInfo = () => {
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const tableUuid = event.target.value;
+
     const selectedTable = tables.find(
       (table) => table.uuid === tableUuid
     );
@@ -82,69 +85,57 @@ const TableInfo = () => {
     );
   };
 
-  const selectedTable = customerData.table;
-
   return (
     <section className="m-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Table heading */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Left */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light">
             <MdRestaurantMenu className="text-xl text-primary" />
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold text-text-primary">
-              Table
-            </h2>
+            <p className="text-xs text-text-secondary">
+              Dining Table
+            </p>
 
-            {/* <p className="text-xs text-text-secondary">
-              Choose a table for this order
-            </p> */}
+            <p className="text-base font-semibold text-text-primary">
+              {customerData.table?.tableNo
+                ? `Table ${customerData.table.tableNo}`
+                : "Select Table"}
+            </p>
           </div>
         </div>
 
-        {/* Table selector */}
+        {/* Right */}
         <select
-          value={selectedTable?.uuid ?? ""}
+          value={customerData.table?.uuid ?? ""}
           onChange={handleSelectTable}
           className="
-            w-full cursor-pointer rounded-xl
+            w-auto min-w-[135px]
+            cursor-pointer rounded-xl
             border border-border bg-background
-            px-3 py-2.5 text-sm font-medium
-            text-text-primary outline-none
-            transition
-            hover:border-border-strong
+            px-3 py-2
+            text-sm font-medium text-text-primary
+            outline-none transition
+            hover:border-primary/50
             focus:border-primary
             focus:ring-4 focus:ring-primary/10
-            sm:w-auto sm:min-w-[180px]
           "
         >
           <option value="" disabled>
-            Select Table
+            Select
           </option>
 
           {tables.map((table) => (
-            <option key={table.uuid} value={table.uuid}>
-              Table {table.tableNo} ({table.status})
+            <option
+              key={table.uuid}
+              value={table.uuid}
+            >
+              Table {table.tableNo}
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Selected table details */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <span className="rounded-full bg-secondary-light px-3 py-1 text-xs font-medium text-text-secondary">
-          {selectedTable?.seats
-            ? `${selectedTable.seats} seats`
-            : "No table selected"}
-        </span>
-
-        {selectedTable?.status && (
-          <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-medium text-primary">
-            {selectedTable.status}
-          </span>
-        )}
       </div>
     </section>
   );

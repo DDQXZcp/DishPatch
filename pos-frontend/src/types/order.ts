@@ -11,7 +11,7 @@ export interface BillDetails {
 }
 
 export interface Item {
-  id: string;
+  uuid: string;
   name: string;
   pricePerQuantity: number;
   quantity?: number;

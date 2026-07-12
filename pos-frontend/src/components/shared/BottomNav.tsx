@@ -1,6 +1,6 @@
 import React from "react";
 import { MdOutlineReorder, MdTableBar } from "react-icons/md";
-import { CiCircleMore } from "react-icons/ci";
+import { CiCircleMore, CiUser } from "react-icons/ci";
 import { BiSolidDish } from "react-icons/bi";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -19,7 +19,7 @@ const BottomNav: React.FC = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface shadow-[0_-2px_12px_rgba(15,23,42,0.05)]">
-      <div className="grid h-20 grid-cols-4 items-center gap-2 px-2 sm:px-4">
+      <div className="grid h-20 grid-cols-3 items-center gap-2 px-2 sm:px-4">
         <button
           type="button"
           onClick={() => navigate("/menu")}
@@ -38,22 +38,22 @@ const BottomNav: React.FC = () => {
           <span className="text-xs font-medium">Orders</span>
         </button>
 
-        <button
+        {/* <button
           type="button"
           onClick={() => navigate("/tables")}
           className={navItemClass(isActive("/tables"))}
         >
           <MdTableBar size={22} />
           <span className="text-xs font-medium">Tables</span>
-        </button>
+        </button> */}
 
         <button
           type="button"
-          onClick={() => navigate("/more")}
-          className={navItemClass(isActive("/more"))}
+          onClick={() => navigate("/profile")}
+          className={navItemClass(isActive("/profile"))}
         >
-          <CiCircleMore size={24} />
-          <span className="text-xs font-medium">More</span>
+          <CiUser size={24} />
+          <span className="text-xs font-medium">Profile</span>
         </button>
       </div>
     </nav>
