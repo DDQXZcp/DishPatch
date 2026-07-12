@@ -83,14 +83,14 @@ const Layout = () => {
           }
         />
 
-        <Route
+        {/* <Route
           path="/tables"
           element={
             <ProtectedRoutes>
               <Tables />
             </ProtectedRoutes>
           }
-        />
+        /> */}
 
         <Route
           path="/profile"
