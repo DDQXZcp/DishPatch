@@ -1,52 +1,52 @@
 # Map Source
 
-This folder is the source of truth for the Nav2 map used by `robot-fleet`.
+This folder is the source of truth for the map assets used by `robot-fleet`,
+`control-frontend`, and `control-backend`.
 
 ## Files
 
 - `the-hive-landscape-mask-nav2.yaml` — Nav2 map metadata.
 - `the-hive-landscape-mask-nav2.png` — occupancy map image referenced by the YAML.
-- `the-hive-drop-points.yaml` — drop-point metadata derived from the same map.
+- `the-hive-floorplan-landscape.webp` — visual floorplan used by the control frontend.
+- `the-hive-drop-points.yaml` — drop-point metadata in the ROS map frame.
+- `stage-map-assets.sh` — stages normalized runtime files into each service.
 
-## Deployment Flow
+## Staging
 
-The robot fleet deploy workflow watches `map-source/**`.
-
-During deployment, `.github/workflows/deploy-robot-fleet.yml` runs:
+From the repo root:
 
 ```bash
-bash robot-fleet/scripts/stage_nav2_map.sh
+bash map-source/stage-map-assets.sh
+bash map-source/stage-map-assets.sh --check
 ```
 
-That script copies this source map into the Docker build context as:
+The staging script writes:
 
 ```text
 robot-fleet/config/map.yaml
 robot-fleet/config/map.png
+control-frontend/public/maps/map-floorplan.webp
+control-frontend/public/maps/map-manifest.json
+control-backend/config/drop-points.json
 ```
 
-The staged `map.yaml` keeps the source metadata, but normalizes the image field to:
+The staged `robot-fleet/config/map.yaml` keeps the source metadata, but
+normalizes the image field to:
 
 ```yaml
 image: map.png
 ```
 
-Inside the Nav2 container, those files become:
-
-```text
-/ros2_ws/config/map.yaml
-/ros2_ws/config/map.png
-```
+`robot-fleet/scripts/stage_nav2_map.sh` is kept as a compatibility wrapper
+around `stage-map-assets.sh`.
 
 ## Local Test
 
 From the repo root:
 
 ```bash
-bash robot-fleet/scripts/stage_nav2_map.sh
+bash map-source/stage-map-assets.sh
+bash map-source/stage-map-assets.sh --check
 bash robot-fleet/scripts/stage_nav2_map.sh --check
 docker compose -f robot-fleet/docker-compose.yml config >/dev/null
-docker compose -f robot-fleet/docker-compose.yml up --build
 ```
-
-If those pass, the map files are staged correctly for the Robot Fleet Docker build.

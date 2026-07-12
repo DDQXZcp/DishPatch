@@ -5,8 +5,21 @@ import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
-const FLOORPLAN_URL = "/maps/the-hive-floorplan-landscape.webp";
+const MAP_MANIFEST_URL = "/maps/map-manifest.json";
 type FloorplanBounds = [[number, number], [number, number]];
+
+interface MapManifest {
+  imageUrl: string;
+  imageSizePx: [number, number];
+  resolution: number;
+  origin: [number, number, number];
+  coordinateFrame: string;
+}
+
+interface LoadedMap {
+  manifest: MapManifest;
+  bounds: FloorplanBounds;
+}
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -59,11 +72,18 @@ function createRobotPopup(robot: Robot) {
   return wrapper;
 }
 
-function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[]) {
+function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number, number] {
+  const floorplanX = (robot.x - manifest.origin[0]) / manifest.resolution;
+  const floorplanY = (robot.y - manifest.origin[1]) / manifest.resolution;
+
+  return [floorplanY, floorplanX];
+}
+
+function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[], manifest: MapManifest) {
   markerGroup.clearLayers();
 
   robots.forEach((robot: Robot) => {
-    L.marker([robot.x, robot.y], { icon: getRobotIcon(robot.status) })
+    L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
       .bindPopup(createRobotPopup(robot))
       .addTo(markerGroup);
   });
@@ -92,32 +112,47 @@ export default function RestaurantMap() {
   const mapRef = useRef<L.Map | null>(null);
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const frameRef = useRef<number | null>(null);
-  const [bounds, setBounds] = useState<FloorplanBounds | null>(null);
+  const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const image = new Image();
+    let active = true;
 
-    image.onload = () => {
-      if (isMounted) {
-        setBounds([[0, 0], [image.naturalHeight, image.naturalWidth]]);
-      }
-    };
-    image.src = FLOORPLAN_URL;
+    fetch(MAP_MANIFEST_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to load map manifest: ${response.status}`);
+        }
+
+        return response.json() as Promise<MapManifest>;
+      })
+      .then((manifest) => {
+        if (!active) {
+          return;
+        }
+
+        const [imageWidth, imageHeight] = manifest.imageSizePx;
+        setLoadedMap({
+          manifest,
+          bounds: [[0, 0], [imageHeight, imageWidth]],
+        });
+      })
+      .catch((error) => {
+        console.warn("Unable to load map manifest", error);
+      });
 
     return () => {
-      isMounted = false;
-      image.onload = null;
+      active = false;
     };
   }, []);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
 
-    if (!bounds || !container) {
+    if (!loadedMap || !container) {
       return;
     }
 
+    const { bounds, manifest } = loadedMap;
     const map = L.map(container, {
       crs: L.CRS.Simple,
       maxBounds: bounds,
@@ -128,10 +163,10 @@ export default function RestaurantMap() {
     });
 
     mapRef.current = map;
-    L.imageOverlay(FLOORPLAN_URL, bounds).addTo(map);
+    L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
-    syncRobotMarkers(markerGroup, robots);
+    syncRobotMarkers(markerGroup, robots, manifest);
     map.fitBounds(bounds);
 
     const refreshMapSize = () => {
@@ -169,26 +204,26 @@ export default function RestaurantMap() {
         console.warn("Leaflet map cleanup failed", error);
       }
     };
-  }, [bounds]);
+  }, [loadedMap]);
 
   useEffect(() => {
     const markerGroup = markerGroupRef.current;
 
-    if (!markerGroup) {
+    if (!markerGroup || !loadedMap) {
       return;
     }
 
-    syncRobotMarkers(markerGroup, robots);
-  }, [robots]);
+    syncRobotMarkers(markerGroup, robots, loadedMap.manifest);
+  }, [robots, loadedMap]);
 
-  if (!bounds) {
+  if (!loadedMap) {
     return <div className="h-full w-full rounded-lg bg-gray-100" />;
   }
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg">
       <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
-      <RecenterButton onClick={() => mapRef.current?.fitBounds(bounds)} />
+      <RecenterButton onClick={() => mapRef.current?.fitBounds(loadedMap.bounds)} />
     </div>
   );
 }
