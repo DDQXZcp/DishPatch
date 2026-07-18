@@ -1,0 +1,28 @@
+@theme {
+  /*
+   * DishPatch brand palette
+   * Warm gold with a slightly brown tone
+   */
+
+  --color-brand: #b7791f;
+  --color-brand-hover: #975a16;
+  --color-brand-dark: #744210;
+
+  --color-brand-light: #fff7e6;
+  --color-brand-soft: #fdf0d5;
+  --color-brand-border: #e8d7b7;
+
+  /*
+   * Main application colours
+   */
+
+  --color-app-background: #f8fafc;
+  --color-app-surface: #ffffff;
+
+  --color-app-text: #0f172a;
+  --color-app-text-secondary: #64748b;
+  --color-app-text-muted: #94a3b8;
+
+  --color-app-border: #e2e8f0;
+  --color-app-border-strong: #cbd5e1;
+}
