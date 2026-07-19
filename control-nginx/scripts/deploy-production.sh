@@ -15,7 +15,7 @@ PROJECT_DIR="$(
 cd "${PROJECT_DIR}"
 
 DOMAIN="${DOMAIN:-controlapi.dish-patch.com}"
-CERTBOT_EMAIL="${CERTBOT_EMAIL:?CERTBOT_EMAIL must be provided}"
+CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 
 DISH_PATCH_NETWORK_NAME="${
   DISH_PATCH_NETWORK_NAME:-dishpatch-network
@@ -40,7 +40,7 @@ export CERTBOT_WEBROOT
 
 echo "Preparing persistent certificate directories..."
 
-sudo mkdir -p \
+mkdir -p \
   "${LETSENCRYPT_DIR}" \
   "${CERTBOT_WEBROOT}/.well-known/acme-challenge"
 
@@ -70,14 +70,13 @@ if [ ! -f "${CERTIFICATE_FILE}" ]; then
 
   trap cleanup_bootstrap EXIT
 
-  echo "Testing the HTTP challenge route..."
+  echo "Testing the public HTTP challenge route..."
 
   CHALLENGE_TEST_FILE="${
     CERTBOT_WEBROOT
   }/.well-known/acme-challenge/deployment-test"
 
-  echo "dishpatch-acme-test" |
-    sudo tee "${CHALLENGE_TEST_FILE}" >/dev/null
+  echo "dishpatch-acme-test" > "${CHALLENGE_TEST_FILE}"
 
   CHALLENGE_RESPONSE="$(
     curl \
@@ -88,12 +87,28 @@ if [ ! -f "${CERTIFICATE_FILE}" ]; then
       "http://${DOMAIN}/.well-known/acme-challenge/deployment-test"
   )"
 
-  sudo rm -f "${CHALLENGE_TEST_FILE}"
+  rm -f "${CHALLENGE_TEST_FILE}"
 
   if [ "${CHALLENGE_RESPONSE}" != "dishpatch-acme-test" ]; then
     echo "The public ACME challenge route is not working."
     echo "Check DNS and the EC2 security group."
     exit 1
+  fi
+
+  CERTBOT_ACCOUNT_ARGS=()
+
+  if [ -n "${CERTBOT_EMAIL}" ]; then
+    CERTBOT_ACCOUNT_ARGS=(
+      --email "${CERTBOT_EMAIL}"
+      --no-eff-email
+    )
+  else
+    echo "CERTBOT_EMAIL was not supplied."
+    echo "Registering the ACME account without an email address."
+
+    CERTBOT_ACCOUNT_ARGS=(
+      --register-unsafely-without-email
+    )
   fi
 
   echo "Requesting the first TLS certificate..."
@@ -107,9 +122,8 @@ if [ ! -f "${CERTIFICATE_FILE}" ]; then
     --webroot \
     --webroot-path /var/www/certbot \
     --domain "${DOMAIN}" \
-    --email "${CERTBOT_EMAIL}" \
+    "${CERTBOT_ACCOUNT_ARGS[@]}" \
     --agree-tos \
-    --no-eff-email \
     --non-interactive
 
   cleanup_bootstrap

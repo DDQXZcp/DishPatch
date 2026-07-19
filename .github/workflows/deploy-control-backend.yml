@@ -1,15 +1,12 @@
-# Builds the Java backend, installs Docker tooling on a fresh Amazon Linux 2023
-# EC2 instance, deploys Docker Nginx on ports 80/443, and deploys the Docker
-# backend as the official backend.
+# Builds the Java backend, deploys Docker Nginx on ports 80/443, and deploys
+# the Docker backend as the official backend.
 #
-# Required repository variable:
-#   EC2_HOST
-#
-# Required repository secrets:
+# Required repository secret:
 #   EC2_SSH_KEY
-#   CERTBOT_EMAIL
 #
 # Before the first run:
+#   - Install and start Docker Engine, Docker Compose and Docker Buildx on EC2.
+#   - Allow ec2-user to run Docker through sudo.
 #   - Point controlapi.dish-patch.com to the EC2 public/Elastic IP.
 #   - Allow inbound TCP 22, 80 and 443 in the EC2 security group.
 #   - Add control-backend/compose.production.yaml.
@@ -37,7 +34,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EC2_HOST: ${{ vars.EC2_HOST }}
+  EC2_HOST: 52.63.53.185
   EC2_USER: ec2-user
 
   DOMAIN: controlapi.dish-patch.com
@@ -51,8 +48,6 @@ env:
 
   JAR_NAME: dishpatch-control-backend-1.0.0.jar
 
-  DOCKER_COMPOSE_VERSION: v5.1.4
-  DOCKER_BUILDX_VERSION: v0.35.0
 
 jobs:
   build-and-deploy:
@@ -60,20 +55,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Validate deployment settings
-        run: |
-          set -Eeuo pipefail
-
-          if [ -z "${EC2_HOST}" ]; then
-            echo "Repository variable EC2_HOST is not configured."
-            exit 1
-          fi
-
-          if [ -z "${{ secrets.CERTBOT_EMAIL }}" ]; then
-            echo "Repository secret CERTBOT_EMAIL is not configured."
-            exit 1
-          fi
-
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -208,70 +189,6 @@ jobs:
             control-backend.tar.gz \
             "${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/"
 
-      - name: Install Docker tooling on EC2
-        run: |
-          ssh \
-            -i "${HOME}/.ssh/ec2_key" \
-            "${EC2_USER}@${EC2_HOST}" \
-            "DOCKER_COMPOSE_VERSION='${DOCKER_COMPOSE_VERSION}' \
-             DOCKER_BUILDX_VERSION='${DOCKER_BUILDX_VERSION}' \
-             bash -s" <<'REMOTE_SCRIPT'
-          set -Eeuo pipefail
-
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "Installing Docker Engine..."
-            sudo dnf install -y docker
-          fi
-
-          sudo systemctl enable --now docker
-
-          ARCH="$(uname -m)"
-
-          case "${ARCH}" in
-            x86_64)
-              COMPOSE_ARCH="x86_64"
-              BUILDX_ARCH="amd64"
-              ;;
-            aarch64)
-              COMPOSE_ARCH="aarch64"
-              BUILDX_ARCH="arm64"
-              ;;
-            *)
-              echo "Unsupported EC2 architecture: ${ARCH}"
-              exit 1
-              ;;
-          esac
-
-          sudo mkdir -p /usr/local/lib/docker/cli-plugins
-
-          if ! sudo docker compose version >/dev/null 2>&1; then
-            echo "Installing Docker Compose ${DOCKER_COMPOSE_VERSION}..."
-
-            sudo curl -fSL \
-              "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" \
-              -o /usr/local/lib/docker/cli-plugins/docker-compose
-
-            sudo chmod +x \
-              /usr/local/lib/docker/cli-plugins/docker-compose
-          fi
-
-          if ! sudo docker buildx version >/dev/null 2>&1; then
-            echo "Installing Docker Buildx ${DOCKER_BUILDX_VERSION}..."
-
-            sudo curl -fSL \
-              "https://github.com/docker/buildx/releases/download/${DOCKER_BUILDX_VERSION}/buildx-${DOCKER_BUILDX_VERSION}.linux-${BUILDX_ARCH}" \
-              -o /usr/local/lib/docker/cli-plugins/docker-buildx
-
-            sudo chmod +x \
-              /usr/local/lib/docker/cli-plugins/docker-buildx
-          fi
-
-          echo "Installed Docker tooling:"
-          sudo docker --version
-          sudo docker compose version
-          sudo docker buildx version
-          REMOTE_SCRIPT
-
       # Nginx is deployed first. Its production configuration uses deferred
       # Docker DNS resolution, so it can start before the backend container.
       - name: Deploy production Docker Nginx
@@ -281,7 +198,6 @@ jobs:
             "${EC2_USER}@${EC2_HOST}" \
             "REMOTE_NGINX_DIR='${REMOTE_NGINX_DIR}' \
              DOMAIN='${DOMAIN}' \
-             CERTBOT_EMAIL='${{ secrets.CERTBOT_EMAIL }}' \
              DISH_PATCH_NETWORK_NAME='${DISH_PATCH_NETWORK_NAME}' \
              bash -s" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
@@ -315,7 +231,7 @@ jobs:
 
           echo "Deploying Nginx on ports 80 and 443..."
 
-          sudo --preserve-env=DOMAIN,CERTBOT_EMAIL,DISH_PATCH_NETWORK_NAME \
+          sudo --preserve-env=DOMAIN,DISH_PATCH_NETWORK_NAME \
             bash ./scripts/deploy-production.sh
 
           echo "Production Nginx status:"
