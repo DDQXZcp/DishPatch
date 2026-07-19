@@ -1,0 +1,34 @@
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# SSL certificates and private keys
+certificates/
+certbot/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Logs
+*.log
+logs/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Docker Compose override files
+compose.override.yaml
+docker-compose.override.yml

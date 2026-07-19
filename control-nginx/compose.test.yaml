@@ -1,0 +1,33 @@
+name: dishpatch-nginx-test
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    # Safe shadow-testing port:
+    # EC2 localhost:18080 -> Nginx container:80
+    ports:
+      - "${NGINX_TEST_BIND_IP:-127.0.0.1}:${NGINX_TEST_HTTP_PORT:-18080}:80"
+
+    networks:
+      - dishpatch-shared
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://127.0.0.1/nginx-health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  dishpatch-shared:
+    external: true
+    name: "${DISH_PATCH_NETWORK_NAME:-dishpatch-network}"
