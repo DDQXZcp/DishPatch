@@ -1,6 +1,6 @@
-package com.campusride.service;
+package com.dishpatch.service;
 
-import com.campusride.model.Scooter;
+import com.dishpatch.model.Scooter;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;

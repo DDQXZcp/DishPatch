@@ -1,0 +1,41 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Documentation
+README.md
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+*.swp
+*.swo
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Certificates and private keys
+certificates/
+certbot/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Docker Compose files are not needed in the image
+compose*.yaml
+docker-compose*.yml
+
+# Deployment scripts are executed on the host, not inside Nginx
+scripts/

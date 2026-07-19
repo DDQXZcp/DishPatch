@@ -312,3 +312,21 @@ VITE_BACKEND_URL=http://localhost:3000/
 # Replace with your S3 bucket that stores menu photo
 VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southeast-2.amazonaws.com
 ```
+
+## EC2 Prerequisites
+
+The deployment assumes the EC2 instance is already prepared with:
+
+- Docker Engine running
+- Docker Compose and Docker Buildx installed
+- Inbound ports `80` and `443` open
+- Port `22` available for GitHub Actions deployment
+- Ports `80` and `443` not used by another service
+- `controlapi.dish-patch.com` pointing to the EC2 public or Elastic IP
+
+Verify the Docker tools with:
+
+```bash
+sudo docker --version
+sudo docker compose version
+sudo docker buildx version

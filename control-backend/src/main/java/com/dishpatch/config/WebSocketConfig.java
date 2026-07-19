@@ -1,4 +1,4 @@
-package com.campusride.config;
+package com.dishpatch.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;

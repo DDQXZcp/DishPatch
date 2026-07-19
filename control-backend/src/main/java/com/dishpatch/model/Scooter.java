@@ -1,4 +1,4 @@
-package com.campusride.model;
+package com.dishpatch.model;
 
 public class Scooter {
     private int id;

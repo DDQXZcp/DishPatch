@@ -1,0 +1,40 @@
+name: dishpatch-nginx
+
+services:
+  nginx:
+    container_name: dishpatch-nginx
+    image: dishpatch-nginx:latest
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/controlapi.production.conf:/etc/nginx/conf.d/controlapi.conf:ro
+      - "${LETSENCRYPT_DIR:-/opt/dishpatch/letsencrypt}:/etc/letsencrypt:ro"
+      - "${CERTBOT_WEBROOT:-/opt/dishpatch/certbot/www}:/var/www/certbot:ro"
+
+    networks:
+      - dishpatch-shared
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://127.0.0.1/nginx-health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+networks:
+  dishpatch-shared:
+    external: true
+    name: "${DISH_PATCH_NETWORK_NAME:-dishpatch-network}"

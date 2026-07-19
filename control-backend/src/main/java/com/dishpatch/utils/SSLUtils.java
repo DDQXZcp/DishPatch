@@ -1,4 +1,4 @@
-package com.campusride.utils;
+package com.dishpatch.utils;
 
 import javax.net.ssl.SSLSocketFactory;
 import java.io.FileInputStream;
