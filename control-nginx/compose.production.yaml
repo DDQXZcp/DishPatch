@@ -1,7 +1,10 @@
-name: dishpatch-nginx-production
+name: dishpatch-nginx
 
 services:
   nginx:
+    container_name: dishpatch-nginx
+    image: dishpatch-nginx:latest
+
     build:
       context: .
       dockerfile: Dockerfile

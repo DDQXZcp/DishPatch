@@ -48,7 +48,6 @@ env:
 
   JAR_NAME: dishpatch-control-backend-1.0.0.jar
 
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -249,6 +248,7 @@ jobs:
             -i "${HOME}/.ssh/ec2_key" \
             "${EC2_USER}@${EC2_HOST}" \
             "REMOTE_BACKEND_DIR='${REMOTE_BACKEND_DIR}' \
+             REMOTE_NGINX_DIR='${REMOTE_NGINX_DIR}' \
              BACKEND_PRODUCTION_COMPOSE_FILE='${BACKEND_PRODUCTION_COMPOSE_FILE}' \
              DISH_PATCH_NETWORK_NAME='${DISH_PATCH_NETWORK_NAME}' \
              bash -s" <<'REMOTE_SCRIPT'
@@ -322,24 +322,36 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for the backend container to remain running..."
+          NGINX_CONTAINER_ID="$(
+            cd "${REMOTE_NGINX_DIR}"
+
+            sudo docker compose \
+              -f compose.production.yaml \
+              ps -q nginx
+          )"
+
+          if [ -z "${NGINX_CONTAINER_ID}" ]; then
+            echo "The production Nginx container was not found."
+            exit 1
+          fi
+
+          echo "Waiting for the backend to accept connections from Docker Nginx..."
 
           for attempt in $(seq 1 24); do
-            STATUS="$(
+            BACKEND_STATUS="$(
               sudo docker inspect \
                 --format '{{.State.Status}}' \
-                "${CONTAINER_ID}"
+                "${CONTAINER_ID}" \
+                2>/dev/null \
+                || true
             )"
 
-            if [ "${STATUS}" = "running" ]; then
-              echo "Backend container is running."
-              break
-            fi
-
-            if [ "${STATUS}" = "exited" ] \
-              || [ "${STATUS}" = "dead" ]
+            if [ "${BACKEND_STATUS}" = "exited" ] \
+              || [ "${BACKEND_STATUS}" = "dead" ]
             then
-              echo "Backend container stopped with status: ${STATUS}"
+              echo "Backend container stopped with status: ${BACKEND_STATUS}"
+
+              cd "${REMOTE_BACKEND_DIR}"
 
               sudo docker compose \
                 -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
@@ -350,8 +362,18 @@ jobs:
               exit 1
             fi
 
+            if sudo docker exec \
+              "${NGINX_CONTAINER_ID}" \
+              sh -c 'nc -z dishpatch-backend 8081'
+            then
+              echo "Backend is accepting connections on port 8081."
+              break
+            fi
+
             if [ "${attempt}" -eq 24 ]; then
-              echo "Backend did not become stable."
+              echo "Backend did not become reachable within 120 seconds."
+
+              cd "${REMOTE_BACKEND_DIR}"
 
               sudo docker compose \
                 -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
@@ -366,9 +388,11 @@ jobs:
               exit 1
             fi
 
-            echo "Backend status: ${STATUS}. Attempt ${attempt}/24..."
+            echo "Backend is still starting. Attempt ${attempt}/24..."
             sleep 5
           done
+
+          cd "${REMOTE_BACKEND_DIR}"
 
           sudo docker compose \
             -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
@@ -391,30 +415,38 @@ jobs:
             "https://${DOMAIN}/nginx-health"
 
           echo
-          echo "Checking Nginx-to-backend routing..."
+          echo "Waiting for Nginx-to-backend routing..."
 
-          HTTP_CODE="$(
-            curl \
-              --silent \
-              --show-error \
-              --output /tmp/control-backend-response.txt \
-              --write-out '%{http_code}' \
-              --max-time 20 \
-              "https://${DOMAIN}/" \
-              || true
-          )"
+          for attempt in $(seq 1 24); do
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --output /tmp/control-backend-response.txt \
+                --write-out '%{http_code}' \
+                --max-time 10 \
+                "https://${DOMAIN}/" \
+                || true
+            )"
 
-          echo "Backend route returned HTTP ${HTTP_CODE}."
+            case "${HTTP_CODE}" in
+              000|502|503|504)
+                echo "Backend route is not ready: HTTP ${HTTP_CODE}. Attempt ${attempt}/24..."
+                sleep 5
+                ;;
 
-          case "${HTTP_CODE}" in
-            000|502|503|504)
-              echo "Production Nginx could not reach the Docker backend."
-              cat /tmp/control-backend-response.txt || true
-              exit 1
-              ;;
-          esac
+              *)
+                echo "Backend route responded with HTTP ${HTTP_CODE}."
+                cat /tmp/control-backend-response.txt || true
+                echo
+                echo "Production Docker deployment succeeded."
+                exit 0
+                ;;
+            esac
+          done
 
-          echo "Production Docker deployment succeeded."
+          echo "Nginx could not reach the backend after 120 seconds."
+          cat /tmp/control-backend-response.txt || true
+          exit 1
 
       - name: Show Docker diagnostics on failure
         if: failure()

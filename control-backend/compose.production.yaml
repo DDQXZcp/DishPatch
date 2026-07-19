@@ -2,6 +2,9 @@ name: dishpatch-control-backend
 
 services:
   backend:
+    container_name: dishpatch-control-backend
+    image: dishpatch-control-backend:latest
+
     build:
       context: .
       dockerfile: Dockerfile
