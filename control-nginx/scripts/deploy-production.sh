@@ -2,36 +2,17 @@
 
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(
-  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
-  pwd
-)"
-
-PROJECT_DIR="$(
-  cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1
-  pwd
-)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
 cd "${PROJECT_DIR}"
 
 DOMAIN="${DOMAIN:-controlapi.dish-patch.com}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
-
-DISH_PATCH_NETWORK_NAME="${
-  DISH_PATCH_NETWORK_NAME:-dishpatch-network
-}"
-
-LETSENCRYPT_DIR="${
-  LETSENCRYPT_DIR:-/opt/dishpatch/letsencrypt
-}"
-
-CERTBOT_WEBROOT="${
-  CERTBOT_WEBROOT:-/opt/dishpatch/certbot/www
-}"
-
-CERTIFICATE_FILE="${
-  LETSENCRYPT_DIR
-}/live/${DOMAIN}/fullchain.pem"
+DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME:-dishpatch-network}"
+LETSENCRYPT_DIR="${LETSENCRYPT_DIR:-/opt/dishpatch/letsencrypt}"
+CERTBOT_WEBROOT="${CERTBOT_WEBROOT:-/opt/dishpatch/certbot/www}"
+CERTIFICATE_FILE="${LETSENCRYPT_DIR}/live/${DOMAIN}/fullchain.pem"
 
 export DOMAIN
 export DISH_PATCH_NETWORK_NAME
@@ -72,9 +53,7 @@ if [ ! -f "${CERTIFICATE_FILE}" ]; then
 
   echo "Testing the public HTTP challenge route..."
 
-  CHALLENGE_TEST_FILE="${
-    CERTBOT_WEBROOT
-  }/.well-known/acme-challenge/deployment-test"
+  CHALLENGE_TEST_FILE="${CERTBOT_WEBROOT}/.well-known/acme-challenge/deployment-test"
 
   echo "dishpatch-acme-test" > "${CHALLENGE_TEST_FILE}"
 
