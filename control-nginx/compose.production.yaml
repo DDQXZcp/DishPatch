@@ -1,5 +1,4 @@
-# Used for local testing
-name: dishpatch-nginx-test
+name: dishpatch-nginx-production
 
 services:
   nginx:
@@ -9,10 +8,14 @@ services:
 
     restart: unless-stopped
 
-    # Safe shadow-testing port:
-    # EC2 localhost:18080 -> Nginx container:80
     ports:
-      - "${NGINX_TEST_BIND_IP:-127.0.0.1}:${NGINX_TEST_HTTP_PORT:-18080}:80"
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/controlapi.production.conf:/etc/nginx/conf.d/controlapi.conf:ro
+      - "${LETSENCRYPT_DIR:-/opt/dishpatch/letsencrypt}:/etc/letsencrypt:ro"
+      - "${CERTBOT_WEBROOT:-/opt/dishpatch/certbot/www}:/var/www/certbot:ro"
 
     networks:
       - dishpatch-shared
@@ -25,7 +28,7 @@ services:
         ]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
       start_period: 5s
 
 networks:

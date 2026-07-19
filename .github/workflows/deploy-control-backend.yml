@@ -1,12 +1,21 @@
-# This workflow deploys the Dockerized control Nginx first,
-# then builds the control backend using Maven and deploys it to EC2.
+# Builds the Java backend, installs Docker tooling on a fresh Amazon Linux 2023
+# EC2 instance, deploys Docker Nginx on ports 80/443, and deploys the Docker
+# backend as the official backend.
 #
-# Before using this workflow:
-# - Docker and Docker Compose must be installed on EC2.
-# - The existing OS Nginx can continue using ports 80 and 443.
-# - compose.test.yaml should bind Docker Nginx to 127.0.0.1:18080.
+# Required repository variable:
+#   EC2_HOST
+#
+# Required repository secrets:
+#   EC2_SSH_KEY
+#   CERTBOT_EMAIL
+#
+# Before the first run:
+#   - Point controlapi.dish-patch.com to the EC2 public/Elastic IP.
+#   - Allow inbound TCP 22, 80 and 443 in the EC2 security group.
+#   - Add control-backend/compose.production.yaml.
+#   - Add the production/bootstrap files and deploy-production.sh under control-nginx.
 
-name: Deploy Control Nginx and Backend
+name: Build and Deploy Control Platform (Docker → EC2)
 
 on:
   push:
@@ -16,7 +25,6 @@ on:
     paths:
       - "control-nginx/**"
       - "control-backend/**"
-      - "control-backend/virtual-robots/**"
       - ".github/workflows/deploy-control-backend.yml"
 
   workflow_dispatch: {}
@@ -24,154 +32,50 @@ on:
 permissions:
   contents: read
 
-env:
-  EC2_HOST: 52.63.53.185
-  EC2_USER: ec2-user
-  EC2_SSH_KEY_SECRET: EC2_SSH_KEY
+concurrency:
+  group: control-platform-production
+  cancel-in-progress: false
 
+env:
+  EC2_HOST: ${{ vars.EC2_HOST }}
+  EC2_USER: ec2-user
+
+  DOMAIN: controlapi.dish-patch.com
   DISH_PATCH_NETWORK_NAME: dishpatch-network
 
   REMOTE_NGINX_DIR: /home/ec2-user/control-nginx
-  NGINX_COMPOSE_FILE: compose.test.yaml
-  NGINX_TEST_HTTP_PORT: 18080
+  REMOTE_BACKEND_DIR: /home/ec2-user/control-backend
 
-  REMOTE_BACKEND_DOCKER_DIR: /home/ec2-user/control-backend-docker
-  BACKEND_COMPOSE_FILE: compose.test.yaml
-  BACKEND_TEST_HTTP_PORT: 18081
+  NGINX_PRODUCTION_COMPOSE_FILE: compose.production.yaml
+  BACKEND_PRODUCTION_COMPOSE_FILE: compose.production.yaml
 
   JAR_NAME: dishpatch-control-backend-1.0.0.jar
-  REMOTE_DIR: /home/ec2-user/app
-  SERVICE_NAME: dishpatch-control-backend
+
+  DOCKER_COMPOSE_VERSION: v5.1.4
+  DOCKER_BUILDX_VERSION: v0.35.0
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Prepare the SSH key before deploying Nginx.
-      - name: Prepare SSH key
-        id: ssh-key
+      - name: Validate deployment settings
         run: |
-          echo "${{ secrets[env.EC2_SSH_KEY_SECRET] }}" > key.pem
-          chmod 600 key.pem
-
-      # ------------------------------------------------------------
-      # Deploy Docker Nginx first
-      # ------------------------------------------------------------
-
-      - name: Package control Nginx files
-        run: |
-          tar \
-            --exclude="control-nginx/.env" \
-            --exclude="control-nginx/.git" \
-            -czf control-nginx.tar.gz \
-            control-nginx
-
-      - name: Copy control Nginx files to EC2
-        run: |
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            control-nginx.tar.gz \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/control-nginx.tar.gz"
-
-      - name: Deploy control Nginx on EC2
-        run: |
-          ssh \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "REMOTE_NGINX_DIR='${{ env.REMOTE_NGINX_DIR }}' \
-             NGINX_COMPOSE_FILE='${{ env.NGINX_COMPOSE_FILE }}' \
-             DISH_PATCH_NETWORK_NAME='${{ env.DISH_PATCH_NETWORK_NAME }}' \
-             NGINX_TEST_HTTP_PORT='${{ env.NGINX_TEST_HTTP_PORT }}' \
-             bash -s" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
 
-          echo "Checking Docker installation..."
-          docker --version
-          docker compose version
+          if [ -z "${EC2_HOST}" ]; then
+            echo "Repository variable EC2_HOST is not configured."
+            exit 1
+          fi
 
-          echo "Preparing Nginx deployment directory..."
-          rm -rf "${REMOTE_NGINX_DIR}"
-          mkdir -p "${REMOTE_NGINX_DIR}"
+          if [ -z "${{ secrets.CERTBOT_EMAIL }}" ]; then
+            echo "Repository secret CERTBOT_EMAIL is not configured."
+            exit 1
+          fi
 
-          tar \
-            -xzf /home/ec2-user/control-nginx.tar.gz \
-            -C "${REMOTE_NGINX_DIR}" \
-            --strip-components=1
-
-          rm -f /home/ec2-user/control-nginx.tar.gz
-
-          cd "${REMOTE_NGINX_DIR}"
-
-          chmod +x scripts/ensure-network.sh
-
-          echo "Ensuring the shared Docker network exists..."
-          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
-            ./scripts/ensure-network.sh
-
-          echo "Validating Docker Compose configuration..."
-          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
-          NGINX_TEST_HTTP_PORT="${NGINX_TEST_HTTP_PORT}" \
-            docker compose \
-              -f "${NGINX_COMPOSE_FILE}" \
-              config
-
-          echo "Building and starting test Nginx..."
-          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
-          NGINX_TEST_HTTP_PORT="${NGINX_TEST_HTTP_PORT}" \
-            docker compose \
-              -f "${NGINX_COMPOSE_FILE}" \
-              up -d \
-              --build \
-              --remove-orphans
-
-          echo "Validating Nginx configuration..."
-          docker compose \
-            -f "${NGINX_COMPOSE_FILE}" \
-            exec -T nginx nginx -t
-
-          echo "Waiting for Docker Nginx health check..."
-
-          for attempt in $(seq 1 12); do
-            if curl \
-              --fail \
-              --silent \
-              --show-error \
-              "http://127.0.0.1:${NGINX_TEST_HTTP_PORT}/nginx-health"
-            then
-              echo
-              echo "Docker Nginx is healthy."
-              docker compose -f "${NGINX_COMPOSE_FILE}" ps
-              exit 0
-            fi
-
-            echo "Nginx is not ready yet. Attempt ${attempt}/12..."
-            sleep 5
-          done
-
-          echo "Docker Nginx failed its health check."
-
-          docker compose \
-            -f "${NGINX_COMPOSE_FILE}" \
-            ps
-
-          docker compose \
-            -f "${NGINX_COMPOSE_FILE}" \
-            logs \
-            --tail=200 \
-            nginx
-
-          exit 1
-          REMOTE_SCRIPT
-
-      # ------------------------------------------------------------
-      # Keep the existing backend build and deployment
-      # ------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -181,34 +85,69 @@ jobs:
           cache: maven
           cache-dependency-path: control-backend/pom.xml
 
-      - name: Build with Maven
+      - name: Build backend with Maven
         working-directory: control-backend
-        run: mvn clean package -DskipTests
+        run: |
+          set -Eeuo pipefail
+          mvn --batch-mode --no-transfer-progress clean package -DskipTests
 
-      - name: Find built JAR file
+      - name: Find built JAR
         id: find-jar
         run: |
-          JAR_FILE=$(find control-backend/target \
-            -maxdepth 1 \
-            -type f \
-            -name '*.jar' \
-            ! -name '*-sources.jar' \
-            ! -name '*-javadoc.jar' \
-            | head -n 1)
+          set -Eeuo pipefail
+
+          JAR_FILE="$(
+            find control-backend/target \
+              -maxdepth 1 \
+              -type f \
+              -name '*.jar' \
+              ! -name '*-sources.jar' \
+              ! -name '*-javadoc.jar' \
+              | head -n 1
+          )"
 
           if [ -z "${JAR_FILE}" ]; then
-            echo "No JAR file found in the target directory."
+            echo "No deployable JAR was found in control-backend/target."
             exit 1
           fi
 
           echo "Found JAR: ${JAR_FILE}"
           echo "jar=${JAR_FILE}" >> "${GITHUB_OUTPUT}"
 
-      # ------------------------------------------------------------
-      # Deploy duplicate Docker backend
-      # ------------------------------------------------------------
+      - name: Validate Docker deployment files
+        run: |
+          set -Eeuo pipefail
 
-      - name: Package Docker backend
+          required_files=(
+            "control-backend/Dockerfile"
+            "control-backend/compose.production.yaml"
+            "control-nginx/Dockerfile"
+            "control-nginx/compose.bootstrap.yaml"
+            "control-nginx/compose.production.yaml"
+            "control-nginx/nginx/controlapi.bootstrap.conf"
+            "control-nginx/nginx/controlapi.production.conf"
+            "control-nginx/scripts/ensure-network.sh"
+            "control-nginx/scripts/deploy-production.sh"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [ ! -f "${file}" ]; then
+              echo "Required deployment file is missing: ${file}"
+              exit 1
+            fi
+          done
+
+      - name: Package Nginx deployment
+        run: |
+          set -Eeuo pipefail
+
+          tar \
+            --exclude="control-nginx/.env" \
+            --exclude="control-nginx/.git" \
+            -czf control-nginx.tar.gz \
+            control-nginx
+
+      - name: Package backend deployment
         run: |
           set -Eeuo pipefail
 
@@ -218,220 +157,370 @@ jobs:
           cp control-backend/Dockerfile \
             backend-docker-package/Dockerfile
 
-          cp control-backend/compose.test.yaml \
-            backend-docker-package/compose.test.yaml
+          cp control-backend/compose.production.yaml \
+            backend-docker-package/compose.production.yaml
 
           cp "${{ steps.find-jar.outputs.jar }}" \
-            "backend-docker-package/target/${{ env.JAR_NAME }}"
+            "backend-docker-package/target/${JAR_NAME}"
 
           tar \
-            -czf control-backend-docker.tar.gz \
+            -czf control-backend.tar.gz \
             -C backend-docker-package \
             .
 
-          echo "Docker backend package contents:"
-          tar -tzf control-backend-docker.tar.gz
+          echo "Backend package contents:"
+          tar -tzf control-backend.tar.gz
 
-      - name: Copy Docker backend package to EC2
+      - name: Prepare SSH
         run: |
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            control-backend-docker.tar.gz \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/control-backend-docker.tar.gz"
+          set -Eeuo pipefail
 
-      - name: Deploy duplicate Docker backend on EC2
+          install -m 700 -d "${HOME}/.ssh"
+
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" \
+            | tr -d '\r' \
+            > "${HOME}/.ssh/ec2_key"
+
+          chmod 600 "${HOME}/.ssh/ec2_key"
+
+          for attempt in $(seq 1 10); do
+            if ssh-keyscan -H "${EC2_HOST}" \
+              >> "${HOME}/.ssh/known_hosts" 2>/dev/null
+            then
+              break
+            fi
+
+            if [ "${attempt}" -eq 10 ]; then
+              echo "Could not retrieve the EC2 SSH host key."
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+      - name: Copy deployment packages to EC2
+        run: |
+          set -Eeuo pipefail
+
+          scp \
+            -i "${HOME}/.ssh/ec2_key" \
+            control-nginx.tar.gz \
+            control-backend.tar.gz \
+            "${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/"
+
+      - name: Install Docker tooling on EC2
         run: |
           ssh \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "REMOTE_BACKEND_DOCKER_DIR='${{ env.REMOTE_BACKEND_DOCKER_DIR }}' \
-             BACKEND_COMPOSE_FILE='${{ env.BACKEND_COMPOSE_FILE }}' \
-             BACKEND_TEST_HTTP_PORT='${{ env.BACKEND_TEST_HTTP_PORT }}' \
-             NGINX_TEST_HTTP_PORT='${{ env.NGINX_TEST_HTTP_PORT }}' \
-             DISH_PATCH_NETWORK_NAME='${{ env.DISH_PATCH_NETWORK_NAME }}' \
+            -i "${HOME}/.ssh/ec2_key" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "DOCKER_COMPOSE_VERSION='${DOCKER_COMPOSE_VERSION}' \
+             DOCKER_BUILDX_VERSION='${DOCKER_BUILDX_VERSION}' \
              bash -s" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
 
-          echo "Preparing Docker backend deployment directory..."
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "Installing Docker Engine..."
+            sudo dnf install -y docker
+          fi
 
-          rm -rf "${REMOTE_BACKEND_DOCKER_DIR}"
-          mkdir -p "${REMOTE_BACKEND_DOCKER_DIR}"
+          sudo systemctl enable --now docker
+
+          ARCH="$(uname -m)"
+
+          case "${ARCH}" in
+            x86_64)
+              COMPOSE_ARCH="x86_64"
+              BUILDX_ARCH="amd64"
+              ;;
+            aarch64)
+              COMPOSE_ARCH="aarch64"
+              BUILDX_ARCH="arm64"
+              ;;
+            *)
+              echo "Unsupported EC2 architecture: ${ARCH}"
+              exit 1
+              ;;
+          esac
+
+          sudo mkdir -p /usr/local/lib/docker/cli-plugins
+
+          if ! sudo docker compose version >/dev/null 2>&1; then
+            echo "Installing Docker Compose ${DOCKER_COMPOSE_VERSION}..."
+
+            sudo curl -fSL \
+              "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+
+            sudo chmod +x \
+              /usr/local/lib/docker/cli-plugins/docker-compose
+          fi
+
+          if ! sudo docker buildx version >/dev/null 2>&1; then
+            echo "Installing Docker Buildx ${DOCKER_BUILDX_VERSION}..."
+
+            sudo curl -fSL \
+              "https://github.com/docker/buildx/releases/download/${DOCKER_BUILDX_VERSION}/buildx-${DOCKER_BUILDX_VERSION}.linux-${BUILDX_ARCH}" \
+              -o /usr/local/lib/docker/cli-plugins/docker-buildx
+
+            sudo chmod +x \
+              /usr/local/lib/docker/cli-plugins/docker-buildx
+          fi
+
+          echo "Installed Docker tooling:"
+          sudo docker --version
+          sudo docker compose version
+          sudo docker buildx version
+          REMOTE_SCRIPT
+
+      # Nginx is deployed first. Its production configuration uses deferred
+      # Docker DNS resolution, so it can start before the backend container.
+      - name: Deploy production Docker Nginx
+        run: |
+          ssh \
+            -i "${HOME}/.ssh/ec2_key" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "REMOTE_NGINX_DIR='${REMOTE_NGINX_DIR}' \
+             DOMAIN='${DOMAIN}' \
+             CERTBOT_EMAIL='${{ secrets.CERTBOT_EMAIL }}' \
+             DISH_PATCH_NETWORK_NAME='${DISH_PATCH_NETWORK_NAME}' \
+             bash -s" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          STAGING_DIR="${REMOTE_NGINX_DIR}.new"
+
+          rm -rf "${STAGING_DIR}"
+          mkdir -p "${STAGING_DIR}"
 
           tar \
-            -xzf /home/ec2-user/control-backend-docker.tar.gz \
-            -C "${REMOTE_BACKEND_DOCKER_DIR}"
+            -xzf "/home/${USER}/control-nginx.tar.gz" \
+            -C "${STAGING_DIR}" \
+            --strip-components=1
 
-          rm -f /home/ec2-user/control-backend-docker.tar.gz
+          rm -f "/home/${USER}/control-nginx.tar.gz"
 
-          cd "${REMOTE_BACKEND_DOCKER_DIR}"
+          rm -rf "${REMOTE_NGINX_DIR}.previous"
 
-          echo "Ensuring shared Docker network exists..."
+          if [ -d "${REMOTE_NGINX_DIR}" ]; then
+            mv "${REMOTE_NGINX_DIR}" \
+              "${REMOTE_NGINX_DIR}.previous"
+          fi
 
-          if ! docker network inspect \
+          mv "${STAGING_DIR}" "${REMOTE_NGINX_DIR}"
+
+          cd "${REMOTE_NGINX_DIR}"
+
+          chmod +x \
+            scripts/ensure-network.sh \
+            scripts/deploy-production.sh
+
+          echo "Deploying Nginx on ports 80 and 443..."
+
+          sudo --preserve-env=DOMAIN,CERTBOT_EMAIL,DISH_PATCH_NETWORK_NAME \
+            bash ./scripts/deploy-production.sh
+
+          echo "Production Nginx status:"
+
+          sudo docker compose \
+            -f "${NGINX_PRODUCTION_COMPOSE_FILE:-compose.production.yaml}" \
+            ps
+
+          rm -rf "${REMOTE_NGINX_DIR}.previous"
+          REMOTE_SCRIPT
+
+      - name: Deploy official Docker backend
+        run: |
+          ssh \
+            -i "${HOME}/.ssh/ec2_key" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "REMOTE_BACKEND_DIR='${REMOTE_BACKEND_DIR}' \
+             BACKEND_PRODUCTION_COMPOSE_FILE='${BACKEND_PRODUCTION_COMPOSE_FILE}' \
+             DISH_PATCH_NETWORK_NAME='${DISH_PATCH_NETWORK_NAME}' \
+             bash -s" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          STAGING_DIR="${REMOTE_BACKEND_DIR}.new"
+
+          rm -rf "${STAGING_DIR}"
+          mkdir -p "${STAGING_DIR}"
+
+          tar \
+            -xzf "/home/${USER}/control-backend.tar.gz" \
+            -C "${STAGING_DIR}"
+
+          rm -f "/home/${USER}/control-backend.tar.gz"
+
+          rm -rf "${REMOTE_BACKEND_DIR}.previous"
+
+          if [ -d "${REMOTE_BACKEND_DIR}" ]; then
+            mv "${REMOTE_BACKEND_DIR}" \
+              "${REMOTE_BACKEND_DIR}.previous"
+          fi
+
+          mv "${STAGING_DIR}" "${REMOTE_BACKEND_DIR}"
+
+          cd "${REMOTE_BACKEND_DIR}"
+
+          if ! sudo docker network inspect \
             "${DISH_PATCH_NETWORK_NAME}" >/dev/null 2>&1
           then
-            docker network create \
+            sudo docker network create \
               "${DISH_PATCH_NETWORK_NAME}"
           fi
 
           echo "Validating backend Compose configuration..."
 
           DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            sudo --preserve-env=DISH_PATCH_NETWORK_NAME \
             docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
+              -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
               config
 
-          echo "Building duplicate Docker backend..."
+          echo "Building the official backend image..."
 
           DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            sudo --preserve-env=DISH_PATCH_NETWORK_NAME \
             docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
+              -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
               build \
               backend
 
-          echo "Starting duplicate Docker backend..."
+          echo "Starting the official backend container..."
 
           DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            sudo --preserve-env=DISH_PATCH_NETWORK_NAME \
             docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
+              -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
               up \
               --detach \
-              --remove-orphans
+              --remove-orphans \
+              backend
 
-          echo "Waiting for duplicate backend to accept HTTP connections..."
+          CONTAINER_ID="$(
+            sudo docker compose \
+              -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
+              ps -q backend
+          )"
 
-          BACKEND_READY=false
+          if [ -z "${CONTAINER_ID}" ]; then
+            echo "The backend container was not created."
+            exit 1
+          fi
+
+          echo "Waiting for the backend container to remain running..."
 
           for attempt in $(seq 1 24); do
-            HTTP_CODE="$(
-              curl \
-                --silent \
-                --output /dev/null \
-                --write-out '%{http_code}' \
-                --max-time 5 \
-                "http://127.0.0.1:${BACKEND_TEST_HTTP_PORT}/" \
-                || true
+            STATUS="$(
+              sudo docker inspect \
+                --format '{{.State.Status}}' \
+                "${CONTAINER_ID}"
             )"
 
-            if [ "${HTTP_CODE}" != "000" ]; then
-              echo "Docker backend responded with HTTP ${HTTP_CODE}."
-              BACKEND_READY=true
+            if [ "${STATUS}" = "running" ]; then
+              echo "Backend container is running."
               break
             fi
 
-            echo "Backend not ready. Attempt ${attempt}/24..."
+            if [ "${STATUS}" = "exited" ] \
+              || [ "${STATUS}" = "dead" ]
+            then
+              echo "Backend container stopped with status: ${STATUS}"
+
+              sudo docker compose \
+                -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
+                logs \
+                --tail=200 \
+                backend
+
+              exit 1
+            fi
+
+            if [ "${attempt}" -eq 24 ]; then
+              echo "Backend did not become stable."
+
+              sudo docker compose \
+                -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
+                ps -a
+
+              sudo docker compose \
+                -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
+                logs \
+                --tail=200 \
+                backend
+
+              exit 1
+            fi
+
+            echo "Backend status: ${STATUS}. Attempt ${attempt}/24..."
             sleep 5
           done
 
-          if [ "${BACKEND_READY}" != "true" ]; then
-            echo "Duplicate Docker backend failed to start."
+          sudo docker compose \
+            -f "${BACKEND_PRODUCTION_COMPOSE_FILE}" \
+            ps
 
-            docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
-              ps -a
+          rm -rf "${REMOTE_BACKEND_DIR}.previous"
+          REMOTE_SCRIPT
 
-            docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
-              logs \
-              --tail=200 \
-              backend
+      - name: Verify production route
+        run: |
+          set -Eeuo pipefail
 
-            exit 1
-          fi
+          echo "Checking Docker Nginx health endpoint..."
 
-          echo "Checking routing through Docker Nginx..."
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --max-time 20 \
+            "https://${DOMAIN}/nginx-health"
 
-          NGINX_HTTP_CODE="$(
+          echo
+          echo "Checking Nginx-to-backend routing..."
+
+          HTTP_CODE="$(
             curl \
               --silent \
-              --output /dev/null \
+              --show-error \
+              --output /tmp/control-backend-response.txt \
               --write-out '%{http_code}' \
-              --max-time 10 \
-              -H "Host: controlapi.dish-patch.com" \
-              "http://127.0.0.1:${NGINX_TEST_HTTP_PORT}/" \
+              --max-time 20 \
+              "https://${DOMAIN}/" \
               || true
           )"
 
-          echo "Docker Nginx returned HTTP ${NGINX_HTTP_CODE}."
+          echo "Backend route returned HTTP ${HTTP_CODE}."
 
-          if [ "${NGINX_HTTP_CODE}" = "000" ] \
-            || [ "${NGINX_HTTP_CODE}" = "502" ] \
-            || [ "${NGINX_HTTP_CODE}" = "503" ] \
-            || [ "${NGINX_HTTP_CODE}" = "504" ]
-          then
-            echo "Docker Nginx could not reach the Docker backend."
+          case "${HTTP_CODE}" in
+            000|502|503|504)
+              echo "Production Nginx could not reach the Docker backend."
+              cat /tmp/control-backend-response.txt || true
+              exit 1
+              ;;
+          esac
 
-            docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
-              ps -a
+          echo "Production Docker deployment succeeded."
 
-            docker compose \
-              -f "${BACKEND_COMPOSE_FILE}" \
-              logs \
-              --tail=200 \
-              backend
-
-            exit 1
-          fi
-
-          echo "Duplicate Docker backend deployment succeeded."
-
-          docker compose \
-            -f "${BACKEND_COMPOSE_FILE}" \
-            ps
-          REMOTE_SCRIPT
-
-      - name: Ensure backend directory exists on EC2
+      - name: Show Docker diagnostics on failure
+        if: failure()
         run: |
           ssh \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "mkdir -p '${{ env.REMOTE_DIR }}'"
+            -i "${HOME}/.ssh/ec2_key" \
+            "${EC2_USER}@${EC2_HOST}" \
+            "sudo docker ps -a; \
+             echo '===== NGINX LOGS ====='; \
+             cd '${REMOTE_NGINX_DIR}' 2>/dev/null && \
+             sudo docker compose -f '${NGINX_PRODUCTION_COMPOSE_FILE}' logs --tail=200 || true; \
+             echo '===== BACKEND LOGS ====='; \
+             cd '${REMOTE_BACKEND_DIR}' 2>/dev/null && \
+             sudo docker compose -f '${BACKEND_PRODUCTION_COMPOSE_FILE}' logs --tail=200 || true" \
+            || true
 
-      - name: Copy JAR to EC2
-        run: |
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            "${{ steps.find-jar.outputs.jar }}" \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/"
-
-      - name: Copy Python app to EC2
-        run: |
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            control-backend/virtual-robots/virtual-robots.py \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:${{ env.REMOTE_DIR }}/"
-
-      # For better security, the certificate is still managed separately
-      # and is not copied by this workflow.
-
-      - name: Copy backend setup script to EC2
-        run: |
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            control-backend/deployment-scripts/setup-control-backend-service.sh \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/"
-
-      - name: Run backend setup script on EC2
-        run: |
-          ssh \
-            -o StrictHostKeyChecking=no \
-            -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "bash /home/ec2-user/setup-control-backend-service.sh \
-              '${{ secrets.MQTT_USERNAME }}' \
-              '${{ secrets.MQTT_PASSWORD }}'"
-
-      - name: Clean up deployment files
+      - name: Clean up runner files
         if: always()
         run: |
-          rm -f key.pem
-          rm -f control-nginx.tar.gz
-          rm -f control-backend-docker.tar.gz
+          rm -f \
+            "${HOME}/.ssh/ec2_key" \
+            control-nginx.tar.gz \
+            control-backend.tar.gz
+
           rm -rf backend-docker-package
