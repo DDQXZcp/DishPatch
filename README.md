@@ -312,3 +312,9 @@ VITE_BACKEND_URL=http://localhost:3000/
 # Replace with your S3 bucket that stores menu photo
 VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southeast-2.amazonaws.com
 ```
+
+### EC2 Setup
+
+- Docker
+- Docker Compose
+- Docker BuildX

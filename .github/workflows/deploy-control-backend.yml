@@ -29,13 +29,16 @@ env:
   EC2_USER: ec2-user
   EC2_SSH_KEY_SECRET: EC2_SSH_KEY
 
-  # Nginx deployment
+  DISH_PATCH_NETWORK_NAME: dishpatch-network
+
   REMOTE_NGINX_DIR: /home/ec2-user/control-nginx
   NGINX_COMPOSE_FILE: compose.test.yaml
-  DISH_PATCH_NETWORK_NAME: dishpatch-network
   NGINX_TEST_HTTP_PORT: 18080
 
-  # Backend deployment
+  REMOTE_BACKEND_DOCKER_DIR: /home/ec2-user/control-backend-docker
+  BACKEND_COMPOSE_FILE: compose.test.yaml
+  BACKEND_TEST_HTTP_PORT: 18081
+
   JAR_NAME: dishpatch-control-backend-1.0.0.jar
   REMOTE_DIR: /home/ec2-user/app
   SERVICE_NAME: dishpatch-control-backend
@@ -201,6 +204,185 @@ jobs:
           echo "Found JAR: ${JAR_FILE}"
           echo "jar=${JAR_FILE}" >> "${GITHUB_OUTPUT}"
 
+      # ------------------------------------------------------------
+      # Deploy duplicate Docker backend
+      # ------------------------------------------------------------
+
+      - name: Package Docker backend
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf backend-docker-package
+          mkdir -p backend-docker-package/target
+
+          cp control-backend/Dockerfile \
+            backend-docker-package/Dockerfile
+
+          cp control-backend/compose.test.yaml \
+            backend-docker-package/compose.test.yaml
+
+          cp "${{ steps.find-jar.outputs.jar }}" \
+            "backend-docker-package/target/${{ env.JAR_NAME }}"
+
+          tar \
+            -czf control-backend-docker.tar.gz \
+            -C backend-docker-package \
+            .
+
+          echo "Docker backend package contents:"
+          tar -tzf control-backend-docker.tar.gz
+
+      - name: Copy Docker backend package to EC2
+        run: |
+          scp \
+            -o StrictHostKeyChecking=no \
+            -i key.pem \
+            control-backend-docker.tar.gz \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/home/ec2-user/control-backend-docker.tar.gz"
+
+      - name: Deploy duplicate Docker backend on EC2
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=no \
+            -i key.pem \
+            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
+            "REMOTE_BACKEND_DOCKER_DIR='${{ env.REMOTE_BACKEND_DOCKER_DIR }}' \
+             BACKEND_COMPOSE_FILE='${{ env.BACKEND_COMPOSE_FILE }}' \
+             BACKEND_TEST_HTTP_PORT='${{ env.BACKEND_TEST_HTTP_PORT }}' \
+             NGINX_TEST_HTTP_PORT='${{ env.NGINX_TEST_HTTP_PORT }}' \
+             DISH_PATCH_NETWORK_NAME='${{ env.DISH_PATCH_NETWORK_NAME }}' \
+             bash -s" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          echo "Preparing Docker backend deployment directory..."
+
+          rm -rf "${REMOTE_BACKEND_DOCKER_DIR}"
+          mkdir -p "${REMOTE_BACKEND_DOCKER_DIR}"
+
+          tar \
+            -xzf /home/ec2-user/control-backend-docker.tar.gz \
+            -C "${REMOTE_BACKEND_DOCKER_DIR}"
+
+          rm -f /home/ec2-user/control-backend-docker.tar.gz
+
+          cd "${REMOTE_BACKEND_DOCKER_DIR}"
+
+          echo "Ensuring shared Docker network exists..."
+
+          if ! docker network inspect \
+            "${DISH_PATCH_NETWORK_NAME}" >/dev/null 2>&1
+          then
+            docker network create \
+              "${DISH_PATCH_NETWORK_NAME}"
+          fi
+
+          echo "Validating backend Compose configuration..."
+
+          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              config
+
+          echo "Building duplicate Docker backend..."
+
+          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              build \
+              backend
+
+          echo "Starting duplicate Docker backend..."
+
+          DISH_PATCH_NETWORK_NAME="${DISH_PATCH_NETWORK_NAME}" \
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              up \
+              --detach \
+              --remove-orphans
+
+          echo "Waiting for duplicate backend to accept HTTP connections..."
+
+          BACKEND_READY=false
+
+          for attempt in $(seq 1 24); do
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                --max-time 5 \
+                "http://127.0.0.1:${BACKEND_TEST_HTTP_PORT}/" \
+                || true
+            )"
+
+            if [ "${HTTP_CODE}" != "000" ]; then
+              echo "Docker backend responded with HTTP ${HTTP_CODE}."
+              BACKEND_READY=true
+              break
+            fi
+
+            echo "Backend not ready. Attempt ${attempt}/24..."
+            sleep 5
+          done
+
+          if [ "${BACKEND_READY}" != "true" ]; then
+            echo "Duplicate Docker backend failed to start."
+
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              ps -a
+
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              logs \
+              --tail=200 \
+              backend
+
+            exit 1
+          fi
+
+          echo "Checking routing through Docker Nginx..."
+
+          NGINX_HTTP_CODE="$(
+            curl \
+              --silent \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --max-time 10 \
+              -H "Host: controlapi.dish-patch.com" \
+              "http://127.0.0.1:${NGINX_TEST_HTTP_PORT}/" \
+              || true
+          )"
+
+          echo "Docker Nginx returned HTTP ${NGINX_HTTP_CODE}."
+
+          if [ "${NGINX_HTTP_CODE}" = "000" ] \
+            || [ "${NGINX_HTTP_CODE}" = "502" ] \
+            || [ "${NGINX_HTTP_CODE}" = "503" ] \
+            || [ "${NGINX_HTTP_CODE}" = "504" ]
+          then
+            echo "Docker Nginx could not reach the Docker backend."
+
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              ps -a
+
+            docker compose \
+              -f "${BACKEND_COMPOSE_FILE}" \
+              logs \
+              --tail=200 \
+              backend
+
+            exit 1
+          fi
+
+          echo "Duplicate Docker backend deployment succeeded."
+
+          docker compose \
+            -f "${BACKEND_COMPOSE_FILE}" \
+            ps
+          REMOTE_SCRIPT
+
       - name: Ensure backend directory exists on EC2
         run: |
           ssh \
@@ -246,7 +428,10 @@ jobs:
               '${{ secrets.MQTT_USERNAME }}' \
               '${{ secrets.MQTT_PASSWORD }}'"
 
-      - name: Clean up SSH key
+      - name: Clean up deployment files
         if: always()
         run: |
-          rm -f key.pem control-nginx.tar.gz
+          rm -f key.pem
+          rm -f control-nginx.tar.gz
+          rm -f control-backend-docker.tar.gz
+          rm -rf backend-docker-package
