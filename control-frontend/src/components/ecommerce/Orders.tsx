@@ -341,7 +341,7 @@ export default function Orders({
                     isHeader
                     className="min-w-[130px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
-                    Display ID
+                    Order ID
                   </TableCell>
 
                   <TableCell
