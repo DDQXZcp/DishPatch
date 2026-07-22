@@ -26,7 +26,7 @@ async function createOrder(order) {
       orderId,                                  // backend PK
       displayId,                                // short ID for UI
       customerDetails: order.customerDetails,
-      orderStatus: order.orderStatus || "NEW",
+      orderStatus: order.orderStatus || "Preparing",
       orderDate: new Date().toISOString(),
       bills: order.bills,
       items: order.items || [],
