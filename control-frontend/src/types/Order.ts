@@ -27,6 +27,15 @@ export interface Order {
   displayId: string;
 
   items: OrderItem[];
+
+  tableNo?: string | number;
+
+  table?:
+    | string
+    | number
+    | {
+        tableNo?: string | number;
+    };
   orderStatus: OrderStatus;
 }
 

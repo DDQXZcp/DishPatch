@@ -27,6 +27,16 @@ interface OrdersProps {
   framed?: boolean;
 }
 
+type OrderWithTable = Order & {
+  tableNo?: string | number;
+  table?:
+    | string
+    | number
+    | {
+        tableNo?: string | number;
+      };
+};
+
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
   "http://localhost:8080";
@@ -353,6 +363,13 @@ export default function Orders({
 
                   <TableCell
                     isHeader
+                    className="min-w-[100px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    Table
+                  </TableCell>
+
+                  <TableCell
+                    isHeader
                     className="min-w-[120px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Status
@@ -374,6 +391,12 @@ export default function Orders({
 
                     <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
                       {formatItems(order.items)}
+                    </TableCell>
+
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {formatTableNumber(
+                        order as OrderWithTable,
+                      )}
                     </TableCell>
 
                     <TableCell className="py-3">
@@ -429,6 +452,26 @@ function formatItems(items: OrderItem[]): string {
       return `${quantity} × ${name}`;
     })
     .join(", ");
+}
+
+function formatTableNumber(
+  order: OrderWithTable,
+): string {
+  const value =
+    order.tableNo ??
+    (typeof order.table === "object"
+      ? order.table?.tableNo
+      : order.table);
+
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return "—";
+  }
+
+  return String(value);
 }
 
 interface RefreshIconProps {
