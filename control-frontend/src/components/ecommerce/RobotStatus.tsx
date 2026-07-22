@@ -21,11 +21,11 @@ const STATUS_COLORS: Record<RobotStatus, string> = {
   Maintenance: 'bg-red-500',
 };
 
-interface RecentOrdersProps {
+interface RobotStatusProps {
   framed?: boolean;
 }
 
-export default function RecentOrders({ framed = true }: RecentOrdersProps) {
+export default function RobotStatus({ framed = true }: RobotStatusProps) {
   const { robots } = useRobotContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<RobotStatus>>(new Set());

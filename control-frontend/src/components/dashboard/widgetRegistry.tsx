@@ -1,5 +1,6 @@
 import DemographicCard from "../ecommerce/DemographicCard";
-import RecentOrders from "../ecommerce/RecentOrders";
+import RobotStatus from "../ecommerce/RobotStatus";
+import Orders from "../ecommerce/Orders";
 import PlaceholderWidget from "./PlaceholderWidget";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
@@ -14,17 +15,18 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     id: "robot-list",
     title: "Robot",
     description: "Live robot fleet status",
-    render: () => <RecentOrders framed={false} />,
+    render: () => <RobotStatus framed={false} />,
   },
   {
     id: "pos-orders",
     title: "POS Order Status",
     description: "Placeholder for POS order flow",
     render: () => (
-      <PlaceholderWidget
-        label="Order status widget"
-        description="Future POS order data can land here while keeping the dashboard layout stable."
-      />
+      // <PlaceholderWidget
+      //   label="Order status widget"
+      //   description="Future POS order data can land here while keeping the dashboard layout stable."
+      // />
+      <Orders framed={false} />
     ),
   },
   {

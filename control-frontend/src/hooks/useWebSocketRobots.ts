@@ -35,7 +35,7 @@ export const useWebSocketRobots = () => {
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; //Default Spring Boot backend URL
 
   useEffect(() => {
     let active = true;
