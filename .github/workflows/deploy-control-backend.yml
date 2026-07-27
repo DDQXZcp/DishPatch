@@ -22,6 +22,7 @@ on:
     paths:
       - "control-nginx/**"
       - "control-backend/**"
+      - "map-source/**"
       - ".github/workflows/deploy-control-backend.yml"
 
   workflow_dispatch: {}
@@ -64,6 +65,15 @@ jobs:
           java-version: "17"
           cache: maven
           cache-dependency-path: control-backend/pom.xml
+
+      # Writes control-backend/src/main/resources/drop-points.json, which Maven
+      # packages into the JAR. Must run before the build: the file is gitignored,
+      # so it is absent from a fresh checkout.
+      - name: Stage map assets
+        run: bash map-source/stage-map-assets.sh
+
+      - name: Validate staged map assets
+        run: bash map-source/stage-map-assets.sh --check
 
       - name: Build backend with Maven
         working-directory: control-backend

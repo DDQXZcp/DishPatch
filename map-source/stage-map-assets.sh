@@ -17,7 +17,7 @@ SOURCE_DROP_POINTS_YAML="${SOURCE_DIR}/the-hive-drop-points.yaml"
 
 ROBOT_FLEET_CONFIG_DIR="${REPO_ROOT}/robot-fleet/config"
 CONTROL_FRONTEND_MAP_DIR="${REPO_ROOT}/control-frontend/public/maps"
-CONTROL_BACKEND_CONFIG_DIR="${REPO_ROOT}/control-backend/config"
+CONTROL_BACKEND_CONFIG_DIR="${REPO_ROOT}/control-backend/src/main/resources"
 
 ROBOT_FLEET_MAP_YAML="${ROBOT_FLEET_CONFIG_DIR}/map.yaml"
 ROBOT_FLEET_MAP_IMAGE="${ROBOT_FLEET_CONFIG_DIR}/map.png"

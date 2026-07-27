@@ -27,7 +27,7 @@ robot-fleet/config/map.yaml
 robot-fleet/config/map.png
 control-frontend/public/maps/map-floorplan.webp
 control-frontend/public/maps/map-manifest.json
-control-backend/config/drop-points.json
+control-backend/src/main/resources/drop-points.json
 ```
 
 The staged `robot-fleet/config/map.yaml` keeps the source metadata, but
@@ -40,14 +40,27 @@ image: map.png
 `robot-fleet/scripts/stage_nav2_map.sh` is kept as a compatibility wrapper
 around `stage-map-assets.sh`.
 
-All staged outputs except `robot-fleet/config/map.yaml` are gitignored. They are
-generated, so edit `the-hive-drop-points.yaml` and re-run the script rather than
-editing them by hand.
+Every staged output is generated, so edit the sources in this folder and re-run
+the script rather than editing the staged files by hand. All of them are
+gitignored except `robot-fleet/config/map.yaml`.
+
+Each deploy workflow stages the assets it needs before building, so a change to
+this folder reaches production without anyone staging by hand. The three
+workflows that do this — `deploy-control-backend.yml`,
+`deploy-control-frontend.yml` and `deploy-robot-fleet.yml` — all list
+`map-source/**` in their `paths` filter so edits here trigger a redeploy. Add
+both the staging step and the path filter when wiring up a new consumer.
+
+Run the script locally after editing any source file here; a build from a fresh
+clone has no staged assets until you do.
 
 ## Control Backend Drop Points
 
-`control-backend/config/drop-points.json` is derived from
-`the-hive-drop-points.yaml`:
+`control-backend/src/main/resources/drop-points.json` is derived from
+`the-hive-drop-points.yaml`. It is staged into `src/main/resources` so Maven
+packages it into the JAR, where the backend reads it as
+`classpath:drop-points.json`. The file is gitignored and staged by
+`deploy-control-backend.yml` before the Maven build:
 
 ```json
 {
