@@ -37,6 +37,12 @@ type OrderWithTable = Order & {
       };
 };
 
+interface UpdateOrderApiResponse {
+  success: boolean;
+  message: string | null;
+  data: OrderWithTable | null;
+}
+
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
   "http://localhost:8080";
@@ -79,6 +85,13 @@ export default function Orders({
   const [loadError, setLoadError] = useState<
     string | null
   >(null);
+
+  const [actionError, setActionError] = useState<
+    string | null
+  >(null);
+
+  const [cancellingOrderId, setCancellingOrderId] =
+    useState<string | null>(null);
 
   const [filterOpen, setFilterOpen] =
     useState(false);
@@ -125,6 +138,7 @@ export default function Orders({
 
         setOrders(result.data);
         setLoadError(null);
+        setActionError(null);
       } catch (error) {
         setLoadError(
           error instanceof Error
@@ -142,6 +156,72 @@ export default function Orders({
   useEffect(() => {
     void loadOrders(true);
   }, [loadOrders]);
+
+  const cancelOrder = async (order: Order) => {
+    if (
+      order.orderStatus !== "Preparing" ||
+      cancellingOrderId !== null
+    ) {
+      return;
+    }
+
+    setCancellingOrderId(order.orderId);
+    setActionError(null);
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/orders/${encodeURIComponent(
+          order.orderId,
+        )}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orderStatus: "Cancelled",
+          }),
+        },
+      );
+
+      const result = (await response
+        .json()
+        .catch(() => null)) as
+        | UpdateOrderApiResponse
+        | null;
+
+      if (
+        !response.ok ||
+        !result?.success ||
+        !result.data
+      ) {
+        throw new Error(
+          result?.message ||
+            `Unable to cancel order: HTTP ${response.status}`,
+        );
+      }
+
+      setOrders((currentOrders) =>
+        currentOrders.map((currentOrder) =>
+          currentOrder.orderId === order.orderId
+            ? {
+                ...currentOrder,
+                ...result.data,
+                orderStatus: "Cancelled",
+              }
+            : currentOrder,
+        ),
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Unable to cancel the order",
+      );
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   const toggleFilter = (status: OrderStatus) => {
     setActiveFilters((previousFilters) => {
@@ -332,6 +412,14 @@ export default function Orders({
 
       {!isLoading &&
         !loadError &&
+        actionError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
+            {actionError}
+          </div>
+        )}
+
+      {!isLoading &&
+        !loadError &&
         filteredOrders.length === 0 && (
           <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
             {orders.length === 0
@@ -374,45 +462,91 @@ export default function Orders({
                   >
                     Status
                   </TableCell>
+
+                  <TableCell
+                    isHeader
+                    className="min-w-[64px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    Action
+                  </TableCell>
                 </TableRow>
               </TableHeader>
 
               <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {filteredOrders.map((order) => (
-                  <TableRow
-                    key={order.orderId}
-                    className="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                  >
-                    <TableCell className="py-3">
-                      <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        #{order.displayId}
-                      </p>
-                    </TableCell>
+                {filteredOrders.map((order) => {
+                  const canCancel =
+                    order.orderStatus === "Preparing";
 
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                      {formatItems(order.items)}
-                    </TableCell>
+                  const isCancelling =
+                    cancellingOrderId ===
+                    order.orderId;
 
-                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                      {formatTableNumber(
-                        order as OrderWithTable,
-                      )}
-                    </TableCell>
+                  return (
+                    <TableRow
+                      key={order.orderId}
+                      className="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                    >
+                      <TableCell className="py-3">
+                        <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                          #{order.displayId}
+                        </p>
+                      </TableCell>
 
-                    <TableCell className="py-3">
-                      <Badge
-                        size="sm"
-                        color={
-                          STATUS_CONFIG[
-                            order.orderStatus
-                          ].badgeColor
-                        }
-                      >
-                        {order.orderStatus}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                        {formatItems(order.items)}
+                      </TableCell>
+
+                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                        {formatTableNumber(
+                          order as OrderWithTable,
+                        )}
+                      </TableCell>
+
+                      <TableCell className="py-3">
+                        <Badge
+                          size="sm"
+                          color={
+                            STATUS_CONFIG[
+                              order.orderStatus
+                            ].badgeColor
+                          }
+                        >
+                          {order.orderStatus}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="py-3 text-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void cancelOrder(order)
+                          }
+                          disabled={
+                            !canCancel ||
+                            cancellingOrderId !== null
+                          }
+                          aria-label={`Cancel order ${order.displayId}`}
+                          title={
+                            canCancel
+                              ? "Cancel order"
+                              : `Order is already ${order.orderStatus.toLowerCase()}`
+                          }
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+                            canCancel
+                              ? "border-red-300 bg-white text-red-600 hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
+                              : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
+                          }`}
+                        >
+                          {isCancelling ? (
+                            <LoadingIcon />
+                          ) : (
+                            <CancelIcon />
+                          )}
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -502,6 +636,57 @@ function RefreshIcon({
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LoadingIcon() {
+  return (
+    <svg
+      className="h-4 w-4 animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth="3"
+      />
+
+      <path
+        className="opacity-75"
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CancelIcon() {
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 6L18 18"
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M18 6L6 18"
+        strokeLinecap="round"
       />
     </svg>
   );
