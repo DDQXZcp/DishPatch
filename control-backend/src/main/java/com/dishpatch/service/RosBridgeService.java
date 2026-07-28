@@ -154,6 +154,11 @@ public class RosBridgeService extends TextWebSocketHandler {
         session.sendMessage(new TextMessage(payload));
     }
 
+    /** True when the rosbridge session is open and goals can actually be sent. */
+    public boolean isConnected() {
+        return session != null && session.isOpen();
+    }
+
     /**
      * Publishes a navigation goal to {@code /robot{id}/goal_pose} via rosbridge.
      * The topic is advertised once per robot before its first publish on the

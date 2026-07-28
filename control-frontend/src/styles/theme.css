@@ -2,15 +2,31 @@
   /*
    * DishPatch brand palette
    * Warm gold with a slightly brown tone
+   *
+   * The numeric ramp is the single source of truth; the semantic tokens
+   * below alias it, so bg-brand and bg-brand-500 can never diverge.
    */
 
-  --color-brand: #b7791f;
-  --color-brand-hover: #975a16;
-  --color-brand-dark: #744210;
+  --color-brand-25: #fffcf5;
+  --color-brand-50: #fff7e6;
+  --color-brand-100: #fdf0d5;
+  --color-brand-200: #e8d7b7;
+  --color-brand-300: #dcbe80;
+  --color-brand-400: #c99b45;
+  --color-brand-500: #b7791f;
+  --color-brand-600: #975a16;
+  --color-brand-700: #744210;
+  --color-brand-800: #5c340c;
+  --color-brand-900: #46270a;
+  --color-brand-950: #2a1705;
 
-  --color-brand-light: #fff7e6;
-  --color-brand-soft: #fdf0d5;
-  --color-brand-border: #e8d7b7;
+  --color-brand: var(--color-brand-500);
+  --color-brand-hover: var(--color-brand-600);
+  --color-brand-dark: var(--color-brand-700);
+
+  --color-brand-light: var(--color-brand-50);
+  --color-brand-soft: var(--color-brand-100);
+  --color-brand-border: var(--color-brand-200);
 
   /*
    * Main application colours
