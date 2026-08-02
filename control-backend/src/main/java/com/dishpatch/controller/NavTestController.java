@@ -51,7 +51,7 @@ public class NavTestController {
      * health endpoint
      * @return 200 with {@code rosbridgeConnected}, whether the fleet link is open,
      *         and {@code destinationsLoaded}, how many drop points were parsed at
-     *         startup (25 for the current floorplan)
+     *         startup (26 for the current floorplan)
      */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
