@@ -6,78 +6,78 @@ resolution: 0.011802
 origin: [0.0, 0.0, 0.0]
 coordinate_note: "pixel coordinates are from the image top-left; map poses are meters in the ROS map frame"
 drop_points:
-  - id: table_1
+  - id: T1
     pixel: [754.5, 2518.5]
     pose: {x: 8.911, y: 9.241, yaw: 0.0}
-  - id: table_2
+  - id: T2
     pixel: [1109.5, 2518.5]
     pose: {x: 13.100, y: 9.241, yaw: 0.0}
-  - id: table_3
+  - id: T3
     pixel: [1535.5, 2518.5]
     pose: {x: 18.128, y: 9.241, yaw: 0.0}
-  - id: table_4
+  - id: T4
     pixel: [1967.5, 2518.5]
     pose: {x: 23.226, y: 9.241, yaw: 0.0}
-  - id: table_5
+  - id: T5
     pixel: [2376.5, 2518.5]
     pose: {x: 28.053, y: 9.241, yaw: 0.0}
-  - id: table_6
+  - id: T6
     pixel: [3070.5, 2518.5]
     pose: {x: 36.244, y: 9.241, yaw: 0.0}
-  - id: table_7
+  - id: T7
     pixel: [3530.5, 2518.5]
     pose: {x: 41.673, y: 9.241, yaw: 0.0}
-  - id: table_8
+  - id: T8
     pixel: [4024.5, 2518.5]
     pose: {x: 47.503, y: 9.241, yaw: 0.0}
-  - id: table_9
+  - id: T9
     pixel: [4526.5, 2518.5]
     pose: {x: 53.428, y: 9.241, yaw: 0.0}
-  - id: table_10
+  - id: T10
     pixel: [4526.5, 1595.5]
     pose: {x: 53.428, y: 20.134, yaw: 0.0}
-  - id: table_11
+  - id: T11
     pixel: [4024.5, 1595.5]
     pose: {x: 47.503, y: 20.134, yaw: 0.0}
-  - id: table_12
+  - id: T12
     pixel: [3530.5, 1595.5]
     pose: {x: 41.673, y: 20.134, yaw: 0.0}
-  - id: table_13
+  - id: T13
     pixel: [3070.5, 1595.5]
     pose: {x: 36.244, y: 20.134, yaw: 0.0}
-  - id: table_14
+  - id: T14
     pixel: [2376.5, 1595.5]
     pose: {x: 28.053, y: 20.134, yaw: 0.0}
-  - id: table_15
+  - id: T15
     pixel: [1967.5, 1595.5]
     pose: {x: 23.226, y: 20.134, yaw: 0.0}
-  - id: table_16
+  - id: T16
     pixel: [1535.5, 1595.5]
     pose: {x: 18.128, y: 20.134, yaw: 0.0}
-  - id: table_17
+  - id: T17
     pixel: [3597.5, 2461.5]
     pose: {x: 42.464, y: 9.914, yaw: 0.0}
-  - id: table_18
+  - id: T18
     pixel: [3597.5, 1647.5]
     pose: {x: 42.464, y: 19.521, yaw: 0.0}
-  - id: room_1
+  - id: R1
     pixel: [1455.5, 2461.5]
     pose: {x: 17.184, y: 9.914, yaw: 0.0}
-  - id: room_2
+  - id: R2
     pixel: [1455.5, 1647.6]
     pose: {x: 17.184, y: 19.519, yaw: 0.0}
-  - id: room_3
+  - id: R3
     pixel: [3818.5, 2461.5]
     pose: {x: 45.072, y: 9.914, yaw: 0.0}
-  - id: room_4
+  - id: R4
     pixel: [3818.5, 1647.5]
     pose: {x: 45.072, y: 19.520, yaw: 0.0}
-  - id: room_5
+  - id: R5
     pixel: [4172.5, 2461.5]
     pose: {x: 49.250, y: 9.914, yaw: 0.0}
-  - id: room_6
+  - id: R6
     pixel: [4172.5, 1647.5]
     pose: {x: 49.250, y: 19.520, yaw: 0.0}
-  - id: room_7
+  - id: R7
     pixel: [3486.5, 2053.5]
     pose: {x: 41.154, y: 14.729, yaw: 0.0}
