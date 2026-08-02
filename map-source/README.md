@@ -87,10 +87,10 @@ packages it into the JAR, where the backend reads it as
 | `dropPoints[].y` | number | `drop_points[].pose.y` | Meters in the ROS map frame. |
 | `dropPoints[].yaw` | number | `drop_points[].pose.yaw` | Radians. Defaults to `0.0`. |
 
-There are 25 drop points, one per delivery destination on the floorplan:
-`T1` … `T18` (tables) and `R1` … `R7` (rooms). Each `id` identifies the shape
-labelled with that number in `the-hive-floorplan-landscape.webp`, so a POS order
-for table 4 resolves directly to drop point `T4`.
+There are 26 drop points: `T1` … `T18` (tables), `R1` … `R7` (rooms), and
+`counter` (the kitchen counter). Each `id` identifies the shape labelled with
+that name in `the-hive-floorplan-landscape.webp`, so a POS order for table 4
+resolves directly to drop point `T4`.
 
 The `pixel` field in the source YAML is authoring metadata used to place each
 drop point against the floorplan image. It is **not** carried into the staged
