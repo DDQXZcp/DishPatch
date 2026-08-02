@@ -50,8 +50,8 @@ class DropPointServiceTest {
                 serviceFor(new ClassPathResource("drop-points.json"));
         service.load();
 
-        assertEquals(25, service.all().size(),
-                "expected 18 tables + 7 rooms; run map-source/stage-map-assets.sh");
+        assertEquals(26, service.all().size(),
+                "expected 18 tables + 7 rooms + the counter; run map-source/stage-map-assets.sh");
         assertEquals("map", service.frameId());
     }
 
@@ -62,11 +62,12 @@ class DropPointServiceTest {
         service.load();
 
         for (int i = 1; i <= 18; i++) {
-            assertTrue(service.find("table_" + i).isPresent(), "missing table_" + i);
+            assertTrue(service.find("T" + i).isPresent(), "missing T" + i);
         }
         for (int i = 1; i <= 7; i++) {
-            assertTrue(service.find("room_" + i).isPresent(), "missing room_" + i);
+            assertTrue(service.find("R" + i).isPresent(), "missing R" + i);
         }
+        assertTrue(service.find("counter").isPresent(), "missing counter");
     }
 
     @Test
@@ -75,9 +76,9 @@ class DropPointServiceTest {
                 serviceFor(new ClassPathResource("drop-points.json"));
         service.load();
 
-        DropPointMap.DropPoint point = service.find("table_4").orElseThrow();
+        DropPointMap.DropPoint point = service.find("T4").orElseThrow();
 
-        // Matches table_4 in the staged drop-points.json.
+        // Matches T4 in the staged drop-points.json.
         assertEquals(23.226, point.x());
         assertEquals(9.241, point.y());
         assertEquals(0.0, point.yaw());
@@ -89,21 +90,21 @@ class DropPointServiceTest {
                 serviceFor(new ClassPathResource("drop-points.json"));
         service.load();
 
-        assertTrue(service.find("table_99").isEmpty());
+        assertTrue(service.find("T99").isEmpty());
         assertTrue(service.find("").isEmpty());
     }
 
     @Test
     void rejectsDuplicateIds() {
         Resource source = json(mapWith("""
-                { "id": "table_1", "x": 1.0, "y": 2.0, "yaw": 0.0 },
-                { "id": "table_1", "x": 9.0, "y": 9.0, "yaw": 0.0 }
+                { "id": "T1", "x": 1.0, "y": 2.0, "yaw": 0.0 },
+                { "id": "T1", "x": 9.0, "y": 9.0, "yaw": 0.0 }
                 """));
 
         IllegalStateException thrown = assertThrows(
                 IllegalStateException.class, serviceFor(source)::load);
 
-        assertTrue(thrown.getMessage().contains("table_1"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("T1"), thrown.getMessage());
     }
 
     @Test
@@ -119,14 +120,14 @@ class DropPointServiceTest {
     @Test
     void keepsSourceOrderInAll() throws IOException {
         Resource source = json(mapWith("""
-                { "id": "room_3", "x": 1.0, "y": 1.0, "yaw": 0.0 },
-                { "id": "table_1", "x": 2.0, "y": 2.0, "yaw": 0.0 }
+                { "id": "R3", "x": 1.0, "y": 1.0, "yaw": 0.0 },
+                { "id": "T1", "x": 2.0, "y": 2.0, "yaw": 0.0 }
                 """));
 
         DropPointService service = serviceFor(source);
         service.load();
 
-        assertEquals("room_3", service.all().get(0).id());
-        assertEquals("table_1", service.all().get(1).id());
+        assertEquals("R3", service.all().get(0).id());
+        assertEquals("T1", service.all().get(1).id());
     }
 }
