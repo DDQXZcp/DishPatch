@@ -81,3 +81,6 @@ drop_points:
   - id: R7
     pixel: [3486.5, 2053.5]
     pose: {x: 41.154, y: 14.729, yaw: 0.0}
+  - id: counter
+    pixel: [3306.5, 2053.5]
+    pose: {x: 39.029, y: 14.729, yaw: 0.0}
