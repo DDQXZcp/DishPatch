@@ -3,16 +3,18 @@ package com.dishpatch.dispatch;
 /**
  * Stage of a single delivery job.
  * <p>
- * There is no arrival feedback from Nav2, so "driving to the table" and "sitting
- * at the table" cannot be told apart — the configured dwell stands in for the
- * whole trip. If arrival feedback is ever wired up, {@link #TO_TABLE} splits into
- * a driving stage and a dwelling stage.
+ * The driving stages end when the robot's reported position reaches the
+ * destination. Only {@link #AT_TABLE} is on a timer, and that timer is serving
+ * time rather than a stand-in for travel.
  */
 public enum DispatchState {
 
-    /** Table goal published; the dwell expiring means "assume it arrived". */
+    /** Table goal published; ends when the robot reaches the table. */
     TO_TABLE,
 
-    /** Order marked complete and counter goal published; robot is on its way back. */
+    /** At the table serving; ends when the serve dwell expires. */
+    AT_TABLE,
+
+    /** Order complete and counter goal published; ends when it reaches the counter. */
     RETURNING
 }
