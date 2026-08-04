@@ -110,6 +110,7 @@ function applyCoverView(map: L.Map, bounds: FloorplanBounds) {
   const center = L.latLngBounds(bounds).getCenter();
   const zoom = getCoverZoom(map, bounds);
 
+  map.setMinZoom(zoom);
   map.setView(center, zoom, { animate: false });
 }
 
@@ -183,6 +184,7 @@ export default function RestaurantMap() {
       maxBoundsViscosity: 1,
       minZoom: -3,
       maxZoom: 2,
+      zoomDelta: 0.5,
       zoomSnap: 0,
       attributionControl: false,
     });
