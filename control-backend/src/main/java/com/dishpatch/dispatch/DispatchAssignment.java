@@ -1,8 +1,7 @@
 package com.dishpatch.dispatch;
 
 /**
- * One in-flight delivery: which robot is carrying which order, where to, and when
- * the current stage runs out.
+ * One in-flight delivery: which robot is carrying which order, and where to.
  * <p>
  * Immutable on purpose. {@link DispatchService} mutates on the scheduler thread
  * while {@link DispatchController} reads on a request thread, so a transition
@@ -17,7 +16,8 @@ package com.dishpatch.dispatch;
  * @param robotId        robot id, matching the {@code /robot{id}} ROS namespace
  * @param destination    drop point id this job is currently headed to
  * @param state          current stage
- * @param deadlineMillis wall clock at which the stage expires
+ * @param deadlineMillis wall clock at which the serve dwell ends; 0 on the driving
+ *                       stages, which advance on the robot's reported position
  */
 public record DispatchAssignment(
         String orderId,
