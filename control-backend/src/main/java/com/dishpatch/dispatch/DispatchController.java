@@ -48,6 +48,7 @@ public class DispatchController {
                     assignment.destination(),
                     assignment.state(),
                     dispatchService.millisRemaining(assignment),
+                    dispatchService.metresToGo(assignment),
                     dispatchService.isRobotStale(assignment.robotId())
             ));
         }
@@ -76,8 +77,12 @@ public class DispatchController {
      * Mirrors {@link DispatchAssignment} but reports time remaining rather than the
      * absolute deadline, which is internal and unreadable without doing date maths.
      *
-     * @param robotStale robot has stopped reporting telemetry, so it has already
-     *                   vanished from the frontend map while still holding this job
+     * @param millisRemaining serving time left; 0 on the driving stages, which
+     *                        advance on position rather than a clock
+     * @param metresToGo      distance to the destination, or -1 if unknown; the
+     *                        thing to read when a delivery is not progressing
+     * @param robotStale      robot has stopped reporting telemetry, so it has already
+     *                        vanished from the frontend map while still holding this job
      */
     public record AssignmentView(
             String orderId,
@@ -85,6 +90,7 @@ public class DispatchController {
             String destination,
             DispatchState state,
             long millisRemaining,
+            double metresToGo,
             boolean robotStale
     ) { }
 
