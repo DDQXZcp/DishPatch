@@ -5,9 +5,12 @@ public class Robot {
     private String name;
     private double x;
     private double y;
+    private double yaw;
     private String status;
     private int battery;
     private float speed;
+    private String destination;
+    private String orderId;
 
     // Getters and setters
     public int getId() { return id; }
@@ -30,4 +33,13 @@ public class Robot {
 
     public float getSpeed() { return speed; }
     public void setSpeed(float speed) { this.speed = speed; }
+
+    public double getYaw() { return yaw; }
+    public void setYaw(double yaw) { this.yaw = yaw; }
+
+    public String getDestination() { return destination; }
+    public void setDestination(String destination) { this.destination = destination; }
+
+    public String getOrderId() { return orderId; }
+    public void setOrderId(String orderId) { this.orderId = orderId; }
 }
