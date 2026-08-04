@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 @Controller //Change to @service when @MessageMapping is moved
@@ -20,12 +21,25 @@ public class RobotService {
 
     private static final Logger logger = Logger.getLogger(RobotService.class.getName());
 
+    /**
+     * Robot status values. These are a contract with the control frontend — see
+     * RobotStatus in control-frontend/src/types/Robot.ts, which drives the map
+     * colours and the status cards. A value outside this set renders unstyled.
+     */
+    public static final String STATUS_SERVING = "Serving";
+    public static final String STATUS_PICKUP = "Pickup";
+    public static final String STATUS_RETURNING = "Returning";
+    public static final String STATUS_WAITING = "Waiting";
+    public static final String STATUS_MAINTENANCE = "Maintenance";
+
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     private final List<Robot> robots = new ArrayList<>();
     private final Map<Integer, Long> robotLastUpdMap = new HashMap<>();
-    private final Map<String, Object> stats = new HashMap<>();
+    // Concurrent: written by the rosbridge thread and the dispatch scheduler, and
+    // read by the broker thread that serialises it.
+    private final Map<String, Object> stats = new ConcurrentHashMap<>();
     private final Gson gson = new Gson();
 
     private static final long EXPIRY_MILLIS = 20_000L; // 20 seconds
@@ -55,8 +69,7 @@ public class RobotService {
             }
 
             updateStats();
-            messagingTemplate.convertAndSend("/topic/robot-locations", getRobotsSortedByStatus());
-            messagingTemplate.convertAndSend("/topic/robot-stats", stats);
+            broadcast();
         }
 
     // Sort robots by status and filter out expired ones
@@ -73,11 +86,11 @@ public class RobotService {
 
             validRobots.sort(Comparator.comparingInt(r -> {
                 switch (r.getStatus()) {
-                    case "Serving": return 0;
-                    case "Pickup": return 1;
-                    case "Returning": return 2;
-                    case "Waiting": return 3;
-                    case "Maintenance": return 4;
+                    case STATUS_SERVING: return 0;
+                    case STATUS_PICKUP: return 1;
+                    case STATUS_RETURNING: return 2;
+                    case STATUS_WAITING: return 3;
+                    case STATUS_MAINTENANCE: return 4;
                     default: return 5; // Unknown status
                 }
             }));
@@ -86,12 +99,19 @@ public class RobotService {
     }
 
     private void updateStats() {
-        long serving = robots.stream().filter(r -> "Serving".equals(r.getStatus())).count();
-        long pickup = robots.stream().filter(r -> "Pickup".equals(r.getStatus())).count();
-        long returning = robots.stream().filter(r -> "Returning".equals(r.getStatus())).count();
-        long waiting = robots.stream().filter(r -> "Waiting".equals(r.getStatus())).count();
-        long maintenance = robots.stream().filter(r -> "Maintenance".equals(r.getStatus())).count();
-        int total = robots.size();
+        long serving, pickup, returning, waiting, maintenance;
+        int total;
+
+        // Held while counting: the dispatch scheduler mutates statuses while the
+        // rosbridge thread adds robots, so an unguarded stream can throw.
+        synchronized (robots) {
+            serving = robots.stream().filter(r -> STATUS_SERVING.equals(r.getStatus())).count();
+            pickup = robots.stream().filter(r -> STATUS_PICKUP.equals(r.getStatus())).count();
+            returning = robots.stream().filter(r -> STATUS_RETURNING.equals(r.getStatus())).count();
+            waiting = robots.stream().filter(r -> STATUS_WAITING.equals(r.getStatus())).count();
+            maintenance = robots.stream().filter(r -> STATUS_MAINTENANCE.equals(r.getStatus())).count();
+            total = robots.size();
+        }
 
         stats.put("serving", serving);
         stats.put("pickup", pickup);
@@ -100,6 +120,12 @@ public class RobotService {
         stats.put("maintenance", maintenance);
         stats.put("total", total);
         stats.put("timestamp", new Date());
+    }
+
+    /** Pushes the current robot list and stats to the control frontend. */
+    private void broadcast() {
+        messagingTemplate.convertAndSend("/topic/robot-locations", getRobotsSortedByStatus());
+        messagingTemplate.convertAndSend("/topic/robot-stats", stats);
     }
 
 
@@ -139,8 +165,57 @@ public class RobotService {
         }
 
         updateStats();
-        messagingTemplate.convertAndSend("/topic/robot-locations", getRobotsSortedByStatus());
-        messagingTemplate.convertAndSend("/topic/robot-stats", stats);
+        broadcast();
+    }
+
+    /**
+     * Sets a robot's status and pushes the change to the control frontend.
+     * Unknown ids are ignored — a robot that has not reported yet has nothing to set.
+     *
+     * @param id     robot id
+     * @param status one of the {@code STATUS_*} constants
+     */
+    public void setStatus(int id, String status) {
+        synchronized (robots) {
+            robots.stream()
+                    .filter(r -> r.getId() == id)
+                    .findFirst()
+                    .ifPresent(robot -> robot.setStatus(status));
+        }
+
+        updateStats();
+        broadcast();
+    }
+
+    /**
+     * Ids of robots whose telemetry is still current, using the same expiry as the
+     * list pushed to the frontend. Anything else has gone silent and must not be
+     * handed new work.
+     */
+    public List<Integer> getFreshRobotIds() {
+        long currentTime = System.currentTimeMillis();
+
+        synchronized (robots) {
+            List<Integer> fresh = new ArrayList<>();
+            for (Robot robot : robots) {
+                if (isFreshAt(robot.getId(), currentTime)) {
+                    fresh.add(robot.getId());
+                }
+            }
+            return fresh;
+        }
+    }
+
+    /** Whether this robot has reported telemetry within the expiry window. */
+    public boolean isFresh(int id) {
+        synchronized (robots) {
+            return isFreshAt(id, System.currentTimeMillis());
+        }
+    }
+
+    private boolean isFreshAt(int id, long currentTime) {
+        Long lastUpdate = robotLastUpdMap.get(id);
+        return lastUpdate != null && (currentTime - lastUpdate) < EXPIRY_MILLIS;
     }
 
     public List<Robot> getAllRobots() {
