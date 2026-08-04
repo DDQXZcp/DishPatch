@@ -123,31 +123,3 @@ export const menus = [
     items: sandwiches,
   },
 ];
-
-export const tables = [
-  {
-    uuid: "0ed17dc9-7e46-4de1-b50b-6d7187b7ac8a",
-    tableNo: "A1",
-    seats: 4,
-  },
-  {
-    uuid: "c613d538-4a1a-43dc-b5f2-7d6f6ad8a6fb",
-    tableNo: "A2",
-    seats: 4,
-  },
-  {
-    uuid: "68c9db97-857d-4f02-a270-cc42a4381a4b",
-    tableNo: "A3",
-    seats: 4,
-  },
-  {
-    uuid: "e604f813-3cec-4f78-a7cb-2cb9345ad61f",
-    tableNo: "A4",
-    seats: 4,
-  },
-  {
-    uuid: "b264daf6-bf9b-4de0-a34e-73c2b58c5df7",
-    tableNo: "A5",
-    seats: 4,
-  },
-];

@@ -4,7 +4,7 @@ export const WIDGET_IDS = [
   "robot-map",
   "robot-list",
   "pos-orders",
-  "table-status",
+  "alerts-notifications",
 ] as const;
 
 export type WidgetId = (typeof WIDGET_IDS)[number];

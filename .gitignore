@@ -7,3 +7,4 @@ robot-fleet/config/the-hive-landscape-mask-nav2.png
 control-frontend/public/maps/map-floorplan.webp
 control-frontend/public/maps/map-manifest.json
 control-backend/src/main/resources/drop-points.json
+.env

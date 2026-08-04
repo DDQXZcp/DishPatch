@@ -39,7 +39,7 @@ const DEFAULT_ROWS: DashboardWidgetRow[] = [
     height: 360,
     columns: [
       { widgetId: "pos-orders", width: 50 },
-      { widgetId: "table-status", width: 50 },
+      { widgetId: "alerts-notifications", width: 50 },
     ],
   },
 ];

@@ -37,6 +37,8 @@ export interface Order {
         tableNo?: string | number;
     };
   orderStatus: OrderStatus;
+
+  orderDate: string;
 }
 
 export interface OrdersApiResponse {
