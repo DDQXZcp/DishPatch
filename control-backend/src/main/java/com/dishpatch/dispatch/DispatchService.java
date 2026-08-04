@@ -210,9 +210,11 @@ public class DispatchService {
         }
 
         publishGoal(assignment.robotId(), COUNTER);
-        robotService.setStatus(
+        robotService.setAssignment(
                 assignment.robotId(),
-                RobotService.STATUS_RETURNING
+                RobotService.STATUS_RETURNING,
+                COUNTER,
+                null // the meal has been handed over
         );
 
         assignments.put(
@@ -229,9 +231,11 @@ public class DispatchService {
     private void releaseRobot(DispatchAssignment assignment) {
         assignments.remove(assignment.orderId());
         atCounter.add(assignment.robotId());
-        robotService.setStatus(
+        robotService.setAssignment(
                 assignment.robotId(),
-                RobotService.STATUS_WAITING
+                RobotService.STATUS_WAITING,
+                null, // parked, not headed anywhere
+                null
         );
 
         logger.info(
@@ -289,7 +293,8 @@ public class DispatchService {
                 continue;
             }
 
-            robotService.setStatus(robotId, RobotService.STATUS_RETURNING);
+            robotService.setAssignment(
+                    robotId, RobotService.STATUS_RETURNING, COUNTER, null);
             homing.add(robotId);
 
             logger.info(
@@ -302,7 +307,8 @@ public class DispatchService {
     /** Marks a robot parked at the counter and available. */
     private void arriveAtCounter(int robotId) {
         atCounter.add(robotId);
-        robotService.setStatus(robotId, RobotService.STATUS_WAITING);
+        robotService.setAssignment(
+                robotId, RobotService.STATUS_WAITING, null, null);
 
         logger.info("Robot " + robotId + " at " + COUNTER + " and free");
     }
@@ -409,7 +415,8 @@ public class DispatchService {
                     DispatchState.TO_TABLE,
                     0 // no timer on a driving stage
             ));
-            robotService.setStatus(robotId, RobotService.STATUS_SERVING);
+            robotService.setAssignment(
+                    robotId, RobotService.STATUS_SERVING, destination, orderId);
 
             logger.info(
                     "Order " + orderId + " assigned to robot " + robotId

@@ -158,6 +158,15 @@ public class RobotService {
                     robot.setSpeed(msg.get("speed").getAsFloat());
                     robot.setX(msg.getAsJsonObject("pose").getAsJsonObject("position").get("x").getAsDouble());
                     robot.setY(msg.getAsJsonObject("pose").getAsJsonObject("position").get("y").getAsDouble());
+
+                    // The fleet is planar, so x and y of the quaternion are always
+                    // zero and this recovers the heading exactly.
+                    JsonObject orientation =
+                            msg.getAsJsonObject("pose").getAsJsonObject("orientation");
+                    robot.setYaw(2.0 * Math.atan2(
+                            orientation.get("z").getAsDouble(),
+                            orientation.get("w").getAsDouble()
+                    ));
                 }
                 // Add logic for updating z, speed, status, etc when its possible
             }
@@ -169,18 +178,32 @@ public class RobotService {
     }
 
     /**
-     * Sets a robot's status and pushes the change to the control frontend.
+     * Records what the dispatcher has given a robot to do, and pushes it to the
+     * control frontend. Set in one call because they always change together — a
+     * robot that starts Serving is by definition carrying something somewhere.
+     * <p>
      * Unknown ids are ignored — a robot that has not reported yet has nothing to set.
      *
-     * @param id     robot id
-     * @param status one of the {@code STATUS_*} constants
+     * @param id          robot id
+     * @param status      one of the {@code STATUS_*} constants
+     * @param destination drop point id it is driving to, or null when it is idle
+     * @param orderId     order it is carrying, or null when empty-handed
      */
-    public void setStatus(int id, String status) {
+    public void setAssignment(
+            int id,
+            String status,
+            String destination,
+            String orderId
+    ) {
         synchronized (robots) {
             robots.stream()
                     .filter(r -> r.getId() == id)
                     .findFirst()
-                    .ifPresent(robot -> robot.setStatus(status));
+                    .ifPresent(robot -> {
+                        robot.setStatus(status);
+                        robot.setDestination(destination);
+                        robot.setOrderId(orderId);
+                    });
         }
 
         updateStats();
