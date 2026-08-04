@@ -1,6 +1,6 @@
 package com.dishpatch.model;
 
-public class Scooter {
+public class Robot {
     private int id;
     private String name;
     private double x;

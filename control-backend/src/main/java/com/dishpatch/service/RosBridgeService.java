@@ -44,7 +44,7 @@ public class RosBridgeService extends TextWebSocketHandler {
     private int robotCount;
 
     @Autowired
-    private ScooterService scooterService;
+    private RobotService robotService;
 
     private WebSocketSession session;
 
@@ -100,7 +100,7 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     /**
      * Called on each incoming message from rosbridge.
-     * Parses the topic and field, then forwards to ScooterService.updateField().
+     * Parses the topic and field, then forwards to RobotService.updateField().
      */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
@@ -119,7 +119,7 @@ public class RosBridgeService extends TextWebSocketHandler {
             int    id    = Integer.parseInt(parts[1].replace("robot", ""));
             String field = parts[2];
 
-            scooterService.updateField(id, field, msg);
+            robotService.updateField(id, field, msg);
 
         } catch (Exception e) {
             logger.warning("Error handling rosbridge message: " + e.getMessage());
