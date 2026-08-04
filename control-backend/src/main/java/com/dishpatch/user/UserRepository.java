@@ -35,6 +35,24 @@ public class UserRepository {
         this.usersTableName = usersTableName;
     }
 
+    public Optional<Map<String, Object>> findById(String userId) {
+        GetItemResponse response = dynamoDbClient.getItem(
+            GetItemRequest.builder().tableName(usersTableName)
+            .key(Map.of(
+                "userId",
+                AttributeValue.builder().s(userId).build()
+            ))
+            .build()
+        );
+
+        if (!response.hasItem() || response.item().isEmpty()) {
+            return Optional.empty()
+        }
+
+        return Optional.of(
+            DynamoDbValueMapper.toJavaMap(response.item())
+        );
+    }
 
     public Optional<Map<String, Object>> findByEmail(String email) {
         QueryRequest request = QueryRequest.builder()
@@ -54,4 +72,45 @@ public class UserRepository {
 
         return Optional.of(DynamoDbValueMapper.toJavaMap(response.items().get(0)))
     }
+
+    // Add addUser()
+    // Add updatePassword. Look into hashing
+
+    public Optional<Map<String, Object>> updateEmail(String userId, String email) {
+        try {
+            UpdateItemResponse response = 
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder().tableName(usersTableName)
+                .key(Map.of(
+                    "userId",
+                    AttributeValue.builder().s(userId).build()
+                ))
+                .updateExpression(
+                    "SET #email = :email"
+                )
+                .conditionExpression(
+                    "attribute_exists(#userId)"
+                )
+                .expressionAttributeNames(Map.of(
+                    "#userId",
+                    "userId",
+                    "#email",
+                    "email"
+                ))
+                .expressionAttributeValues(Map.of(
+                    ":email",
+                    AttributeValue.builder().s(email).build()
+                ))
+                .returnValues(ReturnValue.ALL_NEW).build()
+            );
+        
+            return Optional.of(
+                DynamoDbValueMapper.toJavaMap(
+                    response.attributes()
+                )
+            );
+        } catch (ConditionalCheckFailedException exception) {
+            return Optional.empty();
+        }
+    } 
 }
