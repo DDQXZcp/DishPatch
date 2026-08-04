@@ -17,7 +17,7 @@ Independent, and separately owned. Easy to conflate.
 |---|---|---|---|
 | Order status | an order | POS backend | `Preparing` / `Completed` / `Cancelled` (DynamoDB) |
 | Robot status | a robot | **this package** | `Serving` / `Pickup` / `Returning` / `Waiting` / `Maintenance` |
-| Dispatch state | a delivery job | **this package** | `TO_TABLE` / `RETURNING` (in memory) |
+| Dispatch state | a delivery job | **this package** | `TO_TABLE` / `AT_TABLE` / `RETURNING` (in memory) |
 
 Robot status values are a contract with `RobotStatus` in
 `control-frontend/src/types/Robot.ts` — anything outside that set renders unstyled.
@@ -34,24 +34,38 @@ status alone. `Pickup` and `Maintenance` have no producer yet.
         [robot at counter, Waiting]
                        │  publish table goal, status → Serving
                        ▼
-                   TO_TABLE ──── 5s ────┐
-                                        │  mark order Completed
-                                        │  publish counter goal, status → Returning
+                   TO_TABLE ──── within 0.5m of the table ────┐
+                                                              ▼
+                                                          AT_TABLE ──── 5s ────┐
+                                                     │  mark order Completed   │
+                                                     │  counter goal, Returning│
+                                        ┌────────────────────────────────◀─────┘
                                         ▼
-                                   RETURNING ──── 5s ────┐
-                                                         │  status → Waiting
-                                                         │  assignment deleted
-                                                         ▼
-                                              [robot at counter, free]
+                                   RETURNING ──── within 0.5m of the counter ────┐
+                                                         │  status → Waiting     │
+                                                         │  assignment deleted   │
+                                              [robot at counter, free] ◀─────────┘
 ```
+
+Stage changes come from the robot's **reported position**, not a timer. `TO_TABLE`
+and `RETURNING` end when the robot is within `ARRIVAL_RADIUS_M` (0.5m) of its
+destination. Only `AT_TABLE` is on a clock, and that 5s is serving time, not a
+stand-in for travel.
+
+Positions arrive on `/robot{id}/status` and are numerically in the map frame:
+`nav_node` seeds its odometry from each robot's `INITIAL_X`/`INITIAL_Y`, which are
+map coordinates. `RobotStatus` carries no `frame_id`, so that is a fleet convention
+rather than a guarantee.
 
 A tick runs every 2 seconds:
 
-1. **Advance** — every assignment past its deadline moves to its next stage.
-2. **Assign** — pending orders, oldest first, get a robot while free ones last.
+1. **Advance** — assignments whose robot has arrived (or whose serve dwell expired)
+   move on.
+2. **Home** — robots not known to be at the counter are sent there.
+3. **Assign** — pending orders, oldest first, get a robot while free ones last.
 
 **Nothing blocks.** Spring's default scheduler is one thread, so a sleeping delivery
-would stall every other one. Stages are deadlines checked each tick, never waits.
+would stall every other one. Progress is checked each tick, never waited on.
 
 ## Debug Endpoint
 
@@ -65,8 +79,8 @@ would stall every other one. Stages are deadlines checked each tick, never waits
   "queuedOrders": 3,
   "freeRobots": [1],
   "active": [
-    { "orderId": "a3f1…", "robotId": 2, "destination": "T4",
-      "state": "TO_TABLE", "millisRemaining": 3120, "robotStale": false }
+    { "orderId": "a3f1…", "robotId": 2, "destination": "T4", "state": "TO_TABLE",
+      "millisRemaining": 0, "metresToGo": 12.4, "robotStale": false }
   ],
   "skipped": [ { "orderId": "b7c2…", "reason": "Unknown destination: T99" } ]
 }
@@ -79,12 +93,25 @@ would stall every other one. Stages are deadlines checked each tick, never waits
 The meal is picked up at the counter, so a robot must be there before it can take an
 order. `Waiting` means idle **and** at the counter.
 
-**Not yet implemented.** `RobotService` marks a robot `Waiting` as soon as it reports
-telemetry, wherever it is, and `freeRobotIds()` is just fresh-minus-busy. So a robot
-mid-floor is assignable and gets driven straight to a table, carrying nothing.
+Robots are not born at the counter — one that has just booted, or that reappears
+after a restart, is standing wherever it stopped. So any robot the pipeline has not
+placed itself is **homed** first: sent to the counter, status `Returning`, and added
+to the free set only when its position says it got there. A robot already parked at
+the counter is adopted without being commanded anywhere.
 
-Fix: home unrecognised robots to the counter first, assignable only once the homing
-dwell expires. That makes the invariant structural instead of a rule to remember.
+Two collections make this structural rather than a rule to remember:
+
+| | Meaning |
+|---|---|
+| `atCounter` | Parked at the counter and idle. This is what `freeRobotIds()` returns. |
+| `homing` | Driving to the counter with no order, mapped to an arrival deadline. |
+
+A robot leaves `atCounter` when it takes an order and rejoins it on release. Losing
+telemetry drops it from both, so it homes again on its return rather than being
+trusted to still be where it was.
+
+Consequence: after a restart every robot drives to the counter, and nothing
+dispatches until the first one gets there.
 
 ## State, and what is deliberately absent
 
@@ -119,8 +146,10 @@ So none of these exist, on purpose:
 | Counter goal fails to publish | Best effort — robot still moves to `RETURNING` so it is eventually freed. | Handled |
 | Exception inside the tick | Caught. An escaping exception silently cancels all future runs of a `@Scheduled` method. | Handled |
 | Concurrency | Scheduler writes, request threads read. `ConcurrentHashMap` and an immutable assignment replaced whole, so no torn reads. | Handled |
-| Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`; delivery still completes on schedule. | Surfaced, not resolved |
-| Cold start | Robots boot wherever the simulator puts them and are immediately assignable. Breaks the counter invariant. | **Not handled** |
-| Backend restart mid-delivery | Assignments are lost; a robot parked at a table re-registers as `Waiting` and is reassigned at once. Same cause as cold start. | **Not handled** |
+| Cold start | Robots boot wherever the simulator puts them, so each is homed to the counter before it can take an order. | Handled |
+| Backend restart mid-delivery | Assignments are lost, so the robot is treated as unplaced and homed. Its order stays `Preparing` and is dispatched again. | Handled |
+| Telemetry lapses at the counter | Dropped from `atCounter`/`homing`, so the robot homes again when it comes back rather than being trusted to still be there. | Handled |
+| Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. | Surfaced, not resolved |
+| Robot never reaches its destination | Stuck, Nav2 rejected the goal, or it stops just outside 0.5m — the stage never ends, the order never completes, the robot is never freed. `metresToGo` on the endpoint is how you spot it. A per-stage timeout would be the fix. | **Not handled** |
 | Stale orders | A days-old `Preparing` order is still dispatched, and FIFO puts it **first**. A max-age guard belongs with the other skip checks, so it reports a reason. | **Not handled** |
 | DynamoDB scan fails | Caught and logged; the tick carries on seeing zero orders. The endpoint then reads as an idle restaurant. A `lastError` field would close this. | **Not handled** |
