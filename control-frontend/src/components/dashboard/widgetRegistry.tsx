@@ -1,7 +1,7 @@
 import DemographicCard from "../ecommerce/DemographicCard";
 import RobotStatus from "../ecommerce/RobotStatus";
 import Orders from "../ecommerce/Orders";
-import PlaceholderWidget from "./PlaceholderWidget";
+import AlertsNotificationsWidget from "./AlertsNotificationsWidget";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
@@ -30,15 +30,10 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     ),
   },
   {
-    id: "table-status",
-    title: "Table Status",
-    description: "Placeholder for table state",
-    render: () => (
-      <PlaceholderWidget
-        label="Table status widget"
-        description="Future seated, ordered, served, and cleared states can be shown here."
-      />
-    ),
+    id: "alerts-notifications",
+    title: "Alerts / Notifications",
+    description: "Operational alerts and service notifications",
+    render: () => <AlertsNotificationsWidget />, 
   },
 ];
 
