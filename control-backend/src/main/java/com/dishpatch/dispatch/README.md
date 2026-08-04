@@ -38,14 +38,14 @@ from telemetry, not from here.
         [robot at counter, Waiting]
                        │  publish table goal, status → Serving
                        ▼
-                   TO_TABLE ──── within 0.5m of the table ────┐
+                   TO_TABLE ──── Nav2 done, at the table ────┐
                                                               ▼
                                                           AT_TABLE ──── 5s ────┐
                                                      │  mark order Completed   │
                                                      │  counter goal, Returning│
                                         ┌────────────────────────────────◀─────┘
                                         ▼
-                                   RETURNING ──── within 0.5m of the counter ────┐
+                                   RETURNING ──── Nav2 done, at the counter ─────┐
                                                          │  status → Waiting     │
                                                          │  assignment deleted   │
                                               [robot at counter, free] ◀─────────┘
