@@ -206,6 +206,26 @@ public class RobotService {
         }
     }
 
+    /**
+     * Snapshot of a robot's last reported position.
+     * <p>
+     * Numerically in the map frame: nav_node seeds its odometry from the robot's
+     * INITIAL_X/INITIAL_Y, which are map coordinates, so these compare directly
+     * against drop points. RobotStatus carries no frame_id, so that is a
+     * convention of the fleet rather than a guarantee.
+     */
+    public record Position(double x, double y) { }
+
+    /** Last reported position of a robot, empty if it has never reported. */
+    public Optional<Position> getPosition(int id) {
+        synchronized (robots) {
+            return robots.stream()
+                    .filter(r -> r.getId() == id)
+                    .findFirst()
+                    .map(robot -> new Position(robot.getX(), robot.getY()));
+        }
+    }
+
     /** Whether this robot has reported telemetry within the expiry window. */
     public boolean isFresh(int id) {
         synchronized (robots) {
