@@ -89,6 +89,30 @@ function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[], manifest: 
   });
 }
 
+function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
+  const mapSize = map.getSize();
+  const boundsHeight = bounds[1][0] - bounds[0][0];
+  const boundsWidth = bounds[1][1] - bounds[0][1];
+
+  if (mapSize.x <= 0 || mapSize.y <= 0 || boundsWidth <= 0 || boundsHeight <= 0) {
+    return map.getZoom();
+  }
+
+  const coverScale = Math.max(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
+  const coverZoom = Math.log2(coverScale);
+  const minZoom = map.getMinZoom();
+  const maxZoom = map.getMaxZoom();
+
+  return Math.max(minZoom, Math.min(maxZoom, coverZoom));
+}
+
+function applyCoverView(map: L.Map, bounds: FloorplanBounds) {
+  const center = L.latLngBounds(bounds).getCenter();
+  const zoom = getCoverZoom(map, bounds);
+
+  map.setView(center, zoom, { animate: false });
+}
+
 function RecenterButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="absolute top-4 right-4 z-[1000]">
@@ -159,6 +183,7 @@ export default function RestaurantMap() {
       maxBoundsViscosity: 1,
       minZoom: -3,
       maxZoom: 2,
+      zoomSnap: 0,
       attributionControl: false,
     });
 
@@ -167,7 +192,6 @@ export default function RestaurantMap() {
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
     syncRobotMarkers(markerGroup, robots, manifest);
-    map.fitBounds(bounds);
 
     const refreshMapSize = () => {
       if (frameRef.current !== null) {
@@ -176,7 +200,7 @@ export default function RestaurantMap() {
 
       frameRef.current = window.requestAnimationFrame(() => {
         map.invalidateSize({ animate: false });
-        map.fitBounds(bounds);
+        applyCoverView(map, bounds);
         frameRef.current = null;
       });
     };
@@ -223,7 +247,7 @@ export default function RestaurantMap() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg">
       <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
-      <RecenterButton onClick={() => mapRef.current?.fitBounds(loadedMap.bounds)} />
+      <RecenterButton onClick={() => mapRef.current && applyCoverView(mapRef.current, loadedMap.bounds)} />
     </div>
   );
 }

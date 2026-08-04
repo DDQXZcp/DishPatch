@@ -30,8 +30,8 @@ const DEFAULT_ROWS: DashboardWidgetRow[] = [
     id: "row-main",
     height: 620,
     columns: [
-      { widgetId: "robot-map", width: 66 },
-      { widgetId: "robot-list", width: 34 },
+      { widgetId: "robot-map", width: 60 },
+      { widgetId: "robot-list", width: 40 },
     ],
   },
   {
