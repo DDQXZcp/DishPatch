@@ -49,6 +49,7 @@ public class DispatchController {
                     assignment.state(),
                     dispatchService.millisRemaining(assignment),
                     dispatchService.metresToGo(assignment),
+                    dispatchService.isNavigating(assignment.robotId()),
                     dispatchService.isRobotStale(assignment.robotId())
             ));
         }
@@ -81,6 +82,8 @@ public class DispatchController {
      *                        advance on position rather than a clock
      * @param metresToGo      distance to the destination, or -1 if unknown; the
      *                        thing to read when a delivery is not progressing
+     * @param navigating      Nav2 is working on a goal. False during a driving stage
+     *                        means the goal was lost or aborted and is being re-sent
      * @param robotStale      robot has stopped reporting telemetry, so it has already
      *                        vanished from the frontend map while still holding this job
      */
@@ -91,6 +94,7 @@ public class DispatchController {
             DispatchState state,
             long millisRemaining,
             double metresToGo,
+            boolean navigating,
             boolean robotStale
     ) { }
 

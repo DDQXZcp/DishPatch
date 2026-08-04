@@ -1,5 +1,6 @@
 package com.dishpatch.service;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import jakarta.annotation.PostConstruct;
@@ -14,7 +15,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.socket.CloseStatus;
 
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -48,8 +49,16 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     private WebSocketSession session;
 
-    /** Robot ids whose goal_pose topic has been advertised on the current session. */
-    private final Set<Integer> advertisedGoals = ConcurrentHashMap.newKeySet();
+    /** Hidden topic the NavigateToPose action server publishes its goal states on. */
+    private static final String NAV_STATUS_SUFFIX = "/navigate_to_pose/_action/status";
+
+    // action_msgs/msg/GoalStatus codes. The rest (SUCCEEDED, ABORTED, CANCELED)
+    // are terminal and mean Nav2 is no longer driving.
+    private static final int GOAL_ACCEPTED = 1;
+    private static final int GOAL_EXECUTING = 2;
+
+    /** Whether Nav2 currently holds a live goal, per robot id. */
+    private final Map<Integer, Boolean> navigating = new ConcurrentHashMap<>();
 
     /**
      * Initiates a WebSocket connection to rosbridge on startup.
@@ -83,24 +92,27 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.session = session;
-        advertisedGoals.clear(); // new session — previous advertisements no longer valid
+        navigating.clear(); // new session — nothing known about Nav2 yet
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
 
         for (int i = 1; i <= robotCount; i++) {
-            subscribe("/robot" + i + "/status",   "shared_msgs/msg/RobotStatus");
+            subscribe("/robot" + i + "/status", "shared_msgs/msg/RobotStatus");
+            subscribe("/robot" + i + NAV_STATUS_SUFFIX, "action_msgs/msg/GoalStatusArray");
+
+            // Advertised up front, not on first publish. A freshly advertised
+            // publisher has to discover goal_relay_node's subscription, and
+            // anything published before that completes is dropped silently.
+            advertiseGoal(i);
         }
 
-        logger.info("Subscribed to " + robotCount + " ROS2 topics.");
-
-        // TEMP smoke-test: publish one goal to robot1 on connect — REMOVE after verifying
-        // Thread.sleep(3000); // give Nav2 action server time to come up before goal_relay_node forwards
-        // publishGoal(1, 4.0, 4.0, 0.0);
+        logger.info("Subscribed and advertised for " + robotCount + " robots.");
     }
 
 
     /**
      * Called on each incoming message from rosbridge.
-     * Parses the topic and field, then forwards to RobotService.updateField().
+     * Routes Nav2 goal status, and forwards everything else to
+     * RobotService.updateField().
      */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
@@ -116,14 +128,39 @@ public class RosBridgeService extends TextWebSocketHandler {
             String[] parts = topic.split("/"); // ["", "robot1", "field"]
             if (parts.length < 3) return;
 
-            int    id    = Integer.parseInt(parts[1].replace("robot", ""));
-            String field = parts[2];
+            int id = Integer.parseInt(parts[1].replace("robot", ""));
 
-            robotService.updateField(id, field, msg);
+            if (topic.endsWith(NAV_STATUS_SUFFIX)) {
+                updateNavigating(id, msg);
+                return;
+            }
+
+            robotService.updateField(id, parts[2], msg);
 
         } catch (Exception e) {
             logger.warning("Error handling rosbridge message: " + e.getMessage());
         }
+    }
+
+    /**
+     * Records whether Nav2 currently holds a live goal for this robot.
+     * <p>
+     * The status array keeps terminal goals too, so a robot is only considered to
+     * be navigating while at least one goal is ACCEPTED or EXECUTING.
+     */
+    private void updateNavigating(int id, JsonObject msg) {
+        boolean active = false;
+
+        for (JsonElement element : msg.getAsJsonArray("status_list")) {
+            int status = element.getAsJsonObject().get("status").getAsInt();
+
+            if (status == GOAL_ACCEPTED || status == GOAL_EXECUTING) {
+                active = true;
+                break;
+            }
+        }
+
+        navigating.put(id, active);
     }
 
     /**
@@ -154,15 +191,32 @@ public class RosBridgeService extends TextWebSocketHandler {
         session.sendMessage(new TextMessage(payload));
     }
 
+    /** Advertises a robot's goal_pose topic, so later publishes are not dropped. */
+    private void advertiseGoal(int id) throws Exception {
+        session.sendMessage(new TextMessage(String.format(
+            "{\"op\":\"advertise\",\"topic\":\"/robot%d/goal_pose\",\"type\":\"geometry_msgs/PoseStamped\"}", id
+        )));
+    }
+
     /** True when the rosbridge session is open and goals can actually be sent. */
     public boolean isConnected() {
         return session != null && session.isOpen();
     }
 
     /**
+     * Whether Nav2 currently holds a live goal for this robot, from the action
+     * server's own status topic.
+     * <p>
+     * False also means "not known yet" — before the first status message arrives
+     * there is nothing to report, and treating that as idle lets a goal be sent.
+     */
+    public boolean isNavigating(int robotId) {
+        return Boolean.TRUE.equals(navigating.get(robotId));
+    }
+
+    /**
      * Publishes a navigation goal to {@code /robot{id}/goal_pose} via rosbridge.
-     * The topic is advertised once per robot before its first publish on the
-     * current session.
+     * The topic is advertised at connection time, not here.
      *
      * @param id  robot id (matches the {@code /robot{id}} namespace)
      * @param x   goal X in the "map" frame
@@ -176,12 +230,6 @@ public class RosBridgeService extends TextWebSocketHandler {
         }
 
         String topic = "/robot" + id + "/goal_pose";
-
-        if (advertisedGoals.add(id)) {
-            session.sendMessage(new TextMessage(String.format(
-                "{\"op\":\"advertise\",\"topic\":\"%s\",\"type\":\"geometry_msgs/PoseStamped\"}", topic
-            )));
-        }
 
         double oz = Math.sin(yaw / 2.0);
         double ow = Math.cos(yaw / 2.0);

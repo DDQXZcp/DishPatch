@@ -47,15 +47,30 @@ status alone. `Pickup` and `Maintenance` have no producer yet.
                                               [robot at counter, free] ◀─────────┘
 ```
 
-Stage changes come from the robot's **reported position**, not a timer. `TO_TABLE`
-and `RETURNING` end when the robot is within `ARRIVAL_RADIUS_M` (0.5m) of its
-destination. Only `AT_TABLE` is on a clock, and that 5s is serving time, not a
-stand-in for travel.
+Stage changes come from **Nav2**, not a timer. A driving stage ends when Nav2 no
+longer holds a live goal for that robot *and* its position is within
+`ARRIVAL_RADIUS_M` (0.6m) of the destination. Only `AT_TABLE` is on a clock, and
+that 5s is serving time, not a stand-in for travel.
+
+Nav2's verdict comes from `/robot{id}/navigate_to_pose/_action/status`
+(`action_msgs/GoalStatusArray`). It's a hidden topic so `rosapi` won't list it, but
+it subscribes by name and is latched. A goal counts as live while it is `ACCEPTED`
+or `EXECUTING`; `SUCCEEDED`, `ABORTED` and `CANCELED` all mean Nav2 has stopped
+driving.
+
+The distance check is a sanity check on top, not the primary signal — it separates
+"stopped because it arrived" from "stopped because the goal was aborted". It is
+deliberately looser than Nav2's `xy_goal_tolerance` of 0.25, since matching that
+value would put both sides on the same knife edge.
 
 Positions arrive on `/robot{id}/status` and are numerically in the map frame:
 `nav_node` seeds its odometry from each robot's `INITIAL_X`/`INITIAL_Y`, which are
 map coordinates. `RobotStatus` carries no `frame_id`, so that is a fleet convention
 rather than a guarantee.
+
+A driving stage that shows `navigating: false` on the endpoint means Nav2 has no
+goal for that robot — lost or aborted. Nothing re-sends it automatically; the robot
+will sit still until the backend restarts.
 
 A tick runs every 2 seconds:
 
@@ -80,7 +95,8 @@ would stall every other one. Progress is checked each tick, never waited on.
   "freeRobots": [1],
   "active": [
     { "orderId": "a3f1…", "robotId": 2, "destination": "T4", "state": "TO_TABLE",
-      "millisRemaining": 0, "metresToGo": 12.4, "robotStale": false }
+      "millisRemaining": 0, "metresToGo": 12.4,
+      "navigating": true, "robotStale": false }
   ],
   "skipped": [ { "orderId": "b7c2…", "reason": "Unknown destination: T99" } ]
 }
@@ -150,6 +166,7 @@ So none of these exist, on purpose:
 | Backend restart mid-delivery | Assignments are lost, so the robot is treated as unplaced and homed. Its order stays `Preparing` and is dispatched again. | Handled |
 | Telemetry lapses at the counter | Dropped from `atCounter`/`homing`, so the robot homes again when it comes back rather than being trusted to still be there. | Handled |
 | Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. | Surfaced, not resolved |
-| Robot never reaches its destination | Stuck, Nav2 rejected the goal, or it stops just outside 0.5m — the stage never ends, the order never completes, the robot is never freed. `metresToGo` on the endpoint is how you spot it. A per-stage timeout would be the fix. | **Not handled** |
+| Goal never reaches Nav2 | A publish is dropped if the ROS publisher has not yet discovered `goal_relay_node`. Goal topics are advertised at connection time, so discovery finishes long before the first goal is sent. | Handled |
+| Nav2 aborts a goal, or one goes missing anyway | The robot goes idle short of its destination and nothing moves it again — the stage never ends, the order never completes, the robot is never freed. `navigating: false` with a large `metresToGo` is the signature. Never observed in this fleet: 48 goals, 0 aborts. Re-sending the goal while Nav2 is idle would fix it. | **Not handled** |
 | Stale orders | A days-old `Preparing` order is still dispatched, and FIFO puts it **first**. A max-age guard belongs with the other skip checks, so it reports a reason. | **Not handled** |
 | DynamoDB scan fails | Caught and logged; the tick carries on seeing zero orders. The endpoint then reads as an idle restaurant. A `lastError` field would close this. | **Not handled** |

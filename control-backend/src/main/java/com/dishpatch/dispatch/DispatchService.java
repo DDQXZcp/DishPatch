@@ -54,8 +54,15 @@ public class DispatchService {
     /** Time spent at the table serving, once the robot has actually arrived. */
     private static final long SERVE_DWELL_MS = 5_000;
 
-    /** Target tolerance, in metres. Matching nav2's 0.25 */
-    private static final double ARRIVAL_RADIUS_M = 0.25;
+    /**
+     * How close to a drop point counts as arrived, in metres.
+     * <p>
+     * Only a sanity check on top of Nav2's own verdict — it distinguishes
+     * "finished at the destination" from "gave up somewhere else". Deliberately
+     * looser than Nav2's xy_goal_tolerance rather than matching it, since matching
+     * would put both sides on the same knife edge.
+     */
+    private static final double ARRIVAL_RADIUS_M = 0.6;
 
     /** Drop point every robot returns to; must exist in drop-points.json. */
     private static final String COUNTER = "counter";
@@ -301,13 +308,20 @@ public class DispatchService {
     }
 
     /**
-     * Whether a robot's last reported position is within {@link #ARRIVAL_RADIUS_M}
-     * of a drop point.
+     * Whether a robot has finished driving to a drop point.
+     * <p>
+     * Nav2 decides: while it holds a live goal the robot is still on its way,
+     * whatever its position says. The distance check then separates "stopped
+     * because it got there" from "stopped because the goal was aborted".
      * <p>
      * False when the destination is unknown or the robot has never reported — an
      * unanswerable question is not an arrival.
      */
     private boolean hasArrived(int robotId, String destination) {
+        if (rosBridgeService.isNavigating(robotId)) {
+            return false;
+        }
+
         double distance = distanceTo(robotId, destination);
         return distance >= 0 && distance <= ARRIVAL_RADIUS_M;
     }
@@ -574,5 +588,15 @@ public class DispatchService {
      */
     public boolean isRobotStale(int robotId) {
         return !robotService.isFresh(robotId);
+    }
+
+    /**
+     * Whether Nav2 is actually working on a goal for this robot.
+     * <p>
+     * False while a driving stage is in progress means the goal was lost or
+     * aborted — the robot will sit still until it is re-sent.
+     */
+    public boolean isNavigating(int robotId) {
+        return rosBridgeService.isNavigating(robotId);
     }
 }
