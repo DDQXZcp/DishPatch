@@ -13,8 +13,8 @@ interface RobotStatsMessage {
   timestamp?: string;
 }
 
-const ROBOT_LOCATIONS_TOPIC = '/topic/scooter-locations';
-const ROBOT_STATS_TOPIC = '/topic/scooter-stats';
+const ROBOT_LOCATIONS_TOPIC = '/topic/robot-locations';
+const ROBOT_STATS_TOPIC = '/topic/robot-stats';
 
 function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
   return {
