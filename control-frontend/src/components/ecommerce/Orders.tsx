@@ -15,6 +15,7 @@ import {
 
 import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
+import { useRobotContext } from "../../context/RobotWebSocketProvider";
 
 import type {
   Order,
@@ -77,6 +78,7 @@ const STATUS_CONFIG: Record<
 export default function Orders({
   framed = true,
 }: OrdersProps) {
+  const { orders: liveOrders } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] =
@@ -156,6 +158,14 @@ export default function Orders({
   useEffect(() => {
     void loadOrders(true);
   }, [loadOrders]);
+
+  // Backend pushes the full order list on a timer; keep the table in sync.
+  useEffect(() => {
+    if (liveOrders.length > 0) {
+      setOrders(liveOrders);
+      setIsLoading(false);
+    }
+  }, [liveOrders]);
 
   const cancelOrder = async (order: Order) => {
     if (
