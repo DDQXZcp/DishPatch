@@ -9,12 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-final class DynamoDbValueMapper {
+public final class DynamoDbValueMapper {
 
     private DynamoDbValueMapper() {
     }
 
-    static Map<String, Object> toJavaMap(
+    public static Map<String, Object> toJavaMap(
             Map<String, AttributeValue> dynamoDbItem
     ) {
         Map<String, Object> result = new LinkedHashMap<>();
