@@ -28,9 +28,29 @@ if [ ! -f "${MAP_IMAGE_PATH}" ]; then
     exit 1
 fi
 
-# Comma-separated list of robot namespaces to bring Nav2 up for.
-# Example: ROBOT_NAMESPACES=robot1,robot2,robot3
-NAMESPACES=${ROBOT_NAMESPACES:-robot1}
+# Namespaces to bring Nav2 up for.
+#
+# Normally derived from ROBOT_COUNT (the single knob in .env / docker-compose):
+#   ROBOT_COUNT=3  ->  robot1,robot2,robot3
+#
+# ROBOT_NAMESPACES still wins if set explicitly, for the rare case where the
+# namespaces are not a contiguous robot1..robotN range.
+if [ -n "${ROBOT_NAMESPACES}" ]; then
+    NAMESPACES="${ROBOT_NAMESPACES}"
+else
+    COUNT=${ROBOT_COUNT:-1}
+    case "${COUNT}" in
+        ''|*[!0-9]*)
+            echo "[nav2_entrypoint] ROBOT_COUNT must be a positive integer, got '${COUNT}'" >&2
+            exit 1
+            ;;
+    esac
+    if [ "${COUNT}" -lt 1 ]; then
+        echo "[nav2_entrypoint] ROBOT_COUNT must be >= 1, got '${COUNT}'" >&2
+        exit 1
+    fi
+    NAMESPACES=$(seq -s, -f "robot%g" 1 "${COUNT}")
+fi
 
 # Generate per-namespace nav2 params from the template
 for NS in $(echo $NAMESPACES | tr ',' ' '); do

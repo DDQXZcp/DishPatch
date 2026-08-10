@@ -86,8 +86,8 @@ public class NavTestController {
      * robot plans the actual route. A goal is accepted here as soon as it is
      * published — nothing reports back whether the robot arrived.
      *
-     * @param request robot id (1..{@code rosbridge.robot-count}) and a drop point
-     *                id such as {@code T4} or {@code R7}
+     * @param request robot id matching a running {@code /robot{id}} namespace, and
+     *                a drop point id such as {@code T4} or {@code R7}
      * @return 200 with the resolved pose when published; 404 if the destination is
      *         unknown; 503 if rosbridge is disconnected; 502 if the publish failed
      */

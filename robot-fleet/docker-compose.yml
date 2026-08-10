@@ -10,13 +10,38 @@
 # All containers share the "ros_net" Docker network and ROS_DOMAIN_ID=0
 # so they see each other's topics without using host networking.
 #
-# To add more robots: copy the robot1 block, change the service name,
-# ROBOT_NAMESPACE, and container_name.
+# Adding a robot
+# ──────────────
+#   1. Bump ROBOT_COUNT in .env (or the default below) — this is what tells
+#      Nav2 how many namespaces to serve.
+#   2. Copy the robot2 block, change the service name, container_name,
+#      ROBOT_NAMESPACE and the initial pose.
+#
+# The backend needs no change: it discovers live robots by polling
+# /rosapi/topics for /robot{N}/status and subscribing to whatever it finds.
 # ──────────────────────────────────────────────────────────────────────────────
 
 networks:
   ros_net:
     driver: bridge
+
+# ── Shared robot definition ───────────────────────────────────────────────────
+# Anchors so each robot block only carries what actually differs between robots.
+x-robot-env: &robot-env
+  ROS_DOMAIN_ID: "0"
+  PYTHONUNBUFFERED: "1"
+  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+
+x-robot: &robot
+  build:
+    context: .
+    dockerfile: Dockerfile.robot
+  restart: unless-stopped
+  networks:
+    - ros_net
+  depends_on:
+    - rosbridge
+    - nav2
 
 services:
 
@@ -32,9 +57,7 @@ services:
     ports:
       - "9090:9090"           # exposed to host so the Java backend can connect
     environment:
-      - ROS_DOMAIN_ID=0
-      - PYTHONUNBUFFERED=1
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      <<: *robot-env
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9090), 2); s.close()\""]
       interval: 10s
@@ -42,6 +65,8 @@ services:
       retries: 5
 
   # ── Nav2 stack (shared by all robots) ──────────────────────────────────────
+  # Serves namespaces robot1..robot{ROBOT_COUNT}; the entrypoint derives the
+  # list, so this service never needs editing when the fleet grows.
   nav2:
     build:
       context: .
@@ -51,75 +76,44 @@ services:
     networks:
       - ros_net
     environment:
-      - ROS_DOMAIN_ID=0
-      - PYTHONUNBUFFERED=1
-      - ROBOT_NAMESPACES=robot1,robot2
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      <<: *robot-env
+      ROBOT_COUNT: "${ROBOT_COUNT:-2}"
     depends_on:
       - rosbridge
 
   # ── Robot 1 ───────────────────────────────────────────────────────────────
   robot1:
-    build:
-      context: .
-      dockerfile: Dockerfile.robot
+    <<: *robot
     container_name: robot1
-    restart: unless-stopped
-    networks:
-      - ros_net
     environment:
-      - ROS_DOMAIN_ID=0
-      - PYTHONUNBUFFERED=1
-      - ROBOT_NAMESPACE=robot1
-      - AUTO_CYCLE=true
-      - INITIAL_BATTERY=100.0
-      - INITIAL_X=8.911
-      - INITIAL_Y=9.241
-      - INITIAL_THETA=0.0
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    depends_on:
-      - rosbridge
-      - nav2
+      <<: *robot-env
+      ROBOT_NAMESPACE: robot1
+      INITIAL_BATTERY: "100.0"
+      INITIAL_X: "8.911"
+      INITIAL_Y: "9.241"
+      INITIAL_THETA: "0.0"
 
   # ── Robot 2 ───────────────────────────────────────────────────────────────
   robot2:
-    build:
-      context: .
-      dockerfile: Dockerfile.robot
+    <<: *robot
     container_name: robot2
-    restart: unless-stopped
-    networks:
-      - ros_net
     environment:
-      - ROS_DOMAIN_ID=0
-      - PYTHONUNBUFFERED=1
-      - ROBOT_NAMESPACE=robot2
-      - AUTO_CYCLE=true
-      - INITIAL_BATTERY=75.0    # start at different battery level for variety
-      - INITIAL_X=13.100
-      - INITIAL_Y=9.241
-      - INITIAL_THETA=0.0
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    depends_on:
-      - rosbridge
-      - nav2
+      <<: *robot-env
+      ROBOT_NAMESPACE: robot2
+      INITIAL_BATTERY: "75.0"     # start at different battery level for variety
+      INITIAL_X: "13.100"
+      INITIAL_Y: "9.241"
+      INITIAL_THETA: "0.0"
 
-  #     # ── Robot 3 ───────────────────────────────────────────────────────────────
+  # ── Robot 3 ───────────────────────────────────────────────────────────────
+  # Uncomment, and set ROBOT_COUNT=3 in .env.
   # robot3:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.robot
+  #   <<: *robot
   #   container_name: robot3
-  #   restart: unless-stopped
-  #   networks:
-  #     - ros_net
   #   environment:
-  #     - ROS_DOMAIN_ID=0
-  #     - PYTHONUNBUFFERED=1
-  #     - ROBOT_NAMESPACE=robot3
-  #     - AUTO_CYCLE=true
-  #     - INITIAL_BATTERY=50.0
-  #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-  #   depends_on:
-  #     - rosbridge
-  #     - nav2
+  #     <<: *robot-env
+  #     ROBOT_NAMESPACE: robot3
+  #     INITIAL_BATTERY: "50.0"
+  #     INITIAL_X: "17.300"
+  #     INITIAL_Y: "9.241"
+  #     INITIAL_THETA: "0.0"

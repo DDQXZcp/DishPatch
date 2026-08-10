@@ -3,8 +3,9 @@
 # lifecycle_manager) for ALL robots in the fleet. Each robot container only
 # needs nav2-msgs (~20MB), not the full nav2-bringup (~1.2GB).
 #
-# ROBOT_NAMESPACES (comma-separated, e.g. "robot1,robot2") controls which
-# namespaces Nav2 is launched under.
+# ROBOT_COUNT controls how many namespaces Nav2 is launched under: the
+# entrypoint expands it to robot1..robot{ROBOT_COUNT}. Set ROBOT_NAMESPACES
+# instead to name them explicitly.
 # ──────────────────────────────────────────────────────────────────────────────
 FROM ros:jazzy-ros-base
 

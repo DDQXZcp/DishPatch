@@ -60,5 +60,4 @@ RUN source /opt/ros/jazzy/setup.bash && \
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 # ROBOT_NAMESPACE must be set (e.g. robot1, robot2).
-# AUTO_CYCLE=true  → robot simulates realistic state transitions automatically.
 CMD ["/ros2_ws/scripts/robot_entrypoint.sh"]
