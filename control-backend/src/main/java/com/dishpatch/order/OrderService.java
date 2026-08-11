@@ -9,12 +9,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Logger;
 
 @Service
 public class OrderService {
 
     private static final String ORDERS_TOPIC = "/topic/orders";
     private static final long BROADCAST_INTERVAL_MS = 4_000L;
+
+    private static final Logger logger =
+            Logger.getLogger(OrderService.class.getName());
 
     private final OrderRepository orderRepository;
     private final SimpMessagingTemplate messagingTemplate;
@@ -30,7 +34,11 @@ public class OrderService {
     // Keeps the control frontend's order list live without a manual page refresh.
     @Scheduled(fixedDelay = BROADCAST_INTERVAL_MS)
     public void broadcastOrders() {
-        messagingTemplate.convertAndSend(ORDERS_TOPIC, getOrders());
+        try {
+            messagingTemplate.convertAndSend(ORDERS_TOPIC, getOrders());
+        } catch (RuntimeException exception) {
+            logger.warning("Order broadcast failed: " + exception);
+        }
     }
 
     public List<Map<String, Object>> getOrders() {
