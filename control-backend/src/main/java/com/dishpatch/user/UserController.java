@@ -23,6 +23,12 @@ public class UserController {
         this.userService = userService;
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getUser(@PathVariable String id) {
+        return userService.getUser(id).map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
+            .orElseGet(() -> ResponseEntity.status(404).body(new ApiResponse<>(false, "User not found", null)));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginRequest request) {
         return userService.login(request.email(), request.password())
