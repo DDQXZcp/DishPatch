@@ -37,6 +37,11 @@ import java.util.stream.Collectors;
  * driving stages end when it is within {@link #ARRIVAL_RADIUS_M} of its
  * destination. Only the serve dwell is on a clock.
  * <p>
+ * A goal can be lost — dropped with a closing rosbridge session, or aborted by Nav2 —
+ * and a driving stage that has lost its goal would otherwise never end, since the
+ * only exit is an arrival that will never happen. So a driving stage Nav2 is not
+ * working on has its goal re-sent; see {@link #resendGoalIfStalled}.
+ * <p>
  * Configure in application.properties:
  * <pre>
  *   dispatch.enabled=true
@@ -66,6 +71,27 @@ public class DispatchService {
 
     /** Drop point every robot returns to; must exist in drop-points.json. */
     private static final String COUNTER = "counter";
+
+    /**
+     * How long a driving stage must look idle before its goal is re-sent.
+     * <p>
+     * Nav2 does not report a goal the instant it is published — it has to reach
+     * goal_relay_node, be accepted, and come back on the status topic through
+     * rosbridge. For that window {@code isNavigating} is still false while the goal
+     * is perfectly healthy, so re-sending immediately would publish a duplicate goal
+     * on every tick of every normal delivery. Comfortably longer than that round
+     * trip, and still far shorter than a stranded robot.
+     */
+    private static final long GOAL_GRACE_MS = 5_000;
+
+    /**
+     * Goals published for one stage before the delivery is left alone.
+     * <p>
+     * A robot that has ignored this many goals is not going to be fixed by another
+     * one. It stops here and stays visible on the status endpoint with its attempt
+     * count, rather than driving the fleet from a loop nobody is watching.
+     */
+    private static final int MAX_GOAL_ATTEMPTS = 3;
 
     private final OrderService orderService;
     private final DropPointService dropPointService;
@@ -149,20 +175,69 @@ public class DispatchService {
                 case TO_TABLE -> {
                     if (hasArrived(assignment.robotId(), assignment.destination())) {
                         startServing(assignment, now);
+                    } else {
+                        resendGoalIfStalled(assignment, now);
                     }
                 }
                 case AT_TABLE -> {
                     if (now >= assignment.deadlineMillis()) {
-                        completeAndSendBack(assignment);
+                        completeAndSendBack(assignment, now);
                     }
                 }
                 case RETURNING -> {
                     if (hasArrived(assignment.robotId(), COUNTER)) {
                         releaseRobot(assignment);
+                    } else {
+                        resendGoalIfStalled(assignment, now);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Re-publishes the goal for a driving stage that Nav2 is no longer working on.
+     * <p>
+     * A driving stage ends on arrival, and arrival needs a goal. If that goal is
+     * lost — dropped with a closing socket, or aborted by Nav2 — nothing else in this
+     * class will ever move the robot again: {@code manageCounterRobots} skips
+     * anything holding an assignment, and the assignment is only released on arrival.
+     * Without this the robot sits where it stopped until the backend restarts.
+     */
+    private void resendGoalIfStalled(DispatchAssignment assignment, long now) {
+        // Nav2 still has it. Slow is not stalled.
+        if (rosBridgeService.isNavigating(assignment.robotId())) {
+            return;
+        }
+
+        // A robot that is not reporting cannot be judged stalled, and goals sent into
+        // the silence would spend the attempt budget before anything can hear them.
+        // Reported as robotStale on the endpoint; wait for it to come back.
+        if (!robotService.isFresh(assignment.robotId())) {
+            return;
+        }
+
+        // Too soon to tell: a goal published moments ago has not been reported yet.
+        if (now - assignment.lastGoalMillis() < GOAL_GRACE_MS) {
+            return;
+        }
+
+        if (assignment.goalAttempts() >= MAX_GOAL_ATTEMPTS) {
+            return;
+        }
+
+        if (!publishGoal(assignment.robotId(), assignment.destination())) {
+            return; // no goal, no state change — retried next tick
+        }
+
+        assignments.put(assignment.orderId(), assignment.withGoalResent(now));
+
+        logger.warning(
+                "Robot " + assignment.robotId() + " stalled short of "
+                        + assignment.destination() + " with no live goal — re-sent"
+                        + " (attempt " + (assignment.goalAttempts() + 1) + " of "
+                        + MAX_GOAL_ATTEMPTS + ")"
+        );
     }
 
     /** Robot reached the table: stay Serving while the meal is handed over. */
@@ -172,7 +247,8 @@ public class DispatchService {
                 assignment.movedTo(
                         DispatchState.AT_TABLE,
                         assignment.destination(),
-                        now + SERVE_DWELL_MS
+                        now + SERVE_DWELL_MS,
+                        0 // parked and serving; no goal for this stage
                 )
         );
 
@@ -186,10 +262,13 @@ public class DispatchService {
     /**
      * Serve dwell expired: mark the order complete and start the run back.
      * <p>
-     * The counter goal is best effort — if it fails the robot still moves to
-     * RETURNING, and will be retried by the homing pass once it is released.
+     * The robot moves to RETURNING whether or not the counter goal went out, because
+     * the meal is handed over either way and the order is already complete. A goal
+     * that failed to publish is recorded as such, and {@link #resendGoalIfStalled}
+     * picks it up on a later tick — the homing pass cannot, since it skips every
+     * robot holding an assignment.
      */
-    private void completeAndSendBack(DispatchAssignment assignment) {
+    private void completeAndSendBack(DispatchAssignment assignment, long now) {
         Optional<Map<String, Object>> completed =
                 orderService.updateStatus(
                         assignment.orderId(),
@@ -209,7 +288,15 @@ public class DispatchService {
             );
         }
 
-        publishGoal(assignment.robotId(), COUNTER);
+        boolean sent = publishGoal(assignment.robotId(), COUNTER);
+
+        if (!sent) {
+            logger.warning(
+                    "Counter goal for robot " + assignment.robotId()
+                            + " did not go out — will be re-sent"
+            );
+        }
+
         robotService.setAssignment(
                 assignment.robotId(),
                 RobotService.STATUS_RETURNING,
@@ -222,7 +309,8 @@ public class DispatchService {
                 assignment.movedTo(
                         DispatchState.RETURNING,
                         COUNTER,
-                        0 // no timer on a driving stage
+                        0, // no timer on a driving stage
+                        sent ? now : 0
                 )
         );
     }
@@ -358,6 +446,7 @@ public class DispatchService {
      * without any state being kept for them here.
      */
     private void assignPendingOrders() {
+        long now = System.currentTimeMillis();
         List<Map<String, Object>> pending = pendingOrders();
 
         // Self-healing: an order that leaves Preparing drops off the skip list, so
@@ -413,7 +502,9 @@ public class DispatchService {
                     robotId,
                     destination,
                     DispatchState.TO_TABLE,
-                    0 // no timer on a driving stage
+                    0, // no timer on a driving stage
+                    now, // the goal above went out
+                    1
             ));
             robotService.setAssignment(
                     robotId, RobotService.STATUS_SERVING, destination, orderId);
@@ -449,8 +540,10 @@ public class DispatchService {
     /**
      * Resolves a drop point and publishes a goal to it.
      *
-     * @return true only when the goal actually went out; publishGoal logs and
-     *         returns normally when rosbridge is down, so it is no proof by itself
+     * @return true when the goal was written to an open rosbridge session. Still not
+     *         a guarantee it reached Nav2 — the session can close immediately after,
+     *         taking the goal with it. {@link #resendGoalIfStalled} is what closes
+     *         that gap, by re-sending when Nav2 turns out never to have got it
      */
     private boolean publishGoal(int robotId, String destination) {
         Optional<DropPointMap.DropPoint> point =
@@ -470,13 +563,12 @@ public class DispatchService {
         }
 
         try {
-            rosBridgeService.publishGoal(
+            return rosBridgeService.publishGoal(
                     robotId,
                     point.get().x(),
                     point.get().y(),
                     point.get().yaw()
             );
-            return true;
 
         } catch (Exception exception) {
             logger.warning(

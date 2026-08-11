@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import jakarta.annotation.PostConstruct;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,9 +27,15 @@ import java.util.logging.Logger;
  *
  * Subscribes (per robot id 1..robotCount):
  *   /robot{id}/status    shared_msgs/msg/RobotStatus   (robot_id, battery, speed, sensor, pose)
+ *   /robot{id}/navigate_to_pose/_action/status
+ *                        action_msgs/msg/GoalStatusArray  whether Nav2 holds a live goal
  *
  * Publishes (on demand, via {@link #publishGoal}):
  *   /robot{id}/goal_pose geometry_msgs/PoseStamped     navigation goal in the "map" frame
+ *
+ * The status array is latched and carries every goal the action server still
+ * retains, so it is the one subscription whose size follows recent traffic rather
+ * than being fixed per message — see {@link #MAX_TEXT_MESSAGE_BYTES}.
  *
  * Configure in application.properties:
  *   rosbridge.url=ws://<IP>:9090
@@ -47,7 +55,40 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Autowired
     private RobotService robotService;
 
-    private WebSocketSession session;
+    /**
+     * Written on the WebSocket IO thread, read on the dispatch scheduler thread via
+     * {@link #isConnected} and {@link #publishGoal}, so the reference has to be
+     * published safely.
+     */
+    private volatile WebSocketSession session;
+
+    /**
+     * Largest rosbridge frame this client will accept.
+     * <p>
+     * The container default is 8192, which is not enough: the Nav2 goal status array
+     * carries every goal the action server still retains, at roughly 122 bytes each.
+     * Retention is a rolling window, so the array tracks recent traffic rather than
+     * climbing forever — but a busy spell overflows 8192 all the same. Observed on
+     * this fleet: 68 entries / 8272 bytes at a peak, 10 / 1297 while quiet.
+     * <p>
+     * That makes the failure intermittent and easy to misread. A frame over the limit
+     * closes the session with 1009 instead of being truncated, and because the status
+     * topic is latched the same frame arrives again on every reconnect — so once a
+     * busy spell pushes it over, the link stays down until the array drains.
+     * <p>
+     * Headroom only. {@code action_server_result_timeout} on the Nav2 side is what
+     * keeps the peak small; see robot-fleet/config/nav2_params_template.yaml.
+     */
+    private static final int MAX_TEXT_MESSAGE_BYTES = 1024 * 1024;
+
+    /** Warn once a frame passes this, so the next overflow is seen coming. */
+    private static final int LARGE_TEXT_MESSAGE_BYTES = MAX_TEXT_MESSAGE_BYTES / 2;
+
+    /**
+     * Built once rather than per connection attempt, so the raised buffer limit is
+     * applied before the handshake on every reconnect.
+     */
+    private final StandardWebSocketClient client = createClient();
 
     /** Hidden topic the NavigateToPose action server publishes its goal states on. */
     private static final String NAV_STATUS_SUFFIX = "/navigate_to_pose/_action/status";
@@ -61,6 +102,18 @@ public class RosBridgeService extends TextWebSocketHandler {
     private final Map<Integer, Boolean> navigating = new ConcurrentHashMap<>();
 
     /**
+     * A client whose container accepts frames up to {@link #MAX_TEXT_MESSAGE_BYTES}.
+     * <p>
+     * The limit belongs to the container and is read during the handshake, so it has
+     * to be set before {@code execute} rather than on the open session.
+     */
+    private static StandardWebSocketClient createClient() {
+        WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BYTES);
+        return new StandardWebSocketClient(container);
+    }
+
+    /**
      * Initiates a WebSocket connection to rosbridge on startup.
      * Retries every 5 seconds until the connection is established.
      */
@@ -70,7 +123,7 @@ public class RosBridgeService extends TextWebSocketHandler {
             while (true) {
                 try {
                     logger.info("RosBridgeService connecting to " + rosbridgeUrl);
-                    new StandardWebSocketClient().execute(this, rosbridgeUrl);
+                    client.execute(this, rosbridgeUrl);
                     return;
                 } catch (Exception e) {
                     logger.warning("Failed to connect to rosbridge, retrying in 5s: " + e.getMessage());
@@ -124,6 +177,17 @@ public class RosBridgeService extends TextWebSocketHandler {
             String     topic = json.get("topic").getAsString();
             JsonObject msg   = json.getAsJsonObject("msg");
 
+            // A frame that reaches the limit kills the session, and a latched topic
+            // will resend it on every reconnect. Naming the topic while it is merely
+            // large turns that into something seen coming rather than diagnosed after.
+            if (message.getPayloadLength() > LARGE_TEXT_MESSAGE_BYTES) {
+                logger.warning(
+                        "Large rosbridge frame on " + topic + ": "
+                                + message.getPayloadLength() + " bytes, limit "
+                                + MAX_TEXT_MESSAGE_BYTES
+                );
+            }
+
             // Topic format: /robot{id}/{field}
             String[] parts = topic.split("/"); // ["", "robot1", "field"]
             if (parts.length < 3) return;
@@ -170,6 +234,19 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         logger.warning("Rosbridge disconnected (" + status + "). Reconnecting in 5s...");
+
+        // The oversized frame is never delivered, so its size cannot be logged here.
+        // Say what the limit was and what to look at instead — reconnecting will not
+        // help if the peer is latching a frame this client cannot accept.
+        if (status.getCode() == CloseStatus.TOO_BIG_TO_PROCESS.getCode()) {
+            logger.warning(
+                    "Disconnect was a frame over the " + MAX_TEXT_MESSAGE_BYTES
+                            + " byte limit. A latched topic will resend it on every"
+                            + " reconnect; check the Nav2 goal status array size and"
+                            + " action_server_result_timeout."
+            );
+        }
+
         try {
             Thread.sleep(5000);
             connect();
@@ -198,9 +275,15 @@ public class RosBridgeService extends TextWebSocketHandler {
         )));
     }
 
-    /** True when the rosbridge session is open and goals can actually be sent. */
+    /**
+     * True when the rosbridge session is open.
+     * <p>
+     * Says the link was up when asked, not that anything sent over it arrives — the
+     * session can close between this returning true and the next write.
+     */
     public boolean isConnected() {
-        return session != null && session.isOpen();
+        WebSocketSession current = session; // one read: the IO thread can replace it
+        return current != null && current.isOpen();
     }
 
     /**
@@ -222,11 +305,19 @@ public class RosBridgeService extends TextWebSocketHandler {
      * @param x   goal X in the "map" frame
      * @param y   goal Y in the "map" frame
      * @param yaw goal heading in radians (0 = facing +X); converted to a 2D quaternion
+     * @return true when the goal was written to an open session. Not a delivery
+     *         receipt: a session that closes immediately afterwards takes the goal
+     *         with it, and rosbridge does not acknowledge publishes. Nav2's own
+     *         status topic is the only proof the goal landed, which is why a driving
+     *         stage that shows no live goal re-sends rather than trusting this
      */
-    public void publishGoal(int id, double x, double y, double yaw) throws Exception {
-        if (session == null || !session.isOpen()) {
+    public boolean publishGoal(int id, double x, double y, double yaw) throws Exception {
+        // Read once: the field is volatile and the IO thread can null it mid-method.
+        WebSocketSession current = session;
+
+        if (current == null || !current.isOpen()) {
             logger.warning("Cannot publish goal for robot " + id + " — rosbridge not connected");
-            return;
+            return false;
         }
 
         String topic = "/robot" + id + "/goal_pose";
@@ -241,7 +332,8 @@ public class RosBridgeService extends TextWebSocketHandler {
             "\"orientation\":{\"x\":0.0,\"y\":0.0,\"z\":%f,\"w\":%f}}}}",
             topic, x, y, oz, ow
         );
-        session.sendMessage(new TextMessage(payload));
+        current.sendMessage(new TextMessage(payload));
         logger.info("Published goal for robot " + id + " → (" + x + ", " + y + ", yaw=" + yaw + ")");
+        return true;
     }
 }

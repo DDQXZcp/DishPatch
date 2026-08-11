@@ -108,7 +108,13 @@ public class NavTestController {
         }
 
         try {
-            rosBridgeService.publishGoal(robotId, point.x(), point.y(), point.yaw());
+            // isConnected() above is not proof: the session can close in between, and
+            // reporting "sent" for a goal that died with it is how a lost goal stays
+            // invisible.
+            if (!rosBridgeService.publishGoal(robotId, point.x(), point.y(), point.yaw())) {
+                return ResponseEntity.status(503).body(
+                        error("rosbridge not connected"));
+            }
         } catch (Exception exception) {
             return ResponseEntity.status(502).body(
                     error("Failed to publish goal: " + exception.getMessage()));

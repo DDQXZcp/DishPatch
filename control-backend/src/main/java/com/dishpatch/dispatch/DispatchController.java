@@ -50,7 +50,8 @@ public class DispatchController {
                     dispatchService.millisRemaining(assignment),
                     dispatchService.metresToGo(assignment),
                     dispatchService.isNavigating(assignment.robotId()),
-                    dispatchService.isRobotStale(assignment.robotId())
+                    dispatchService.isRobotStale(assignment.robotId()),
+                    assignment.goalAttempts()
             ));
         }
 
@@ -86,6 +87,10 @@ public class DispatchController {
      *                        means the goal was lost or aborted and is being re-sent
      * @param robotStale      robot has stopped reporting telemetry, so it has already
      *                        vanished from the frontend map while still holding this job
+     * @param goalAttempts    goals published for the current stage. 1 is the healthy
+     *                        case; anything higher means goals are being lost, and a
+     *                        value that has stopped climbing short of the destination
+     *                        is a delivery that has given up and needs a look
      */
     public record AssignmentView(
             String orderId,
@@ -95,7 +100,8 @@ public class DispatchController {
             long millisRemaining,
             double metresToGo,
             boolean navigating,
-            boolean robotStale
+            boolean robotStale,
+            int goalAttempts
     ) { }
 
     /** An order that cannot be dispatched, and why. */
