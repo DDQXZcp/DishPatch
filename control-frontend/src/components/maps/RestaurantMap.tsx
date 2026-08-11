@@ -26,7 +26,7 @@ interface RobotMarkerState {
   animationFrameId: number | null;
 }
 
-const ROBOT_MARKER_ANIMATION_DURATION_MS = 160;
+const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 
 // Fix for default Leaflet markers
@@ -123,7 +123,13 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
 
   const step = (now: number) => {
     const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
-    const easedProgress = 1 - Math.pow(1 - progress, 4);
+    let easedProgress: number;
+    if (progress < 0.5) {
+      easedProgress = 4 * progress * progress * progress;
+    } else {
+      const p = 1 - progress;
+      easedProgress = 1 - (p * p * p) / 2;
+    }
 
     state.marker.setLatLng([
       startLat + deltaLat * easedProgress,

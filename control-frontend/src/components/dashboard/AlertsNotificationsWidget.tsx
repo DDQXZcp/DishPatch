@@ -19,13 +19,23 @@ const severityStyles: Record<AlertItem["severity"], string> = {
   error: "bg-red-100 text-red-700",
 };
 
+const STUCK_ROBOT_THRESHOLD_MS = 20 * 1000;
+
+function isStuckCandidate(robot: Robot) {
+  return robot.speed === 0 && (robot.status === "Serving" || robot.status === "Returning");
+}
+
 function getTableLabel(order: Order) {
   return order.tableNo ?? "unknown table";
 }
 
-function buildAlerts(robots: Robot[], orders: Order[]): AlertItem[] {
+function buildAlerts(
+  robots: Robot[],
+  orders: Order[],
+  stuckSinceByRobotId: Record<number, number>,
+  now: number
+): AlertItem[] {
   const alerts: AlertItem[] = [];
-  const now = Date.now();
 
   const overdueOrders = orders.filter((order) => {
     const statusValue = order.orderStatus.toLowerCase();
@@ -61,7 +71,14 @@ function buildAlerts(robots: Robot[], orders: Order[]): AlertItem[] {
     });
   }
 
-  const stuckRobots = robots.filter((robot) => robot.speed === 0 && (robot.status === "Serving" || robot.status === "Returning"));
+  const stuckRobots = robots.filter((robot) => {
+    if (!isStuckCandidate(robot)) {
+      return false;
+    }
+
+    const stuckSince = stuckSinceByRobotId[robot.id];
+    return typeof stuckSince === "number" && now - stuckSince > STUCK_ROBOT_THRESHOLD_MS;
+  });
   if (stuckRobots.length > 0) {
     alerts.push({
       id: "stuck-robots",
@@ -90,6 +107,34 @@ export default function AlertsNotificationsWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [stuckSinceByRobotId, setStuckSinceByRobotId] = useState<Record<number, number>>({});
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+
+    setStuckSinceByRobotId((prev) => {
+      const next: Record<number, number> = {};
+
+      robots.forEach((robot) => {
+        if (isStuckCandidate(robot)) {
+          next[robot.id] = prev[robot.id] ?? now;
+        }
+      });
+
+      return next;
+    });
+  }, [robots]);
 
   useEffect(() => {
     let isMounted = true;
@@ -140,7 +185,10 @@ export default function AlertsNotificationsWidget() {
     };
   }, []);
 
-  const alerts = useMemo(() => buildAlerts(robots, orders), [robots, orders]);
+  const alerts = useMemo(
+    () => buildAlerts(robots, orders, stuckSinceByRobotId, currentTime),
+    [robots, orders, stuckSinceByRobotId, currentTime]
+  );
 
   const actionableAlertCount = useMemo(
     () => alerts.filter((alert) => alert.severity === "warning" || alert.severity === "error").length,
