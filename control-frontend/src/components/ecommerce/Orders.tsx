@@ -164,6 +164,7 @@ export default function Orders({
     if (liveOrders !== null) {
       setOrders(liveOrders);
       setIsLoading(false);
+      setLoadError(null);
     }
   }, [liveOrders]);
 
