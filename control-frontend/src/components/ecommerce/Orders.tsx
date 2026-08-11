@@ -161,7 +161,7 @@ export default function Orders({
 
   // Backend pushes the full order list on a timer; keep the table in sync.
   useEffect(() => {
-    if (liveOrders.length > 0) {
+    if (liveOrders !== null) {
       setOrders(liveOrders);
       setIsLoading(false);
     }

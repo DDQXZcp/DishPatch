@@ -33,7 +33,7 @@ function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
 export const useWebSocketRobots = () => {
   const [robots, setRobots] = useState<Robot[]>([]);
   const [stats, setStats] = useState<RobotStats | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[] | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
