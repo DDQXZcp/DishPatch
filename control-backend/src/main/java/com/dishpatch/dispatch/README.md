@@ -73,10 +73,17 @@ map coordinates. `RobotStatus` carries no `frame_id`, so that is a fleet convent
 rather than a guarantee.
 
 A driving stage that shows `navigating: false` on the endpoint means Nav2 has no
-goal for that robot — lost or aborted. Nothing re-sends it automatically; the robot
-will sit still until the backend restarts.
+goal for that robot — lost, aborted, or dropped with a closing rosbridge session.
+The goal is re-sent once the stage has looked idle for `GOAL_GRACE_MS`, up to
+`MAX_GOAL_ATTEMPTS` times for that stage; `goalAttempts` on the endpoint counts them.
 
-A tick runs every 2 seconds:
+The grace period exists because Nav2 does not report a goal the moment it is
+published — it has to reach `goal_relay_node`, be accepted, and come back on the
+status topic. During that window `navigating` is false while the goal is perfectly
+healthy, so a shorter grace would publish a duplicate goal on every tick of every
+normal delivery.
+
+A tick runs every second:
 
 1. **Advance** — assignments whose robot has arrived (or whose serve dwell expired)
    move on.
@@ -100,7 +107,7 @@ would stall every other one. Progress is checked each tick, never waited on.
   "active": [
     { "orderId": "a3f1…", "robotId": 2, "destination": "T4", "state": "TO_TABLE",
       "millisRemaining": 0, "metresToGo": 12.4,
-      "navigating": true, "robotStale": false }
+      "navigating": true, "robotStale": false, "goalAttempts": 1 }
   ],
   "skipped": [ { "orderId": "b7c2…", "reason": "Unknown destination: T99" } ]
 }
@@ -124,7 +131,7 @@ Two collections make this structural rather than a rule to remember:
 | | Meaning |
 |---|---|
 | `atCounter` | Parked at the counter and idle. This is what `freeRobotIds()` returns. |
-| `homing` | Driving to the counter with no order, mapped to an arrival deadline. |
+| `homing` | Driving to the counter with no order. Arrival is read from position, not a deadline. |
 
 A robot leaves `atCounter` when it takes an order and rejoins it on release. Losing
 telemetry drops it from both, so it homes again on its return rather than being
@@ -139,7 +146,7 @@ The `Map<String, DispatchAssignment>` keyed by order id does three jobs:
 
 1. the state machine's data — what is in flight and how far along
 2. the **re-dispatch guard** — orders stay `Preparing` until delivery completes, so
-   without this a new robot would be assigned every 2 seconds
+   without this a new robot would be assigned every tick
 3. the **robot-busy index** — free robots are fresh robots minus those in this map
 
 So none of these exist, on purpose:
@@ -157,20 +164,22 @@ So none of these exist, on purpose:
 | Situation | Handling | Status |
 |---|---|---|
 | No free robot | Counted in `queuedOrders`, left `Preparing`, retried next tick. | Handled |
-| rosbridge down | Not assigned; queued and retried. `publishGoal` returns normally when the link is down, so `isConnected()` is checked first. | Handled |
+| rosbridge down | Not assigned; queued and retried. `isConnected()` is checked first, but it only says the link was up when asked — the session can close before the write lands, so `publishGoal` reports whether it actually wrote and a driving stage re-sends when Nav2 turns out never to have got the goal. | Handled |
 | Order has no table | `skipped` with a reason; not retried while it stays `Preparing`. | Handled |
 | Table not on the map | Same. Distinct from queued — no robot makes it deliverable. | Handled |
 | Skip list growth | Intersected with pending order ids each tick, so orders leaving `Preparing` drop off. | Handled |
 | Same order on consecutive ticks | The assignment map is the guard. | Handled |
 | Order deleted mid-delivery | `updateStatus` returns empty; logged, robot still returned and freed. | Handled |
-| Counter goal fails to publish | Best effort — robot still moves to `RETURNING` so it is eventually freed. | Handled |
+| Counter goal fails to publish | Robot still moves to `RETURNING`, recorded as having no goal out, and the re-send picks it up on a later tick. The homing pass cannot do this — it skips every robot holding an assignment, and an assignment is only released on arrival. | Handled |
 | Exception inside the tick | Caught. An escaping exception silently cancels all future runs of a `@Scheduled` method. | Handled |
 | Concurrency | Scheduler writes, request threads read. `ConcurrentHashMap` and an immutable assignment replaced whole, so no torn reads. | Handled |
 | Cold start | Robots boot wherever the simulator puts them, so each is homed to the counter before it can take an order. | Handled |
 | Backend restart mid-delivery | Assignments are lost, so the robot is treated as unplaced and homed. Its order stays `Preparing` and is dispatched again. | Handled |
 | Telemetry lapses at the counter | Dropped from `atCounter`/`homing`, so the robot homes again when it comes back rather than being trusted to still be there. | Handled |
-| Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. | Surfaced, not resolved |
+| Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. Goals are not re-sent while it is stale — a robot that cannot be observed cannot be judged stalled, and the attempt budget would be spent on goals nothing can hear. | Surfaced, not resolved |
 | Goal never reaches Nav2 | A publish is dropped if the ROS publisher has not yet discovered `goal_relay_node`. Goal topics are advertised at connection time, so discovery finishes long before the first goal is sent. | Handled |
-| Nav2 aborts a goal, or one goes missing anyway | The robot goes idle short of its destination and nothing moves it again — the stage never ends, the order never completes, the robot is never freed. `navigating: false` with a large `metresToGo` is the signature. Never observed in this fleet: 48 goals, 0 aborts. Re-sending the goal while Nav2 is idle would fix it. | **Not handled** |
+| Oversized rosbridge frame | A frame past the client's limit closes the session with 1009 instead of truncating, and a latched topic resends it on every reconnect — so the link stays down and no goal or telemetry gets through. The Nav2 status array is the one that can reach it: retention is a rolling window, so it follows recent traffic (68 entries at a peak, 10 while quiet), which makes the failure intermittent. The limit is raised well past normal traffic, large frames are warned about before they turn fatal, and `action_server_result_timeout` keeps the peak small. | Handled |
+| Nav2 aborts a goal, or one goes missing anyway | The goal is re-sent once the stage has been idle for `GOAL_GRACE_MS`, up to `MAX_GOAL_ATTEMPTS`. `navigating: false` with a large `metresToGo` is still the signature; `goalAttempts` above 1 says it is being retried. | Handled |
+| A robot ignores every goal it is sent | Re-sending stops at `MAX_GOAL_ATTEMPTS` and the delivery is left alone rather than driving the fleet from a loop nobody is watching. It stays on the endpoint with its attempt count. Nothing frees the robot or re-queues the order — that still needs a human. | Surfaced, not resolved |
 | Stale orders | A days-old `Preparing` order is still dispatched, and FIFO puts it **first**. A max-age guard belongs with the other skip checks, so it reports a reason. | **Not handled** |
 | DynamoDB scan fails | Caught and logged; the tick carries on seeing zero orders. The endpoint then reads as an idle restaurant. A `lastError` field would close this. | **Not handled** |
