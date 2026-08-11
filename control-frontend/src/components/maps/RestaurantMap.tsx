@@ -21,6 +21,14 @@ interface LoadedMap {
   bounds: FloorplanBounds;
 }
 
+interface RobotMarkerState {
+  marker: L.Marker;
+  animationFrameId: number | null;
+}
+
+const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
+const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
+
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -79,13 +87,102 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
   return [floorplanY, floorplanX];
 }
 
-function syncRobotMarkers(markerGroup: L.LayerGroup, robots: Robot[], manifest: MapManifest) {
-  markerGroup.clearLayers();
+function createRobotMarker(robot: Robot, manifest: MapManifest) {
+  return L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
+    .bindPopup(createRobotPopup(robot));
+}
+
+function cancelRobotMarkerAnimation(state: RobotMarkerState) {
+  if (state.animationFrameId !== null) {
+    window.cancelAnimationFrame(state.animationFrameId);
+    state.animationFrameId = null;
+  }
+}
+
+function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapManifest) {
+  const targetLatLng = L.latLng(robotPoseToFloorplanPoint(robot, manifest));
+  const currentLatLng = state.marker.getLatLng();
+  const deltaLat = targetLatLng.lat - currentLatLng.lat;
+  const deltaLng = targetLatLng.lng - currentLatLng.lng;
+  const moveDistance = Math.hypot(deltaLat, deltaLng);
+
+  state.marker.setIcon(getRobotIcon(robot.status));
+  state.marker.bindPopup(createRobotPopup(robot));
+
+  if (moveDistance <= ROBOT_MARKER_SNAP_DISTANCE) {
+    cancelRobotMarkerAnimation(state);
+    state.marker.setLatLng(targetLatLng);
+    return;
+  }
+
+  cancelRobotMarkerAnimation(state);
+
+  const startLat = currentLatLng.lat;
+  const startLng = currentLatLng.lng;
+  const animationStart = performance.now();
+
+  const step = (now: number) => {
+    const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
+    let easedProgress: number;
+    if (progress < 0.5) {
+      easedProgress = 4 * progress * progress * progress;
+    } else {
+      const p = 1 - progress;
+      easedProgress = 1 - (p * p * p) / 2;
+    }
+
+    state.marker.setLatLng([
+      startLat + deltaLat * easedProgress,
+      startLng + deltaLng * easedProgress,
+    ]);
+
+    if (progress < 1) {
+      state.animationFrameId = window.requestAnimationFrame(step);
+      return;
+    }
+
+    state.marker.setLatLng(targetLatLng);
+    state.animationFrameId = null;
+  };
+
+  state.animationFrameId = window.requestAnimationFrame(step);
+}
+
+function syncRobotMarkers(
+  markerGroup: L.LayerGroup,
+  markerStates: React.MutableRefObject<Map<number, RobotMarkerState>>,
+  robots: Robot[],
+  manifest: MapManifest,
+) {
+  const nextRobotIds = new Set<number>();
 
   robots.forEach((robot: Robot) => {
-    L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
-      .bindPopup(createRobotPopup(robot))
-      .addTo(markerGroup);
+    nextRobotIds.add(robot.id);
+
+    const existingState = markerStates.current.get(robot.id);
+
+    if (!existingState) {
+      const marker = createRobotMarker(robot, manifest).addTo(markerGroup);
+
+      markerStates.current.set(robot.id, {
+        marker,
+        animationFrameId: null,
+      });
+
+      return;
+    }
+
+    updateRobotMarker(existingState, robot, manifest);
+  });
+
+  markerStates.current.forEach((state, robotId) => {
+    if (nextRobotIds.has(robotId)) {
+      return;
+    }
+
+    cancelRobotMarkerAnimation(state);
+    markerGroup.removeLayer(state.marker);
+    markerStates.current.delete(robotId);
   });
 }
 
@@ -136,6 +233,7 @@ export default function RestaurantMap() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
+  const markerStatesRef = useRef<Map<number, RobotMarkerState>>(new Map());
   const frameRef = useRef<number | null>(null);
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
 
@@ -193,7 +291,7 @@ export default function RestaurantMap() {
     L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
-    syncRobotMarkers(markerGroup, robots, manifest);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest);
 
     const refreshMapSize = () => {
       if (frameRef.current !== null) {
@@ -220,6 +318,8 @@ export default function RestaurantMap() {
         frameRef.current = null;
       }
 
+      markerStatesRef.current.forEach((state) => cancelRobotMarkerAnimation(state));
+      markerStatesRef.current.clear();
       markerGroupRef.current?.clearLayers();
       markerGroupRef.current = null;
       mapRef.current = null;
@@ -239,7 +339,7 @@ export default function RestaurantMap() {
       return;
     }
 
-    syncRobotMarkers(markerGroup, robots, loadedMap.manifest);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest);
   }, [robots, loadedMap]);
 
   if (!loadedMap) {
