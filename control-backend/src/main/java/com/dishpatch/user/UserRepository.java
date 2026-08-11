@@ -101,8 +101,8 @@ public class UserRepository {
             dynamoDbClient.putItem(
                 PutItemRequest.builder().tableName(usersTableName)
                     .item(item)
-                    .conditionExpression("attribute_not_exists(#userId)")
-                    .expressionAttributeNames(Map.of("#userId", "userId"))
+                    .conditionExpression("attribute_not_exists(#userId) AND attribute_not_exists(#email)")
+                    .expressionAttributeNames(Map.of("#userId", "userId", "#email", "email"))
                     .build()
             );
             return Optional.of(DynamoDbValueMapper.toJavaMap(item));

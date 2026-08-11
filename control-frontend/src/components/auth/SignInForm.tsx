@@ -116,7 +116,7 @@ export default function SignInForm() {
                   <Label>
                     Email <span className="text-error-500">*</span>{" "}
                   </Label>
-                  <Input name="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}placeholder="info@gmail.com" />
+                  <Input name="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="info@gmail.com" />
                 </div>
                 <div>
                   <Label>

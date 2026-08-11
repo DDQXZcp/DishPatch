@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
@@ -8,6 +9,34 @@ import Checkbox from "../form/input/Checkbox";
 export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
+  const [form, setForm] = useState({fname: "", lname: "", email: "", password: ""});
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const response = await fetch("/api/users/signup", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        fname: form.fname,
+        lname: form.lname,
+        email: form.email,
+        password: form.password
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      navigate("/");
+    } else {
+      alert(data.message);
+    }
+  };
+
   return (
     <div className="flex flex-col flex-1 w-full overflow-y-auto lg:w-1/2 no-scrollbar">
       <div className="w-full max-w-md mx-auto mb-5 sm:pt-10">
@@ -82,7 +111,7 @@ export default function SignUpForm() {
                 </span>
               </div>
             </div>
-            <form>
+            <form onSubmit={handleSubmit}>
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {/* <!-- First Name --> */}
@@ -95,6 +124,8 @@ export default function SignUpForm() {
                       id="fname"
                       name="fname"
                       placeholder="Enter your first name"
+                      value={form.fname} 
+                      onChange={(e) => setForm({ ...form, fname: e.target.value })}
                     />
                   </div>
                   {/* <!-- Last Name --> */}
@@ -107,6 +138,8 @@ export default function SignUpForm() {
                       id="lname"
                       name="lname"
                       placeholder="Enter your last name"
+                      value={form.lname} 
+                      onChange={(e) => setForm({ ...form, lname: e.target.value })}
                     />
                   </div>
                 </div>
@@ -120,6 +153,8 @@ export default function SignUpForm() {
                     id="email"
                     name="email"
                     placeholder="Enter your email"
+                    value={form.email} 
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
                 </div>
                 {/* <!-- Password --> */}
@@ -131,6 +166,8 @@ export default function SignUpForm() {
                     <Input
                       placeholder="Enter your password"
                       type={showPassword ? "text" : "password"}
+                      value={form.password} 
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
