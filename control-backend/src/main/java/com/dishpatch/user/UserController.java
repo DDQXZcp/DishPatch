@@ -37,7 +37,7 @@ public class UserController {
             UUID.randomUUID().toString(),
             request.email(),
             request.password(),
-            (request.fname == null || request.fname.isBlank() ? "" : request.fname.trim()) + (request.lname == null || request.lname.isBlank() ? "" : request.lname.trim()),
+            (request.fname == null || request.fname.isBlank() ? "" : request.fname.trim()) + (request.lname == null || request.lname.isBlank() ? "" : " " + request.lname.trim()),
             null,
             null
         ).map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
