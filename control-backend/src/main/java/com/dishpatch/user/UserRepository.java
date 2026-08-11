@@ -125,7 +125,7 @@ public class UserRepository {
                     "SET #email = :email, #updatedAt = :updatedAt"
                 )
                 .conditionExpression(
-                    "attribute_exists(#userId)"
+                    "attribute_exists(#userId) AND attribute_not_exists(#email)"
                 )
                 .expressionAttributeNames(Map.of(
                     "#userId", "userId",

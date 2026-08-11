@@ -4,9 +4,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 import java.util.Map;
 import java.util.UUID;
@@ -45,7 +47,31 @@ public class UserController {
         }
     }
 
-    // @PutMapping("/update/username")
+    @PatchMapping("/update/username/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateEmail(@PathVariable String id, @RequestBody UpdateEmailRequest request) {
+        try {
+            return userService.updateEmail(
+                id,
+                request.email
+            ).map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
+            .orElseGet(() -> ResponseEntity.status(409).body(new ApiResponse<>(false, "Email already exists", null)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
+        }
+    }
+
+    @PatchMapping("/update/password/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updatePassword(@PathVariable String id, @RequestBody UpdatePasswordRequest request) {
+        try {
+            return userService.updatePassword(
+                id,
+                request.password
+            ).map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
+            .orElseGet(() -> ResponseEntity.status(409).body(new ApiResponse<>(false, "Id fault", null)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
+        }
+    }
 
     public record ApiResponse<T>(
             boolean success,
@@ -67,5 +93,8 @@ public class UserController {
             String password
     ) {
     }
+
+    public record UpdateEmailRequest(String email) {}
+    public record UpdatePasswordRequest(String password) {}
 
 }
