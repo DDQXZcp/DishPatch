@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
@@ -28,6 +29,8 @@ interface RobotMarkerState {
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
+const MAP_MIN_ZOOM = -3;
+const MAP_MAX_ZOOM = 2;
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -197,10 +200,11 @@ function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
 
   const coverScale = Math.max(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
   const coverZoom = Math.log2(coverScale);
-  const minZoom = map.getMinZoom();
-  const maxZoom = map.getMaxZoom();
 
-  return Math.max(minZoom, Math.min(maxZoom, coverZoom));
+  // Clamp against the map's fixed zoom range, not map.getMinZoom(), which
+  // this same function's caller mutates on every resize — using the live
+  // value here would turn minZoom into a one-way ratchet across resizes.
+  return Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, coverZoom));
 }
 
 function applyCoverView(map: L.Map, bounds: FloorplanBounds) {
@@ -280,8 +284,8 @@ export default function RestaurantMap() {
       crs: L.CRS.Simple,
       maxBounds: bounds,
       maxBoundsViscosity: 1,
-      minZoom: -3,
-      maxZoom: 2,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
       zoomDelta: 0.5,
       zoomSnap: 0,
       attributionControl: false,
@@ -310,7 +314,20 @@ export default function RestaurantMap() {
     const resizeObserver = new ResizeObserver(refreshMapSize);
     resizeObserver.observe(container);
 
+    const recenterAtMinZoom = () => {
+      if (map.getZoom() <= map.getMinZoom() + 1e-6) {
+        map.panTo(L.latLngBounds(bounds).getCenter(), { animate: false });
+      }
+    };
+
+    map.on("zoomend", recenterAtMinZoom);
+
+    const handleResetView = () => applyCoverView(map, bounds);
+    window.addEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
+
     return () => {
+      window.removeEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
+      map.off("zoomend", recenterAtMinZoom);
       resizeObserver.disconnect();
 
       if (frameRef.current !== null) {

@@ -9,6 +9,7 @@ import {
 
 import { CloseIcon } from "../../icons";
 import {
+  DASHBOARD_RESET_VIEW_EVENT,
   DASHBOARD_WIDGET_STORAGE_KEY,
   MIN_COLUMN_WIDTH,
   defaultWidgetState,
@@ -728,6 +729,7 @@ export default function DashboardWidgets() {
 
   function resetLayout() {
     setWidgetState(defaultWidgetState());
+    window.dispatchEvent(new Event(DASHBOARD_RESET_VIEW_EVENT));
   }
 
   function getDraggedWidgetId(event: DragEvent<HTMLDivElement>) {

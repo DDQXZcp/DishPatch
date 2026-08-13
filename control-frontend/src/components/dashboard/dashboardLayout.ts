@@ -3,6 +3,8 @@ import { WIDGET_IDS, type WidgetId } from "./types";
 export const DASHBOARD_WIDGET_STORAGE_KEY =
   "dishpatch.control.dashboard.widgets.v2";
 
+export const DASHBOARD_RESET_VIEW_EVENT = "dashboard:reset-widget-view";
+
 export const MIN_ROW_HEIGHT = 260;
 export const DEFAULT_ROW_HEIGHT = 420;
 export const MIN_COLUMN_WIDTH = 18;
