@@ -23,7 +23,7 @@ DishPatch is an open-source, AWS cloud-based restaurant service-robot platform t
   <a href="https://control.dish-patch.com/">Live Demo</a>
 </p>
 
-<img alt="DishPatch Architecture" src="./img/DishPatch.png" />
+<img alt="DishPatch Architecture" src="./img/DishPatch_v2.png" />
 
 ## Overview
 
