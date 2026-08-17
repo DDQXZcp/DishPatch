@@ -21,13 +21,25 @@ interface LoadedMap {
   bounds: FloorplanBounds;
 }
 
+interface TrailDot {
+  circle: L.CircleMarker;
+  createdAt: number;
+}
+
 interface RobotMarkerState {
   marker: L.Marker;
   animationFrameId: number | null;
+  trailDots: TrailDot[];
+  lastTrailPoint: L.LatLng | null;
 }
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
+const TRAIL_DOT_RADIUS = 2;
+const TRAIL_OPACITY = 0.4;
+const TRAIL_DURATION = 10000; //10s
+const TRAIL_MIN_DIST = 0.5;
+const TRAIL_MAX_DOTS = 10;
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -99,7 +111,7 @@ function cancelRobotMarkerAnimation(state: RobotMarkerState) {
   }
 }
 
-function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapManifest) {
+function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapManifest, markerGroup: L.LayerGroup) {
   const targetLatLng = L.latLng(robotPoseToFloorplanPoint(robot, manifest));
   const currentLatLng = state.marker.getLatLng();
   const deltaLat = targetLatLng.lat - currentLatLng.lat;
@@ -131,10 +143,16 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
       easedProgress = 1 - (p * p * p) / 2;
     }
 
-    state.marker.setLatLng([
+    const newLatLng = L.latLng(
       startLat + deltaLat * easedProgress,
       startLng + deltaLng * easedProgress,
-    ]);
+    );
+
+    state.marker.setLatLng(newLatLng);
+
+    if (!state.lastTrailPoint || newLatLng.distanceTo(state.lastTrailPoint) >= TRAIL_MIN_DIST) {
+      spawnTrailDot(state, newLatLng, markerGroup);
+    }
 
     if (progress < 1) {
       state.animationFrameId = window.requestAnimationFrame(step);
@@ -167,12 +185,14 @@ function syncRobotMarkers(
       markerStates.current.set(robot.id, {
         marker,
         animationFrameId: null,
+        trailDots: [],
+        lastTrailPoint: null,
       });
 
       return;
     }
 
-    updateRobotMarker(existingState, robot, manifest);
+    updateRobotMarker(existingState, robot, manifest, markerGroup);
   });
 
   markerStates.current.forEach((state, robotId) => {
@@ -181,9 +201,50 @@ function syncRobotMarkers(
     }
 
     cancelRobotMarkerAnimation(state);
+    removeAllTrailDots(state);
     markerGroup.removeLayer(state.marker);
     markerStates.current.delete(robotId);
   });
+}
+
+function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup) {
+  const circle = L.circleMarker(latlng, {
+    radius: TRAIL_DOT_RADIUS,
+    color: '#535965',
+    fillOpacity: TRAIL_OPACITY,
+    interactive: false
+  }).addTo(markerGroup);
+
+  const dot: TrailDot = { circle, createdAt: performance.now() };
+  state.trailDots.push(dot);
+  state.lastTrailPoint = latlng;
+
+  if (state.trailDots.length > TRAIL_MAX_DOTS) {
+    const oldest = state.trailDots.shift();
+    oldest?.circle.remove();
+  }
+}
+
+function fadeTrailDots(state: RobotMarkerState) {
+  const now = performance.now();
+
+  state.trailDots = state.trailDots.filter((dot) => {
+    const age = now - dot.createdAt;
+    const life = age / TRAIL_DURATION;
+
+    if (life >= 1) {
+      dot.circle.remove();
+      return false;
+    }
+
+    dot.circle.setStyle({ fillOpacity: TRAIL_OPACITY * (1 - life) });
+    return true;
+  });
+}
+
+function removeAllTrailDots(state: RobotMarkerState) {
+  state.trailDots.forEach((dot) => dot.circle.remove());
+  state.trailDots = [];
 }
 
 function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
@@ -268,6 +329,18 @@ export default function RestaurantMap() {
     };
   }, []);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      markerStatesRef.current.forEach((state) => {
+        if (state.trailDots.length > 0) {
+          fadeTrailDots(state);
+        }
+      });
+    }, 100);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   useLayoutEffect(() => {
     const container = containerRef.current;
 
@@ -318,7 +391,7 @@ export default function RestaurantMap() {
         frameRef.current = null;
       }
 
-      markerStatesRef.current.forEach((state) => cancelRobotMarkerAnimation(state));
+      markerStatesRef.current.forEach((state) => { cancelRobotMarkerAnimation(state); removeAllTrailDots(state); });
       markerStatesRef.current.clear();
       markerGroupRef.current?.clearLayers();
       markerGroupRef.current = null;
