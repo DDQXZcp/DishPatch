@@ -149,8 +149,13 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
 }
 
 function createRobotMarker(robot: Robot, manifest: MapManifest, orderTableById: Map<string, OrderTableInfo>) {
-  return L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
+  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
     .bindPopup(createRobotPopup(robot, orderTableById));
+
+  marker.on("mouseover", () => marker.openPopup());
+  marker.on("mouseout", () => marker.closePopup());
+
+  return marker;
 }
 
 function cancelRobotMarkerAnimation(state: RobotMarkerState) {
@@ -253,7 +258,7 @@ function syncRobotMarkers(
   });
 }
 
-function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
+function getFitZoom(map: L.Map, bounds: FloorplanBounds) {
   const mapSize = map.getSize();
   const boundsHeight = bounds[1][0] - bounds[0][0];
   const boundsWidth = bounds[1][1] - bounds[0][1];
@@ -262,18 +267,21 @@ function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
     return map.getZoom();
   }
 
-  const coverScale = Math.max(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
-  const coverZoom = Math.log2(coverScale);
+  // Math.min (rather than max) keeps the whole floorplan inside the
+  // window on every axis — the widget's window fits the map, instead of
+  // the map covering the window and cropping whichever axis overflows.
+  const fitScale = Math.min(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
+  const fitZoom = Math.log2(fitScale);
 
   // Clamp against the map's fixed zoom range, not map.getMinZoom(), which
   // this same function's caller mutates on every resize — using the live
   // value here would turn minZoom into a one-way ratchet across resizes.
-  return Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, coverZoom));
+  return Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, fitZoom));
 }
 
-function applyCoverView(map: L.Map, bounds: FloorplanBounds) {
+function applyFitView(map: L.Map, bounds: FloorplanBounds) {
   const center = L.latLngBounds(bounds).getCenter();
-  const zoom = getCoverZoom(map, bounds);
+  const zoom = getFitZoom(map, bounds);
 
   map.setMinZoom(zoom);
   map.setView(center, zoom, { animate: false });
@@ -370,7 +378,7 @@ export default function RestaurantMap() {
 
       frameRef.current = window.requestAnimationFrame(() => {
         map.invalidateSize({ animate: false });
-        applyCoverView(map, bounds);
+        applyFitView(map, bounds);
         frameRef.current = null;
       });
     };
@@ -388,7 +396,7 @@ export default function RestaurantMap() {
 
     map.on("zoomend", recenterAtMinZoom);
 
-    const handleResetView = () => applyCoverView(map, bounds);
+    const handleResetView = () => applyFitView(map, bounds);
     window.addEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
 
     return () => {
@@ -432,7 +440,7 @@ export default function RestaurantMap() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg">
       <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
-      <RecenterButton onClick={() => mapRef.current && applyCoverView(mapRef.current, loadedMap.bounds)} />
+      <RecenterButton onClick={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)} />
     </div>
   );
 }

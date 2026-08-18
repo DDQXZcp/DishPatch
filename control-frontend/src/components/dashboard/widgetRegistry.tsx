@@ -7,10 +7,6 @@ import Orders, {
   OrdersProvider,
   OrdersHeaderActions,
 } from "../ecommerce/Orders";
-import AlertsNotificationsWidget, {
-  AlertsProvider,
-  AlertsHeaderActions,
-} from "./AlertsNotificationsWidget";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
@@ -45,14 +41,6 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     wrap: (children) => (
       <OrdersProvider>{children}</OrdersProvider>
     ),
-  },
-  {
-    id: "alerts-notifications",
-    title: "Alerts / Notifications",
-    description: "Operational alerts and service notifications",
-    render: () => <AlertsNotificationsWidget />,
-    renderHeaderActions: () => <AlertsHeaderActions />,
-    wrap: (children) => <AlertsProvider>{children}</AlertsProvider>,
   },
 ];
 

@@ -9,6 +9,7 @@ import {
 
 import { CloseIcon } from "../../icons";
 import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
+import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget";
 import {
   MIN_COLUMN_WIDTH,
   isWidgetId,
@@ -811,32 +812,35 @@ export default function DashboardWidgets() {
   }
 
   return (
-    <div className="space-y-4">
-      {isDesktopWorkspace ? (
-        <DesktopWorkspace
-          activeDropTarget={activeDropTarget}
-          draggedWidgetId={draggedWidgetId}
-          onColumnResizeStart={handleColumnResizeStart}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-          onDropOnBottom={handleDropOnBottom}
-          onDropOnWidget={handleDropOnWidget}
-          onHideWidget={hideWidget}
-          onRowResizeStart={handleRowResizeStart}
-          onSetActiveDropTarget={setActiveDropTarget}
-          rows={rows}
-        />
-      ) : (
-        <div className="space-y-3">
-          {visibleWidgets.map((widget) => (
-            <MobileWidget
-              key={widget.id}
-              widget={widget}
-              onHide={() => hideWidget(widget.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <AlertsProvider>
+      <div className="space-y-4">
+        <AlertsSnackbarStack />
+        {isDesktopWorkspace ? (
+          <DesktopWorkspace
+            activeDropTarget={activeDropTarget}
+            draggedWidgetId={draggedWidgetId}
+            onColumnResizeStart={handleColumnResizeStart}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+            onDropOnBottom={handleDropOnBottom}
+            onDropOnWidget={handleDropOnWidget}
+            onHideWidget={hideWidget}
+            onRowResizeStart={handleRowResizeStart}
+            onSetActiveDropTarget={setActiveDropTarget}
+            rows={rows}
+          />
+        ) : (
+          <div className="space-y-3">
+            {visibleWidgets.map((widget) => (
+              <MobileWidget
+                key={widget.id}
+                widget={widget}
+                onHide={() => hideWidget(widget.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </AlertsProvider>
   );
 }
