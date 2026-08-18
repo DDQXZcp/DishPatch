@@ -8,24 +8,18 @@ import {
 } from "react";
 
 import { CloseIcon } from "../../icons";
+import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
 import {
-  DASHBOARD_RESET_VIEW_EVENT,
-  DASHBOARD_WIDGET_STORAGE_KEY,
   MIN_COLUMN_WIDTH,
-  defaultWidgetState,
-  hideWidgetInState,
   isWidgetId,
   moveWidgetNearTarget,
   moveWidgetToBottom,
-  readStoredWidgetState,
   setColumnPairWidths,
   setRowHeight,
-  showWidgetInState,
   type DropPosition,
   type DashboardWidgetRow,
-  type DashboardWidgetState,
 } from "./dashboardLayout";
-import { DASHBOARD_WIDGETS, WIDGET_BY_ID } from "./widgetRegistry";
+import { WIDGET_BY_ID } from "./widgetRegistry";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 type ActiveDropTarget =
@@ -557,9 +551,8 @@ function DesktopWorkspace({
 }
 
 export default function DashboardWidgets() {
-  const [initialWidgetState] = useState(readStoredWidgetState);
-  const [widgetState, setWidgetState] =
-    useState<DashboardWidgetState>(initialWidgetState);
+  const { widgetState, setWidgetState, visibleWidgets, hideWidget } =
+    useDashboardWidgets();
   const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
   const [activeDropTarget, setActiveDropTarget] =
     useState<ActiveDropTarget | null>(null);
@@ -570,31 +563,7 @@ export default function DashboardWidgets() {
     useState<ColumnResizeState | null>(null);
   const isDesktopWorkspace = useMediaQuery(DESKTOP_WIDGET_MEDIA_QUERY);
 
-  const { rows, visibleWidgetIds } = widgetState;
-
-  const visibleWidgets = useMemo(
-    () =>
-      visibleWidgetIds
-        .map((widgetId) => WIDGET_BY_ID.get(widgetId))
-        .filter((widget): widget is DashboardWidgetDefinition => Boolean(widget)),
-    [visibleWidgetIds],
-  );
-
-  const visibleIdSet = useMemo(
-    () => new Set<WidgetId>(visibleWidgets.map((widget) => widget.id)),
-    [visibleWidgets],
-  );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        DASHBOARD_WIDGET_STORAGE_KEY,
-        JSON.stringify(widgetState),
-      );
-    } catch (error) {
-      console.warn("Unable to persist dashboard widget layout", error);
-    }
-  }, [widgetState]);
+  const { rows } = widgetState;
 
   useEffect(() => {
     setDraggedWidgetId(null);
@@ -719,19 +688,6 @@ export default function DashboardWidgets() {
     };
   }, [columnResizeState]);
 
-  function hideWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => hideWidgetInState(currentState, widgetId));
-  }
-
-  function toggleWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => showWidgetInState(currentState, widgetId));
-  }
-
-  function resetLayout() {
-    setWidgetState(defaultWidgetState());
-    window.dispatchEvent(new Event(DASHBOARD_RESET_VIEW_EVENT));
-  }
-
   function getDraggedWidgetId(event: DragEvent<HTMLDivElement>) {
     const widgetId = event.dataTransfer.getData("text/plain");
 
@@ -841,44 +797,6 @@ export default function DashboardWidgets() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-theme-md dark:border-gray-800 dark:bg-gray-900 dark:shadow-theme-xl lg:sticky lg:top-[88px] lg:z-9999 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-            Dashboard Widgets
-          </h2>
-          <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-            Toggle visible widgets and arrange them in the desktop workspace.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {DASHBOARD_WIDGETS.map((widget) => {
-            const isVisible = visibleIdSet.has(widget.id);
-            return (
-              <button
-                key={widget.id}
-                type="button"
-                onClick={() => toggleWidget(widget.id)}
-                className={`rounded-lg border px-3 py-2 text-theme-xs font-medium transition ${
-                  isVisible
-                    ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-500/15 dark:text-brand-300"
-                    : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.03]"
-                }`}
-                aria-pressed={isVisible}
-              >
-                {widget.title}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={resetLayout}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-          >
-            Reset layout
-          </button>
-        </div>
-      </div>
-
       {isDesktopWorkspace ? (
         <DesktopWorkspace
           activeDropTarget={activeDropTarget}
