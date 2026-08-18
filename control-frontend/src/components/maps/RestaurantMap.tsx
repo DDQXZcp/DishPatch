@@ -20,7 +20,6 @@ interface LoadedMap {
   manifest: MapManifest;
   bounds: FloorplanBounds;
 }
-
 interface TrailDot {
   circle: L.CircleMarker;
   createdAt: number;
@@ -36,9 +35,9 @@ interface RobotMarkerState {
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 4;
-const TRAIL_OPACITY = 0.5;
-const TRAIL_DURATION = 10000;
-const TRAIL_MIN_DIST = 0.5;
+const TRAIL_OPACITY = 0.75;
+const TRAIL_DURATION = 20000;
+const TRAIL_MIN_DIST = 1;
 const TRAIL_MAX_DOTS = 10;
 
 // Fix for default Leaflet markers
@@ -143,6 +142,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
       easedProgress = 1 - (p * p * p) / 2;
     }
 
+    const prevLatLng = state.marker.getLatLng();
     const newLatLng = L.latLng(
       startLat + deltaLat * easedProgress,
       startLng + deltaLng * easedProgress,
@@ -150,8 +150,8 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
 
     state.marker.setLatLng(newLatLng);
 
-    if (!state.lastTrailPoint || newLatLng.distanceTo(state.lastTrailPoint) >= TRAIL_MIN_DIST) {
-      spawnTrailDot(state, newLatLng, markerGroup);
+    if (!state.lastTrailPoint || prevLatLng.distanceTo(state.lastTrailPoint) >= TRAIL_MIN_DIST) {
+      spawnTrailDot(state, prevLatLng, markerGroup);
     }
 
     if (progress < 1) {
