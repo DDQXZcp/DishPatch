@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import jakarta.annotation.PostConstruct;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -61,6 +63,32 @@ public class RosBridgeService extends TextWebSocketHandler {
     private final Map<Integer, Boolean> navigating = new ConcurrentHashMap<>();
 
     /**
+     * Largest rosbridge frame this client will accept.
+     * <p>
+     * The container default is 8192, which is not enough. The latched Nav2 goal
+     * status array carries every goal the action server still retains, at roughly
+     * 122 bytes each, and a busy spell pushes it past 8192. A frame over the limit
+     * closes the session with 1009 rather than being truncated, and because the
+     * topic is latched the same frame arrives again on every reconnect — so the link
+     * stays down until the array drains rather than recovering on its own.
+     */
+    private static final int MAX_TEXT_MESSAGE_BYTES = 1024 * 1024;
+
+    private final StandardWebSocketClient client = createClient();
+
+    /**
+     * A client whose container accepts frames up to {@link #MAX_TEXT_MESSAGE_BYTES}.
+     * <p>
+     * The limit belongs to the container and is read during the handshake, so it has
+     * to be set before {@code execute} rather than on the open session.
+     */
+    private static StandardWebSocketClient createClient() {
+        WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BYTES);
+        return new StandardWebSocketClient(container);
+    }
+
+    /**
      * Initiates a WebSocket connection to rosbridge on startup.
      * Retries every 5 seconds until the connection is established.
      */
@@ -70,7 +98,7 @@ public class RosBridgeService extends TextWebSocketHandler {
             while (true) {
                 try {
                     logger.info("RosBridgeService connecting to " + rosbridgeUrl);
-                    new StandardWebSocketClient().execute(this, rosbridgeUrl);
+                    client.execute(this, rosbridgeUrl);
                     return;
                 } catch (Exception e) {
                     logger.warning("Failed to connect to rosbridge, retrying in 5s: " + e.getMessage());

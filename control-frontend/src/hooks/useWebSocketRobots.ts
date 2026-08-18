@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import SockJS from 'sockjs-client';
 import { Client, IMessage } from '@stomp/stompjs';
 import type { Robot, RobotStats } from '../types/Robot';
+import type { Order } from '../types/Order';
 
 interface RobotStatsMessage {
   serving?: number;
@@ -15,6 +16,7 @@ interface RobotStatsMessage {
 
 const ROBOT_LOCATIONS_TOPIC = '/topic/robot-locations';
 const ROBOT_STATS_TOPIC = '/topic/robot-stats';
+const ORDERS_TOPIC = '/topic/orders';
 
 function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
   return {
@@ -31,6 +33,7 @@ function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
 export const useWebSocketRobots = () => {
   const [robots, setRobots] = useState<Robot[]>([]);
   const [stats, setStats] = useState<RobotStats | null>(null);
+  const [orders, setOrders] = useState<Order[] | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
@@ -69,6 +72,12 @@ export const useWebSocketRobots = () => {
               const statsData: RobotStatsMessage = JSON.parse(message.body);
               setStats(normalizeRobotStats(statsData));
             });
+
+            // Keeps the POS order list live without a manual page refresh.
+            stompClient.current?.subscribe(ORDERS_TOPIC, (message: IMessage) => {
+              const incomingOrders: Order[] = JSON.parse(message.body);
+              setOrders(incomingOrders);
+            });
           },
           onStompError: (frame) => {
             console.error('STOMP error:', frame);
@@ -99,5 +108,5 @@ export const useWebSocketRobots = () => {
     };
   }, []);
 
-  return { robots, stats, isConnected, error };
+  return { robots, stats, orders, isConnected, error };
 };
