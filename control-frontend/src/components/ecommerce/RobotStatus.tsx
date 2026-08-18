@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -10,6 +10,7 @@ import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import type { Robot, RobotStatus } from '../../types/Robot';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import { buildOrderTableIndex, formatOrderItemLine } from '../../utils/orderTable';
 
 const ALL_STATUSES: RobotStatus[] = ['Serving', 'Returning', 'Waiting', 'Maintenance'];
 
@@ -25,9 +26,11 @@ interface RobotStatusProps {
 }
 
 export default function RobotStatus({ framed = true }: RobotStatusProps) {
-  const { robots } = useRobotContext();
+  const { robots, orders } = useRobotContext();
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<RobotStatus>>(new Set());
+
+  const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
 
   const toggleFilter = (status: RobotStatus) => {
     setActiveFilters((prev) => {
@@ -161,7 +164,7 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
             <TableRow>
               <TableCell
                 isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[130px]"
+                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[80px]"
               >
                 Robot
               </TableCell>
@@ -175,13 +178,25 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
                 isHeader
                 className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[80px]"
               >
-                Battery
+                Status
               </TableCell>
               <TableCell
                 isHeader
                 className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[80px]"
               >
-                Status
+                Order
+              </TableCell>
+              <TableCell
+                isHeader
+                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[60px]"
+              >
+                Table
+              </TableCell>
+              <TableCell
+                isHeader
+                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[160px]"
+              >
+                Items
               </TableCell>
             </TableRow>
           </TableHeader>
@@ -192,26 +207,12 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
             {filteredRobots.map((robot: Robot) => (
               <TableRow key={robot.id} className="">
                 <TableCell className="py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-[50px] w-[50px] overflow-hidden rounded-md">
-                      <img
-                        src="/images/robot/robot-face-icon.svg"
-                        className="h-[50px] w-[50px]"
-                        alt={robot.name}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                        {robot.name}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                    {robot.name}
+                  </p>
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                   {robot.speed} kph
-                </TableCell>
-                <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {robot.battery}%
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                   <Badge
@@ -229,6 +230,34 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
                     {robot.status}
                   </Badge>
                 </TableCell>
+                {(() => {
+                  const orderTable =
+                    robot.status === "Serving" && robot.orderId
+                      ? orderTableById.get(robot.orderId)
+                      : undefined;
+
+                  return (
+                    <>
+                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                        {orderTable ? `#${orderTable.displayId}` : "-"}
+                      </TableCell>
+                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                        {orderTable ? orderTable.tableNo : "-"}
+                      </TableCell>
+                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                        {orderTable && orderTable.items.length > 0 ? (
+                          <ul className="list-disc space-y-0.5 pl-4">
+                            {orderTable.items.map((item, index) => (
+                              <li key={index}>{formatOrderItemLine(item)}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                    </>
+                  );
+                })()}
               </TableRow>
             ))}
           </TableBody>

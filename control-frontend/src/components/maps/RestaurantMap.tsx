@@ -3,18 +3,12 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
+import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
 import type { Robot, RobotStatus } from '../../types/Robot';
-import type { Order, OrderItem } from '../../types/Order';
 
 
 const MAP_MANIFEST_URL = "/maps/map-manifest.json";
 type FloorplanBounds = [[number, number], [number, number]];
-
-interface OrderTableInfo {
-  displayId: string;
-  tableNo: string;
-  items: OrderItem[];
-}
 
 interface MapManifest {
   imageUrl: string;
@@ -69,21 +63,6 @@ function getRobotStatusClassName(status: RobotStatus) {
   if (status === 'Returning') return 'bg-blue-100 text-blue-800';
   if (status === 'Waiting') return 'bg-purple-100 text-purple-800';
   return 'bg-red-100 text-red-800';
-}
-
-function resolveOrderTableNo(order: Order): string | undefined {
-  const value =
-    order.tableNo ??
-    (typeof order.table === 'object' ? order.table?.tableNo : order.table);
-
-  return value === undefined || value === null || value === '' ? undefined : String(value);
-}
-
-function formatOrderItemLine(item: OrderItem): string {
-  const name = item.name ?? item.itemName ?? item.productName ?? 'Item';
-  const quantity = item.quantity ?? item.qty ?? 1;
-
-  return `${quantity} × ${name}`;
 }
 
 function createDetailRow(label: string, value: string) {
@@ -326,19 +305,7 @@ export default function RestaurantMap() {
   const frameRef = useRef<number | null>(null);
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
 
-  const orderTableById = useMemo(() => {
-    const next = new Map<string, OrderTableInfo>();
-
-    (orders ?? []).forEach((order) => {
-      const tableNo = resolveOrderTableNo(order);
-
-      if (tableNo) {
-        next.set(order.orderId, { displayId: order.displayId, tableNo, items: order.items });
-      }
-    });
-
-    return next;
-  }, [orders]);
+  const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
 
   useEffect(() => {
     let active = true;
