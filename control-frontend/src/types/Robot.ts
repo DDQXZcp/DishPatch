@@ -1,4 +1,4 @@
-export type RobotStatus = 'Serving' | 'Pickup' | 'Returning' | 'Waiting' | 'Maintenance';
+export type RobotStatus = 'Serving' | 'Returning' | 'Waiting' | 'Maintenance';
 
 export interface Robot {
   id: number;
@@ -8,6 +8,7 @@ export interface Robot {
   y: number;
   speed: number;
   battery: number;
+  orderId?: string;
 }
 
 export interface RobotStats {

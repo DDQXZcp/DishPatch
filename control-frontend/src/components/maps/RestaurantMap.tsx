@@ -4,10 +4,19 @@ import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
 import type { Robot, RobotStatus } from '../../types/Robot';
+import type { Order, OrderItem, OrdersApiResponse } from '../../types/Order';
 
 
 const MAP_MANIFEST_URL = "/maps/map-manifest.json";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+const ORDER_TABLE_POLL_INTERVAL_MS = 15000;
 type FloorplanBounds = [[number, number], [number, number]];
+
+interface OrderTableInfo {
+  displayId: string;
+  tableNo: string;
+  items: OrderItem[];
+}
 
 interface MapManifest {
   imageUrl: string;
@@ -44,7 +53,6 @@ function getRobotIcon(status: RobotStatus) {
   let borderColor = '';
 
   if (status === 'Serving') borderColor = 'border-green-500';
-  else if (status === 'Pickup') borderColor = 'border-yellow-500';
   else if (status === 'Returning') borderColor = 'border-blue-500';
   else if (status === 'Waiting') borderColor = 'border-purple-500';
   else if (status === 'Maintenance') borderColor = 'border-red-500';
@@ -60,13 +68,35 @@ function getRobotIcon(status: RobotStatus) {
 
 function getRobotStatusClassName(status: RobotStatus) {
   if (status === 'Serving') return 'bg-green-100 text-green-800';
-  if (status === 'Pickup') return 'bg-yellow-100 text-yellow-800';
   if (status === 'Returning') return 'bg-blue-100 text-blue-800';
   if (status === 'Waiting') return 'bg-purple-100 text-purple-800';
   return 'bg-red-100 text-red-800';
 }
 
-function createRobotPopup(robot: Robot) {
+function resolveOrderTableNo(order: Order): string | undefined {
+  const value =
+    order.tableNo ??
+    (typeof order.table === 'object' ? order.table?.tableNo : order.table);
+
+  return value === undefined || value === null || value === '' ? undefined : String(value);
+}
+
+function formatOrderItems(items: OrderItem[]): string {
+  if (!items || items.length === 0) {
+    return 'No items';
+  }
+
+  return items
+    .map((item) => {
+      const name = item.name ?? item.itemName ?? item.productName ?? 'Item';
+      const quantity = item.quantity ?? item.qty ?? 1;
+
+      return `${quantity} × ${name}`;
+    })
+    .join(', ');
+}
+
+function createRobotPopup(robot: Robot, orderTableById: Map<string, OrderTableInfo>) {
   const wrapper = document.createElement('div');
   wrapper.className = 'text-sm';
 
@@ -80,6 +110,22 @@ function createRobotPopup(robot: Robot) {
   status.textContent = robot.status;
   wrapper.appendChild(status);
 
+  if (robot.status === 'Serving' && robot.orderId) {
+    const orderTable = orderTableById.get(robot.orderId);
+
+    if (orderTable) {
+      const orderLine = document.createElement('div');
+      orderLine.className = 'mt-1 text-xs text-gray-600';
+      orderLine.textContent = `Order #${orderTable.displayId} · Table ${orderTable.tableNo}`;
+      wrapper.appendChild(orderLine);
+
+      const itemsLine = document.createElement('div');
+      itemsLine.className = 'mt-1 max-w-[200px] text-xs text-gray-500';
+      itemsLine.textContent = formatOrderItems(orderTable.items);
+      wrapper.appendChild(itemsLine);
+    }
+  }
+
   return wrapper;
 }
 
@@ -90,9 +136,9 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
   return [floorplanY, floorplanX];
 }
 
-function createRobotMarker(robot: Robot, manifest: MapManifest) {
+function createRobotMarker(robot: Robot, manifest: MapManifest, orderTableById: Map<string, OrderTableInfo>) {
   return L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
-    .bindPopup(createRobotPopup(robot));
+    .bindPopup(createRobotPopup(robot, orderTableById));
 }
 
 function cancelRobotMarkerAnimation(state: RobotMarkerState) {
@@ -102,7 +148,12 @@ function cancelRobotMarkerAnimation(state: RobotMarkerState) {
   }
 }
 
-function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapManifest) {
+function updateRobotMarker(
+  state: RobotMarkerState,
+  robot: Robot,
+  manifest: MapManifest,
+  orderTableById: Map<string, OrderTableInfo>,
+) {
   const targetLatLng = L.latLng(robotPoseToFloorplanPoint(robot, manifest));
   const currentLatLng = state.marker.getLatLng();
   const deltaLat = targetLatLng.lat - currentLatLng.lat;
@@ -110,7 +161,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
   const moveDistance = Math.hypot(deltaLat, deltaLng);
 
   state.marker.setIcon(getRobotIcon(robot.status));
-  state.marker.bindPopup(createRobotPopup(robot));
+  state.marker.bindPopup(createRobotPopup(robot, orderTableById));
 
   if (moveDistance <= ROBOT_MARKER_SNAP_DISTANCE) {
     cancelRobotMarkerAnimation(state);
@@ -156,6 +207,7 @@ function syncRobotMarkers(
   markerStates: React.MutableRefObject<Map<number, RobotMarkerState>>,
   robots: Robot[],
   manifest: MapManifest,
+  orderTableById: Map<string, OrderTableInfo>,
 ) {
   const nextRobotIds = new Set<number>();
 
@@ -165,7 +217,7 @@ function syncRobotMarkers(
     const existingState = markerStates.current.get(robot.id);
 
     if (!existingState) {
-      const marker = createRobotMarker(robot, manifest).addTo(markerGroup);
+      const marker = createRobotMarker(robot, manifest, orderTableById).addTo(markerGroup);
 
       markerStates.current.set(robot.id, {
         marker,
@@ -175,7 +227,7 @@ function syncRobotMarkers(
       return;
     }
 
-    updateRobotMarker(existingState, robot, manifest);
+    updateRobotMarker(existingState, robot, manifest, orderTableById);
   });
 
   markerStates.current.forEach((state, robotId) => {
@@ -240,6 +292,49 @@ export default function RestaurantMap() {
   const markerStatesRef = useRef<Map<number, RobotMarkerState>>(new Map());
   const frameRef = useRef<number | null>(null);
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
+  const [orderTableById, setOrderTableById] = useState<Map<string, OrderTableInfo>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOrderTables = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/orders`, { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load orders: ${response.status}`);
+        }
+
+        const result = (await response.json()) as OrdersApiResponse;
+
+        if (!active || !result.success || !Array.isArray(result.data)) {
+          return;
+        }
+
+        const next = new Map<string, OrderTableInfo>();
+
+        result.data.forEach((order) => {
+          const tableNo = resolveOrderTableNo(order);
+
+          if (tableNo) {
+            next.set(order.orderId, { displayId: order.displayId, tableNo, items: order.items });
+          }
+        });
+
+        setOrderTableById(next);
+      } catch (error) {
+        console.warn("Unable to load order/table info", error);
+      }
+    };
+
+    loadOrderTables();
+    const intervalId = window.setInterval(loadOrderTables, ORDER_TABLE_POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -295,7 +390,7 @@ export default function RestaurantMap() {
     L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest, orderTableById);
 
     const refreshMapSize = () => {
       if (frameRef.current !== null) {
@@ -356,8 +451,8 @@ export default function RestaurantMap() {
       return;
     }
 
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest);
-  }, [robots, loadedMap]);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest, orderTableById);
+  }, [robots, loadedMap, orderTableById]);
 
   if (!loadedMap) {
     return <div className="h-full w-full rounded-lg bg-gray-100" />;

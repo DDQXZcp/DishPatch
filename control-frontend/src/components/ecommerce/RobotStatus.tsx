@@ -11,11 +11,10 @@ import { Dropdown } from "../ui/dropdown/Dropdown";
 import type { Robot, RobotStatus } from '../../types/Robot';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
 
-const ALL_STATUSES: RobotStatus[] = ['Serving', 'Pickup', 'Returning', 'Waiting', 'Maintenance'];
+const ALL_STATUSES: RobotStatus[] = ['Serving', 'Returning', 'Waiting', 'Maintenance'];
 
 const STATUS_COLORS: Record<RobotStatus, string> = {
   Serving: 'bg-green-500',
-  Pickup: 'bg-yellow-500',
   Returning: 'bg-blue-500',
   Waiting: 'bg-purple-500',
   Maintenance: 'bg-red-500',
@@ -220,8 +219,6 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
                     color={
                       robot.status === "Serving"
                         ? "success"
-                        : robot.status === "Pickup"
-                        ? "warning"
                         : robot.status === "Returning"
                         ? "info"
                         : robot.status === "Waiting"
