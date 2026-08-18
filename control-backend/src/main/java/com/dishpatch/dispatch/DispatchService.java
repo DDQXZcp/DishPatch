@@ -7,10 +7,12 @@ import com.dishpatch.order.OrderStatus;
 import com.dishpatch.service.RobotService;
 import com.dishpatch.service.RosBridgeService;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -30,8 +32,11 @@ import java.util.stream.Collectors;
  *
  * Each delivery is a {@link DispatchAssignment} carrying a stage. A scheduled tick
  * advances the ones that are ready, then assigns whatever new orders it can.
- * Nothing blocks: Spring's default scheduler runs a single thread, so one sleeping
- * delivery would stall every other one behind it.
+ * Nothing blocks, and nothing waits: progress is re-checked every tick. The tick
+ * does not get a scheduler to itself — enabling the STOMP broker contributes a
+ * TaskScheduler bean and {@code @EnableScheduling} binds to it, so this shares the
+ * MessageBroker pool that pushes updates to the dashboard. A blocking tick would
+ * stall the dashboard as well as every delivery behind it.
  * <p>
  * Arrival is read from the robot's reported position rather than assumed — the
  * driving stages end when it is within {@link #ARRIVAL_RADIUS_M} of its
@@ -67,6 +72,34 @@ public class DispatchService {
     /** Drop point every robot returns to; must exist in drop-points.json. */
     private static final String COUNTER = "counter";
 
+    /**
+     * How long after publishing a goal before Nav2's silence means anything.
+     * <p>
+     * A freshly published goal is not live yet: it crosses a WebSocket to another
+     * host, becomes a ROS message, and only then is accepted by the action server
+     * and reported back. Concluding "no live goal" inside that window would re-send
+     * on top of a goal that was already on its way — which is a preemption, and
+     * preempting our own goals is the pathology this fleet already had.
+     */
+    private static final long GOAL_GRACE_MS = 5_000;
+
+    /**
+     * Deliberately pessimistic cruising speed, in metres per second, used only to
+     * size how long a drive leg is allowed to take. Observed legs run at 0.85-1.4;
+     * a third of that leaves the deadline as a genuine backstop rather than
+     * something a slow-but-healthy delivery can trip.
+     */
+    private static final double PLANNING_SPEED_MPS = 0.4;
+
+    /** Flat allowance per leg for planning, acceptance and acceleration. */
+    private static final long DRIVE_OVERHEAD_MS = 10_000;
+
+    /** Floor on a leg's budget, so a very short hop still gets a sane window. */
+    private static final long MIN_DRIVE_BUDGET_MS = 20_000;
+
+    /** Publishes of the same stage goal before the delivery is given up on. */
+    private static final int MAX_GOAL_ATTEMPTS = 3;
+
     private final OrderService orderService;
     private final DropPointService dropPointService;
     private final RosBridgeService rosBridgeService;
@@ -89,12 +122,37 @@ public class DispatchService {
     /** Robots driving to the counter with no order, until their position says they arrived. */
     private final Set<Integer> homing = ConcurrentHashMap.newKeySet();
 
+    /**
+     * When each homing robot's counter goal was last published.
+     * <p>
+     * A homing robot holds no assignment, so nothing else would ever notice that
+     * its goal died — it would simply never become assignable again. This is what
+     * lets the homing pass re-send, the same way a delivery can.
+     */
+    private final Map<Integer, Long> homingPublishedAt = new ConcurrentHashMap<>();
+
     /** Pending orders that had no robot on the last tick. */
     private volatile int queuedOrders;
 
     /** When the tick last ran; 0 until the first one. */
     private volatile long lastTickMillis;
 
+    /**
+     * Every stage of a delivery is timed against this, so tests can drive the grace
+     * windows and deadlines without waiting out a real minute.
+     */
+    private final Clock clock;
+
+    /**
+     * The constructor Spring uses.
+     * <p>
+     * {@code @Autowired} is load-bearing, not decoration. A class with a single
+     * constructor gets it used implicitly; add a second and Spring finds two
+     * candidates, picks neither, and falls back to looking for a no-arg constructor
+     * — the context then fails to start. That failure is at startup, not compile
+     * time, so nothing catches it but running the app.
+     */
+    @Autowired
     public DispatchService(
             OrderService orderService,
             DropPointService dropPointService,
@@ -103,11 +161,31 @@ public class DispatchService {
             @Value("${dispatch.enabled:true}")
             boolean enabled
     ) {
+        this(
+                orderService,
+                dropPointService,
+                rosBridgeService,
+                robotService,
+                enabled,
+                Clock.systemUTC()
+        );
+    }
+
+    /** For tests, which supply a clock they can move. */
+    DispatchService(
+            OrderService orderService,
+            DropPointService dropPointService,
+            RosBridgeService rosBridgeService,
+            RobotService robotService,
+            boolean enabled,
+            Clock clock
+    ) {
         this.orderService = orderService;
         this.dropPointService = dropPointService;
         this.rosBridgeService = rosBridgeService;
         this.robotService = robotService;
         this.enabled = enabled;
+        this.clock = clock;
     }
 
     /**
@@ -119,7 +197,7 @@ public class DispatchService {
      */
     @Scheduled(fixedDelay = POLL_INTERVAL_MS)
     public void tick() {
-        lastTickMillis = System.currentTimeMillis();
+        lastTickMillis = clock.millis();
 
         if (!enabled) {
             return;
@@ -142,13 +220,15 @@ public class DispatchService {
      * dwell is on a clock.
      */
     private void advanceAssignments() {
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
 
         for (DispatchAssignment assignment : List.copyOf(assignments.values())) {
             switch (assignment.state()) {
                 case TO_TABLE -> {
                     if (hasArrived(assignment.robotId(), assignment.destination())) {
                         startServing(assignment, now);
+                    } else {
+                        recoverIfStalled(assignment, assignment.destination(), now);
                     }
                 }
                 case AT_TABLE -> {
@@ -159,10 +239,146 @@ public class DispatchService {
                 case RETURNING -> {
                     if (hasArrived(assignment.robotId(), COUNTER)) {
                         releaseRobot(assignment);
+                    } else {
+                        recoverIfStalled(assignment, COUNTER, now);
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Decides what to do about a drive leg that has not finished yet.
+     * <p>
+     * A driving stage used to have exactly one way out: arrive. Anything that
+     * stopped the robot short of its destination froze the delivery for good — the
+     * robot stayed in {@link #assignments}, which excluded it from the homing pass
+     * that would otherwise have rescued it, and every code path involved was a
+     * success path, so nothing was logged. Two robots were lost that way on
+     * 2026-08-11 when Nav2 aborted their goals a few milliseconds after receiving
+     * them.
+     * <p>
+     * The signature of a lost goal is the one the package README named long before
+     * it happened: Nav2 reports no live goal while the robot is nowhere near where
+     * it was sent. That is what this looks for.
+     */
+    private void recoverIfStalled(
+            DispatchAssignment assignment,
+            String destination,
+            long now
+    ) {
+        // Too soon to read anything into Nav2's silence.
+        if (now < assignment.goalPublishedAtMillis() + GOAL_GRACE_MS) {
+            return;
+        }
+
+        int robotId = assignment.robotId();
+
+        if (rosBridgeService.isNavigating(robotId)) {
+            // Nav2 still holds a live goal, so the robot is on its way and must be
+            // left alone: re-publishing now would preempt a working goal. If it is
+            // also past its deadline something is wrong that re-sending cannot fix,
+            // so give up rather than fight Nav2 for control of the robot.
+            if (now >= assignment.deadlineMillis()) {
+                abandon(
+                        assignment,
+                        "still navigating well past its deadline",
+                        now
+                );
+            }
+            return;
+        }
+
+        // Nav2 is idle and the robot has not arrived. The goal is gone — aborted,
+        // rejected, or never accepted in the first place.
+        String reason = rosBridgeService.lastGoalFailed(robotId)
+                ? "Nav2 aborted the goal"
+                : "Nav2 has no goal for it";
+
+        if (assignment.attempts() >= MAX_GOAL_ATTEMPTS) {
+            abandon(assignment, reason + " after " + assignment.attempts()
+                    + " attempts", now);
+            return;
+        }
+
+        if (!publishGoal(robotId, destination)) {
+            // rosbridge is down or the drop point vanished. Not this delivery's
+            // fault and not worth an attempt — try again on the next tick.
+            return;
+        }
+
+        assignments.put(
+                assignment.orderId(),
+                assignment.retried(
+                        now + driveBudgetMillis(robotId, destination),
+                        now
+                )
+        );
+
+        logger.warning(
+                "Robot " + robotId + " stalled en route to " + destination
+                        + " (" + reason + ") — re-sent goal, attempt "
+                        + (assignment.attempts() + 1) + " of " + MAX_GOAL_ATTEMPTS
+                        + " for order " + assignment.orderId()
+        );
+    }
+
+    /**
+     * Gives up on a delivery and hands the robot back to the fleet.
+     * <p>
+     * The order is not failed: during {@link DispatchState#TO_TABLE} it is still
+     * Preparing in DynamoDB, so dropping the assignment puts it straight back in
+     * the queue for whichever robot is free next. Past that point it has already
+     * been completed and there is nothing to return.
+     * <p>
+     * The robot goes into {@link #homing} rather than {@link #atCounter}: it is
+     * somewhere on the floor, not parked, and it must prove it got back before it
+     * is handed another meal.
+     */
+    private void abandon(DispatchAssignment assignment, String reason, long now) {
+        int robotId = assignment.robotId();
+
+        assignments.remove(assignment.orderId());
+        atCounter.remove(robotId);
+
+        boolean headingHome = publishGoal(robotId, COUNTER);
+
+        if (headingHome) {
+            homing.add(robotId);
+            homingPublishedAt.put(robotId, now);
+        }
+
+        robotService.setAssignment(
+                robotId, RobotService.STATUS_RETURNING, COUNTER, null);
+
+        logger.warning(
+                "Giving up on order " + assignment.orderId() + " at stage "
+                        + assignment.state() + ": robot " + robotId + " "
+                        + reason + ". Robot sent back to " + COUNTER
+                        + (headingHome ? "" : " (goal not sent; homing pass will retry)")
+                        + (assignment.state() == DispatchState.TO_TABLE
+                                ? ". Order returns to the queue."
+                                : ". Order was already delivered.")
+        );
+    }
+
+    /**
+     * How long a robot may take to drive to a drop point before something is
+     * assumed to have gone wrong, sized from the distance it actually has to cover.
+     * <p>
+     * A fixed timeout cannot serve both a 6 m hop and a 30 m run across the floor;
+     * whatever value suited one would be absurd for the other.
+     */
+    private long driveBudgetMillis(int robotId, String destination) {
+        double metres = distanceTo(robotId, destination);
+
+        if (metres < 0) {
+            // Position unknown, so distance means nothing. The floor still bounds it.
+            return MIN_DRIVE_BUDGET_MS;
+        }
+
+        long budget = (long) (metres / PLANNING_SPEED_MPS * 1000) + DRIVE_OVERHEAD_MS;
+        return Math.max(budget, MIN_DRIVE_BUDGET_MS);
     }
 
     /** Robot reached the table: stay Serving while the meal is handed over. */
@@ -172,7 +388,8 @@ public class DispatchService {
                 assignment.movedTo(
                         DispatchState.AT_TABLE,
                         assignment.destination(),
-                        now + SERVE_DWELL_MS
+                        now + SERVE_DWELL_MS,
+                        0 // parked at the table; no goal in flight to time out
                 )
         );
 
@@ -187,7 +404,10 @@ public class DispatchService {
      * Serve dwell expired: mark the order complete and start the run back.
      * <p>
      * The counter goal is best effort — if it fails the robot still moves to
-     * RETURNING, and will be retried by the homing pass once it is released.
+     * RETURNING with a deadline, and {@link #recoverIfStalled} re-sends it. This
+     * used to claim the homing pass would retry it, which it could not: that pass
+     * skips robots holding an assignment, and a RETURNING robot holds one until it
+     * arrives.
      */
     private void completeAndSendBack(DispatchAssignment assignment) {
         Optional<Map<String, Object>> completed =
@@ -209,6 +429,8 @@ public class DispatchService {
             );
         }
 
+        long now = clock.millis();
+
         publishGoal(assignment.robotId(), COUNTER);
         robotService.setAssignment(
                 assignment.robotId(),
@@ -222,7 +444,8 @@ public class DispatchService {
                 assignment.movedTo(
                         DispatchState.RETURNING,
                         COUNTER,
-                        0 // no timer on a driving stage
+                        now + driveBudgetMillis(assignment.robotId(), COUNTER),
+                        now
                 )
         );
     }
@@ -262,14 +485,35 @@ public class DispatchService {
         atCounter.retainAll(freshIds);
         homing.retainAll(freshIds);
 
-        // Homing robots that have reached the counter.
+        homingPublishedAt.keySet().retainAll(homing);
+
+        long now = clock.millis();
+
+        // Homing robots that have reached the counter — and those whose counter goal
+        // died on the way, which would otherwise sit still forever holding no order
+        // and therefore attracting no attention at all.
         for (Integer robotId : List.copyOf(homing)) {
-            if (!hasArrived(robotId, COUNTER)) {
+            if (hasArrived(robotId, COUNTER)) {
+                homing.remove(robotId);
+                homingPublishedAt.remove(robotId);
+                arriveAtCounter(robotId);
                 continue;
             }
 
-            homing.remove(robotId);
-            arriveAtCounter(robotId);
+            long publishedAt = homingPublishedAt.getOrDefault(robotId, now);
+
+            if (now < publishedAt + GOAL_GRACE_MS
+                    || rosBridgeService.isNavigating(robotId)) {
+                continue;
+            }
+
+            if (publishGoal(robotId, COUNTER)) {
+                homingPublishedAt.put(robotId, now);
+                logger.warning(
+                        "Robot " + robotId + " stopped short of " + COUNTER
+                                + " with no live goal — re-sent it home"
+                );
+            }
         }
 
         // Robots we have never placed at the counter.
@@ -296,6 +540,7 @@ public class DispatchService {
             robotService.setAssignment(
                     robotId, RobotService.STATUS_RETURNING, COUNTER, null);
             homing.add(robotId);
+            homingPublishedAt.put(robotId, now);
 
             logger.info(
                     "Robot " + robotId + " is not at " + COUNTER
@@ -408,12 +653,16 @@ public class DispatchService {
             free.remove(0);
             atCounter.remove(robotId); // it is leaving the counter
 
+            long now = clock.millis();
+
             assignments.put(orderId, new DispatchAssignment(
                     orderId,
                     robotId,
                     destination,
                     DispatchState.TO_TABLE,
-                    0 // no timer on a driving stage
+                    now + driveBudgetMillis(robotId, destination),
+                    1,
+                    now
             ));
             robotService.setAssignment(
                     robotId, RobotService.STATUS_SERVING, destination, orderId);
@@ -546,7 +795,7 @@ public class DispatchService {
     public long millisSinceLastTick() {
         return lastTickMillis == 0
                 ? -1
-                : System.currentTimeMillis() - lastTickMillis;
+                : clock.millis() - lastTickMillis;
     }
 
     /**
@@ -578,7 +827,7 @@ public class DispatchService {
             return 0;
         }
 
-        return Math.max(0, assignment.deadlineMillis() - System.currentTimeMillis());
+        return Math.max(0, assignment.deadlineMillis() - clock.millis());
     }
 
     /**
@@ -605,5 +854,15 @@ public class DispatchService {
      */
     public boolean isNavigating(int robotId) {
         return rosBridgeService.isNavigating(robotId);
+    }
+
+    /**
+     * Whether the last goal Nav2 reported for this robot ended in failure.
+     * <p>
+     * Read alongside {@link #isNavigating}: false there plus true here is a goal
+     * Nav2 gave up on, which is what stranded two robots on 2026-08-11.
+     */
+    public boolean hasGoalFailed(int robotId) {
+        return rosBridgeService.lastGoalFailed(robotId);
     }
 }

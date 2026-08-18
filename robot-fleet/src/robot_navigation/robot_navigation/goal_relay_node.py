@@ -1,6 +1,16 @@
 """
 goal_relay_node.py — Goal Relay Node
 
+NOT LAUNCHED, AND SHOULD NOT BE. Nav2's bt_navigator already subscribes to the
+relative topic "goal_pose", which under a robot namespace resolves to exactly the
+topic below, and forwards it to its own NavigateToPose action. Running this node
+as well put two subscribers on one topic, so every goal became two action goals a
+few milliseconds apart and the second preempted and aborted the first. That was
+true of every goal this fleet ever ran.
+
+Kept only as a record of the interface. Removed from robot_launch.py — see the
+note there before reinstating it.
+
 Subscribes: /{namespace}/goal_pose  (geometry_msgs/PoseStamped)  — from backend
 Action:     /{namespace}/navigate_to_pose  (nav2_msgs/NavigateToPose)  — to bt_navigator
 """

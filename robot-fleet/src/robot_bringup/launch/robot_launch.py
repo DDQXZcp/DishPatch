@@ -95,15 +95,19 @@ def generate_launch_description():
         emulate_tty=True,
     )
 
-    goal_relay_node = Node(
-        package="robot_navigation",
-        executable="goal_relay_node",
-        name="goal_relay_node",
-        namespace=ns,
-        parameters=[{"robot_namespace": ns}],
-        output="screen",
-        emulate_tty=True,
-    )
+    # goal_relay_node is deliberately NOT launched. Nav2's bt_navigator already
+    # subscribes to the relative topic "goal_pose", which under this namespace
+    # resolves to the very topic the backend publishes to — so running the relay
+    # as well put TWO subscribers on /{ns}/goal_pose, each sending its own
+    # NavigateToPose goal. Every goal was executed twice, the second preempting
+    # and aborting the first. Confirmed on the fleet host: `ros2 topic info
+    # /robot1/goal_pose --verbose` reported Subscription count: 2, bt_navigator
+    # and goal_relay_node.
+    #
+    # The backend's contract is unchanged — it still publishes a PoseStamped to
+    # /{ns}/goal_pose, and Nav2 still acts on it. The relay only ever added a
+    # duplicate. Do not re-add this node without first checking that subscription
+    # count.
 
     status_node = Node(
         package="robot_status",
@@ -138,7 +142,6 @@ def generate_launch_description():
         # custom nodes
         hardware_node,
         nav_node,
-        goal_relay_node,
         status_node,
         # static TF
         map_to_odom_tf,

@@ -1,7 +1,14 @@
 <root BTCPP_format="4">
+  <!--
+    Multi-waypoint variant of navigate_to_pose.xml. Same retry, same reasoning:
+    the planning step is retried because it fails on acknowledgement timing rather
+    than on route feasibility. See navigate_to_pose.xml for the full note.
+  -->
   <BehaviorTree ID="NavThroughPoses">
     <Sequence>
-      <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
+      <RetryUntilSuccessful num_attempts="3">
+        <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
+      </RetryUntilSuccessful>
       <FollowPath path="{path}" controller_id="FollowPath"/>
     </Sequence>
   </BehaviorTree>
