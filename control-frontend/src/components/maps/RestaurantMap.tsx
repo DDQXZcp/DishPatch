@@ -37,7 +37,7 @@ const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.75;
-const TRAIL_DURATION = 8000;
+const TRAIL_DURATION = 6000;
 const TRAIL_SPAWN_INTERVAL_MS = 5000;
 const TRAIL_MAX_DOTS = 6;
 
@@ -213,7 +213,7 @@ function syncRobotMarkers(
 function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup) {
   const circle = L.circleMarker(latlng, {
     radius: TRAIL_DOT_RADIUS,
-    color: '#ff0015',
+    color: '#726a6b',
     fillOpacity: TRAIL_OPACITY,
     opacity: TRAIL_OPACITY,
     weight: 0,
