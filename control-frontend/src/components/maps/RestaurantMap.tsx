@@ -35,9 +35,9 @@ interface RobotMarkerState {
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
-const TRAIL_DOT_RADIUS = 2;
-const TRAIL_OPACITY = 0.4;
-const TRAIL_DURATION = 5000; //5s
+const TRAIL_DOT_RADIUS = 4;
+const TRAIL_OPACITY = 0.5;
+const TRAIL_DURATION = 10000;
 const TRAIL_MIN_DIST = 0.5;
 const TRAIL_MAX_DOTS = 10;
 
@@ -210,7 +210,7 @@ function syncRobotMarkers(
 function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup) {
   const circle = L.circleMarker(latlng, {
     radius: TRAIL_DOT_RADIUS,
-    color: '#535965',
+    color: '#ff0015',
     fillOpacity: TRAIL_OPACITY,
     interactive: false
   }).addTo(markerGroup);
