@@ -7,10 +7,12 @@ import com.dishpatch.order.OrderStatus;
 import com.dishpatch.service.RobotService;
 import com.dishpatch.service.RosBridgeService;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -135,6 +137,22 @@ public class DispatchService {
     /** When the tick last ran; 0 until the first one. */
     private volatile long lastTickMillis;
 
+    /**
+     * Every stage of a delivery is timed against this, so tests can drive the grace
+     * windows and deadlines without waiting out a real minute.
+     */
+    private final Clock clock;
+
+    /**
+     * The constructor Spring uses.
+     * <p>
+     * {@code @Autowired} is load-bearing, not decoration. A class with a single
+     * constructor gets it used implicitly; add a second and Spring finds two
+     * candidates, picks neither, and falls back to looking for a no-arg constructor
+     * — the context then fails to start. That failure is at startup, not compile
+     * time, so nothing catches it but running the app.
+     */
+    @Autowired
     public DispatchService(
             OrderService orderService,
             DropPointService dropPointService,
@@ -143,11 +161,31 @@ public class DispatchService {
             @Value("${dispatch.enabled:true}")
             boolean enabled
     ) {
+        this(
+                orderService,
+                dropPointService,
+                rosBridgeService,
+                robotService,
+                enabled,
+                Clock.systemUTC()
+        );
+    }
+
+    /** For tests, which supply a clock they can move. */
+    DispatchService(
+            OrderService orderService,
+            DropPointService dropPointService,
+            RosBridgeService rosBridgeService,
+            RobotService robotService,
+            boolean enabled,
+            Clock clock
+    ) {
         this.orderService = orderService;
         this.dropPointService = dropPointService;
         this.rosBridgeService = rosBridgeService;
         this.robotService = robotService;
         this.enabled = enabled;
+        this.clock = clock;
     }
 
     /**
@@ -159,7 +197,7 @@ public class DispatchService {
      */
     @Scheduled(fixedDelay = POLL_INTERVAL_MS)
     public void tick() {
-        lastTickMillis = System.currentTimeMillis();
+        lastTickMillis = clock.millis();
 
         if (!enabled) {
             return;
@@ -182,7 +220,7 @@ public class DispatchService {
      * dwell is on a clock.
      */
     private void advanceAssignments() {
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
 
         for (DispatchAssignment assignment : List.copyOf(assignments.values())) {
             switch (assignment.state()) {
@@ -391,7 +429,7 @@ public class DispatchService {
             );
         }
 
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
 
         publishGoal(assignment.robotId(), COUNTER);
         robotService.setAssignment(
@@ -449,7 +487,7 @@ public class DispatchService {
 
         homingPublishedAt.keySet().retainAll(homing);
 
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
 
         // Homing robots that have reached the counter — and those whose counter goal
         // died on the way, which would otherwise sit still forever holding no order
@@ -615,7 +653,7 @@ public class DispatchService {
             free.remove(0);
             atCounter.remove(robotId); // it is leaving the counter
 
-            long now = System.currentTimeMillis();
+            long now = clock.millis();
 
             assignments.put(orderId, new DispatchAssignment(
                     orderId,
@@ -757,7 +795,7 @@ public class DispatchService {
     public long millisSinceLastTick() {
         return lastTickMillis == 0
                 ? -1
-                : System.currentTimeMillis() - lastTickMillis;
+                : clock.millis() - lastTickMillis;
     }
 
     /**
@@ -789,7 +827,7 @@ public class DispatchService {
             return 0;
         }
 
-        return Math.max(0, assignment.deadlineMillis() - System.currentTimeMillis());
+        return Math.max(0, assignment.deadlineMillis() - clock.millis());
     }
 
     /**
