@@ -1,6 +1,17 @@
+# Nav2 occupancy grid ONLY. The floorplan the dashboard draws is described
+# separately by the-hive-drop-points.yaml, which keeps the full-resolution
+# 5084x3302 geometry — do not sync this resolution back to that file.
+#
+# The nav grid is deliberately coarser than the source mask. Nav2's static layer
+# resizes the global costmap to whatever the map declares, silently ignoring the
+# resolution asked for in nav2_params_template.yaml, so at the source 0.011802
+# m/pix every plan ran Dijkstra over 16.8 million cells and took ~385ms. At 0.05
+# m/pix that is 935k cells. -5cm.png is generated from the full-resolution mask by
+# taking the darkest pixel in each block, so no wall is ever thinned away; the
+# measured cost is at most 2.7cm of clearance at any drop point.
 image: map.png
 mode: trinary
-resolution: 0.011802
+resolution: 0.05
 origin: [0.0, 0.0, 0.0]
 negate: 0
 occupied_thresh: 0.65
