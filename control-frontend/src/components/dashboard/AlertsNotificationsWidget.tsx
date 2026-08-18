@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import type { Order, OrdersApiResponse } from "../../types/Order";
 import type { Robot } from "../../types/Robot";
@@ -101,7 +108,28 @@ function buildAlerts(
   return alerts;
 }
 
-export default function AlertsNotificationsWidget() {
+interface AlertsContextValue {
+  isLoading: boolean;
+  error: string | null;
+  alerts: AlertItem[];
+  visibleAlerts: AlertItem[];
+  actionableAlertCount: number;
+  dismissAlert: (id: string) => void;
+}
+
+const AlertsContext = createContext<AlertsContextValue | null>(null);
+
+function useAlerts() {
+  const context = useContext(AlertsContext);
+
+  if (!context) {
+    throw new Error("useAlerts must be used within an AlertsProvider");
+  }
+
+  return context;
+}
+
+export function AlertsProvider({ children }: { children: ReactNode }) {
   const { robots } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -205,21 +233,44 @@ export default function AlertsNotificationsWidget() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div />
-        <span
-          className={
-            `rounded-full px-2.5 py-1 text-xs font-medium ` +
-            (actionableAlertCount === 0
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-red-100 text-red-700")
-          }
-        >
-          {actionableAlertCount} ALERTS
-        </span>
-      </div>
+    <AlertsContext.Provider
+      value={{
+        isLoading,
+        error,
+        alerts,
+        visibleAlerts,
+        actionableAlertCount,
+        dismissAlert,
+      }}
+    >
+      {children}
+    </AlertsContext.Provider>
+  );
+}
 
+export function AlertsHeaderActions() {
+  const { actionableAlertCount } = useAlerts();
+
+  return (
+    <span
+      className={
+        `rounded-full px-2.5 py-1 text-xs font-medium ` +
+        (actionableAlertCount === 0
+          ? "bg-emerald-100 text-emerald-700"
+          : "bg-red-100 text-red-700")
+      }
+    >
+      {actionableAlertCount} ALERTS
+    </span>
+  );
+}
+
+export default function AlertsNotificationsWidget() {
+  const { isLoading, error, alerts, visibleAlerts, dismissAlert } =
+    useAlerts();
+
+  return (
+    <div className="flex h-full flex-col gap-3">
       <div className="flex-1 space-y-2 overflow-auto">
         {isLoading && alerts.length === 0 && (
           <p className="text-sm text-gray-500">Loading alerts…</p>

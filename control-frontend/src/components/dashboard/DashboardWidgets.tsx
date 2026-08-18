@@ -108,7 +108,7 @@ function HideButton({ onClick }: { onClick: () => void }) {
 
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
       {widget.render()}
     </div>
   );
@@ -126,14 +126,17 @@ function WidgetHeader({
   return (
     <div
       {...dragHandleProps}
-      className={`flex min-h-[74px] items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-5 ${
+      className={`flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5 ${
         dragHandleProps
           ? "select-none cursor-grab active:cursor-grabbing"
           : ""
       }`}
     >
       <ToolbarTitle widget={widget} />
-      <HideButton onClick={onHide} />
+      <div className="flex items-center gap-2">
+        {widget.renderHeaderActions?.()}
+        <HideButton onClick={onHide} />
+      </div>
     </div>
   );
 }
@@ -151,18 +154,24 @@ function WidgetFrame({
   dragHandleProps?: DragHandleProps;
   isDragging?: boolean;
 }) {
-  return (
-    <div
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03] ${
-        isDragging ? "opacity-60" : ""
-      }`}
-    >
+  const frameContent = (
+    <>
       <WidgetHeader
         widget={widget}
         onHide={onHide}
         dragHandleProps={dragHandleProps}
       />
       <WidgetBody widget={widget} />
+    </>
+  );
+
+  return (
+    <div
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03] ${
+        isDragging ? "opacity-60" : ""
+      }`}
+    >
+      {widget.wrap ? widget.wrap(frameContent) : frameContent}
       {children}
     </div>
   );
@@ -175,10 +184,16 @@ function MobileWidget({
   widget: DashboardWidgetDefinition;
   onHide: () => void;
 }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+  const content = (
+    <>
       <WidgetHeader widget={widget} onHide={onHide} />
       <WidgetBody widget={widget} />
+    </>
+  );
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+      {widget.wrap ? widget.wrap(content) : content}
     </div>
   );
 }
@@ -431,7 +446,7 @@ function DashboardRow({
       }}
     >
       <div
-        className="grid h-full gap-4"
+        className="grid h-full gap-3"
         style={{
           gridTemplateColumns: row.columns
             .map((column) => `minmax(0, ${column.width}fr)`)
@@ -518,7 +533,7 @@ function DesktopWorkspace({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {rows.map((row) => (
         <DashboardRow
           key={row.id}
@@ -812,7 +827,7 @@ export default function DashboardWidgets() {
           rows={rows}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {visibleWidgets.map((widget) => (
             <MobileWidget
               key={widget.id}
