@@ -38,7 +38,7 @@ const TRAIL_DOT_RADIUS = 4;
 const TRAIL_OPACITY = 0.75;
 const TRAIL_DURATION = 20000;
 const TRAIL_MIN_DIST = 1;
-const TRAIL_MAX_DOTS = 10;
+const TRAIL_MAX_DOTS = 200;
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
