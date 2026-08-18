@@ -37,7 +37,7 @@ const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.3;
-const TRAIL_DURATION = 10000;
+const TRAIL_DURATION = 5000;
 const TRAIL_SPAWN_INTERVAL_MS = 5000;
 const TRAIL_MAX_DOTS = 5;
 
@@ -132,6 +132,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
   const startLat = currentLatLng.lat;
   const startLng = currentLatLng.lng;
   const animationStart = performance.now();
+  state.lastTrailSpawnAt = animationStart - TRAIL_SPAWN_INTERVAL_MS;
 
   const step = (now: number) => {
     const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
@@ -154,8 +155,6 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
       spawnTrailDot(state, newLatLng, markerGroup);
       state.lastTrailSpawnAt = now;
     }
-
-    state.lastTrailSpawnAt = animationStart - TRAIL_SPAWN_INTERVAL_MS;
 
     if (progress < 1) {
       state.animationFrameId = window.requestAnimationFrame(step);
