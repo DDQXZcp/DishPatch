@@ -11,7 +11,7 @@ import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import type { Order, OrderStatus, OrdersApiResponse } from "../../types/Order";
 import type { Robot } from "../../types/Robot";
 
-const ORDER_ARRIVED_WINDOW_MS = 5 * 60 * 1000;
+const ALERT_EVENT_WINDOW_MS = 5 * 60 * 1000;
 
 interface AlertItem {
   id: string;
@@ -36,6 +36,7 @@ function buildAlerts(
   robots: Robot[],
   orders: Order[],
   stuckSinceByRobotId: Record<number, number>,
+  newOrderAtByOrderId: Record<string, number>,
   arrivedAtByOrderId: Record<string, number>,
   now: number
 ): AlertItem[] {
@@ -62,12 +63,12 @@ function buildAlerts(
     });
   });
 
-  const recentOrders = orders.filter((order) => {
-    const createdTime = Date.parse(order.orderDate);
-    return !Number.isNaN(createdTime) && now - createdTime <= 5 * 60 * 1000;
+  const newOrders = orders.filter((order) => {
+    const newAt = newOrderAtByOrderId[order.orderId];
+    return typeof newAt === "number" && now - newAt <= ALERT_EVENT_WINDOW_MS;
   });
 
-  recentOrders.forEach((order) => {
+  newOrders.forEach((order) => {
     alerts.push({
       id: `recent-order-${order.orderId}`,
       title: "New order coming",
@@ -78,7 +79,7 @@ function buildAlerts(
 
   const arrivedOrders = orders.filter((order) => {
     const arrivedAt = arrivedAtByOrderId[order.orderId];
-    return typeof arrivedAt === "number" && now - arrivedAt <= ORDER_ARRIVED_WINDOW_MS;
+    return typeof arrivedAt === "number" && now - arrivedAt <= ALERT_EVENT_WINDOW_MS;
   });
 
   arrivedOrders.forEach((order) => {
@@ -143,9 +144,15 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [stuckSinceByRobotId, setStuckSinceByRobotId] = useState<Record<number, number>>({});
   const [arrivedAtByOrderId, setArrivedAtByOrderId] = useState<Record<string, number>>({});
+  const [newOrderAtByOrderId, setNewOrderAtByOrderId] = useState<Record<string, number>>({});
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const previousOrderStatusById = useRef<Map<string, OrderStatus>>(new Map());
-  const hasSeenOrdersOnce = useRef(false);
+  const seenOrderIds = useRef<Set<string>>(new Set());
+  // True once `orders` has been populated from a real data source (REST or
+  // websocket) at least once — guards against the pre-fetch `orders === []`
+  // render being mistaken for the transition baseline.
+  const hasLoadedOrdersOnce = useRef(false);
+  const hasBaselinedOrders = useRef(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -197,6 +204,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
         }
 
         if (isMounted) {
+          hasLoadedOrdersOnce.current = true;
           setOrders(result.data);
         }
       } catch (err) {
@@ -215,25 +223,39 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   // showing up immediately instead of waiting on a REST poll interval.
   useEffect(() => {
     if (liveOrders !== null) {
+      hasLoadedOrdersOnce.current = true;
       setOrders(liveOrders);
     }
   }, [liveOrders]);
 
   useEffect(() => {
+    if (!hasLoadedOrdersOnce.current) {
+      // Skip the pre-fetch render where `orders` is still the initial `[]` —
+      // treating that as the baseline would make every real order look "new"
+      // the moment actual data arrives.
+      return;
+    }
+
     const previousStatusById = previousOrderStatusById.current;
+    const seenIds = seenOrderIds.current;
     const now = Date.now();
-    const isFirstRun = !hasSeenOrdersOnce.current;
+    const isBaselineRun = !hasBaselinedOrders.current;
     const newlyArrivedOrderIds: string[] = [];
+    const newlyCreatedOrderIds: string[] = [];
 
     orders.forEach((order) => {
       const previousStatus = previousStatusById.get(order.orderId);
-      if (!isFirstRun && order.orderStatus === "Completed" && previousStatus !== "Completed") {
+      if (!isBaselineRun && order.orderStatus === "Completed" && previousStatus !== "Completed") {
         newlyArrivedOrderIds.push(order.orderId);
       }
+      if (!isBaselineRun && !seenIds.has(order.orderId)) {
+        newlyCreatedOrderIds.push(order.orderId);
+      }
       previousStatusById.set(order.orderId, order.orderStatus);
+      seenIds.add(order.orderId);
     });
 
-    hasSeenOrdersOnce.current = true;
+    hasBaselinedOrders.current = true;
 
     if (newlyArrivedOrderIds.length > 0) {
       setArrivedAtByOrderId((prev) => {
@@ -244,29 +266,51 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
         return next;
       });
     }
+
+    if (newlyCreatedOrderIds.length > 0) {
+      setNewOrderAtByOrderId((prev) => {
+        const next = { ...prev };
+        newlyCreatedOrderIds.forEach((orderId) => {
+          next[orderId] = now;
+        });
+        return next;
+      });
+    }
   }, [orders]);
 
   useEffect(() => {
-    setArrivedAtByOrderId((prev) => {
-      const now = Date.now();
+    const now = Date.now();
+
+    const pruneExpired = (record: Record<string, number>) => {
       const next: Record<string, number> = {};
       let changed = false;
 
-      for (const [orderId, arrivedAt] of Object.entries(prev)) {
-        if (now - arrivedAt <= ORDER_ARRIVED_WINDOW_MS) {
-          next[orderId] = arrivedAt;
+      for (const [id, timestamp] of Object.entries(record)) {
+        if (now - timestamp <= ALERT_EVENT_WINDOW_MS) {
+          next[id] = timestamp;
         } else {
           changed = true;
         }
       }
 
-      return changed ? next : prev;
-    });
+      return changed ? next : record;
+    };
+
+    setArrivedAtByOrderId(pruneExpired);
+    setNewOrderAtByOrderId(pruneExpired);
   }, [currentTime]);
 
   const alerts = useMemo(
-    () => buildAlerts(robots, orders, stuckSinceByRobotId, arrivedAtByOrderId, currentTime),
-    [robots, orders, stuckSinceByRobotId, arrivedAtByOrderId, currentTime]
+    () =>
+      buildAlerts(
+        robots,
+        orders,
+        stuckSinceByRobotId,
+        newOrderAtByOrderId,
+        arrivedAtByOrderId,
+        currentTime
+      ),
+    [robots, orders, stuckSinceByRobotId, newOrderAtByOrderId, arrivedAtByOrderId, currentTime]
   );
 
   useEffect(() => {
