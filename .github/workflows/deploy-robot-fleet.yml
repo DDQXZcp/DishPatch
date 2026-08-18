@@ -114,9 +114,14 @@ jobs:
       - name: Install and restart robot fleet service
         run: |
           set -euo pipefail
+          # Rebuilds every Docker image, which can hold this session open for a long
+          # time with little output. Without the keepalive that ends as
+          # "client_loop: send disconnect: Broken pipe", exit 255.
           ssh -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             -i key.pem \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
             "REMOTE_DIR='${{ env.REMOTE_DIR }}' SERVICE_USER='${{ env.EC2_USER }}' bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
@@ -124,12 +129,23 @@ jobs:
       - name: Verify robot fleet service
         run: |
           set -euo pipefail
+
+          # Fingerprint the map we are shipping.
+          EXPECTED_MAP_SHA=$(sha256sum robot-fleet/config/map.yaml robot-fleet/config/map.png \
+            | awk '{print $1}' | sha256sum | awk '{print $1}')
+          echo "Staged map fingerprint: ${EXPECTED_MAP_SHA}"
+
+          # ServerAlive*: the checks below poll for up to five minutes while the
+          # fleet comes up, and an SSH session left idle that long gets dropped —
+          # "client_loop: send disconnect: Broken pipe", exit 255.
           ssh -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
             -i key.pem \
             "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' bash -s" <<'REMOTE_SCRIPT'
+            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' EXPECTED_MAP_SHA='${EXPECTED_MAP_SHA}' bash -s" <<'REMOTE_SCRIPT'
           set -euo pipefail
           cd "${REMOTE_DIR}"
 
@@ -181,28 +197,46 @@ jobs:
             done
           }
 
-          check_nav2_map_files() {
-            sudo docker exec nav2 bash -lc '
-              set -euo pipefail
-              test -f /ros2_ws/config/map.yaml
-              test -f /ros2_ws/config/map.png
-              grep -Fx "image: map.png" /ros2_ws/config/map.yaml >/dev/null
-              grep -Fx "resolution: 0.011802" /ros2_ws/config/map.yaml >/dev/null
-              python3 -c "import struct; f=open(\"/ros2_ws/config/map.png\", \"rb\"); f.seek(16); width, height = struct.unpack(\">II\", f.read(8)); assert (width, height) == (5084, 3302), (width, height)"
-            '
-          }
+          ros_graph_ready=""
 
           for attempt in $(seq 1 60); do
-            if check_ros_graph && check_nav2_map_files; then
-              sudo systemctl --no-pager status "${SERVICE_NAME}.service"
-              sudo docker compose -f docker-compose.yml ps
-              exit 0
+            if check_ros_graph; then
+              ros_graph_ready="yes"
+              break
             fi
             sleep 5
           done
 
-          echo "::error::Timed out waiting for expected ROS topics and actions."
-          sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' || true
-          sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' || true
-          exit 1
+          if [ -z "${ros_graph_ready}" ]; then
+            echo "::error::Timed out waiting for expected ROS topics and actions."
+            sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' || true
+            sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' || true
+            exit 1
+          fi
+
+          # Did the map we staged actually reach the running fleet? It is baked into
+          # the nav2 image by COPY rather than mounted, and the systemd unit starts
+          # the stack with `compose up` and no --build, so a rebuild that did not
+          # happen leaves the fleet quietly navigating an old map. Nothing else in
+          # this pipeline would notice — which is how an 18x oversized costmap ran in
+          # production for months.
+          #
+          # Asserted once, not polled: a file on disk does not become correct by
+          # waiting, and retrying it is what turned a wrong map into a five-minute
+          # silence and an SSH broken pipe.
+          actual_map_sha=$(sudo docker exec nav2 sh -c \
+            'sha256sum /ros2_ws/config/map.yaml /ros2_ws/config/map.png | awk "{print \$1}" | sha256sum | awk "{print \$1}"')
+
+          if [ "${actual_map_sha}" != "${EXPECTED_MAP_SHA}" ]; then
+            echo "::error::The nav2 container is not running the map that was just staged. The image was probably not rebuilt from the new assets."
+            echo "  staged:   ${EXPECTED_MAP_SHA}"
+            echo "  deployed: ${actual_map_sha}"
+            echo "--- map.yaml inside the nav2 container ---"
+            sudo docker exec nav2 cat /ros2_ws/config/map.yaml || true
+            exit 1
+          fi
+
+          echo "Map fingerprint matches: ${actual_map_sha}"
+          sudo systemctl --no-pager status "${SERVICE_NAME}.service"
+          sudo docker compose -f docker-compose.yml ps
           REMOTE_SCRIPT
