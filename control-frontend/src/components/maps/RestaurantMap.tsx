@@ -240,7 +240,7 @@ function fadeTrailDots(state: RobotMarkerState) {
       return false;
     }
 
-    dot.circle.setStyle({ fillOpacity: TRAIL_OPACITY * (1 - 2 * life) });
+    dot.circle.setStyle({ fillOpacity: Math.max(0, TRAIL_OPACITY * (1 - 2 * life)) });
     return true;
   });
 }
