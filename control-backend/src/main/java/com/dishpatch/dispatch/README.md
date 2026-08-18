@@ -139,6 +139,41 @@ trusted to still be where it was.
 Consequence: after a restart every robot drives to the counter, and nothing
 dispatches until the first one gets there.
 
+## Load test
+
+Log in first:
+
+```bash
+read -rp "POS email: " POS_EMAIL && read -rsp "POS password: " POS_PASS && echo
+curl -s -c /tmp/dishpatch-cookies.txt -X POST https://posapi.dish-patch.com/api/user/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$POS_EMAIL\",\"password\":\"$POS_PASS\"}" \
+  -w '\nlogin: %{http_code}\n' -o /dev/null
+```
+
+Send twenty orders to randomly chosen drop points:
+
+```bash
+for t in $(awk 'BEGIN{srand();n=split("T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15 T16 T17 T18 R1 R2 R3 R4 R5 R6 R7",a," ");for(i=1;i<=20;i++)printf "%s ",a[int(rand()*n)+1]}'); do
+  curl -s -b /tmp/dishpatch-cookies.txt -X POST https://posapi.dish-patch.com/api/order \
+    -H 'Content-Type: application/json' \
+    -d "{\"customerDetails\":{\"name\":\"Load test $t\",\"phone\":\"0400000000\",\"guests\":2},\"orderStatus\":\"Preparing\",\"bills\":{\"total\":0,\"tax\":0,\"totalWithTax\":0},\"items\":[],\"table\":\"$t\",\"paymentMethod\":\"Cash\"}" \
+    -o /dev/null -w "$t %{http_code}\n"
+  sleep 0.2
+done
+```
+
+While it runs, watch `GET /api/dispatch`:
+
+| Reading | Meaning |
+|---|---|
+| `freeRobots` returning to `[1,2]` between deliveries | healthy |
+| `attempts` above 1 | a goal was lost and re-sent — the recovery path is working |
+| a robot missing from `freeRobots` indefinitely | it is stranded; the thing this pipeline is meant to prevent |
+| `queuedOrders` high while `freeRobots` is non-empty | a bug, not load |
+
+These write real orders to the production table. Clear them out afterwards.
+
 ## State, and what is deliberately absent
 
 The `Map<String, DispatchAssignment>` keyed by order id does three jobs:
@@ -176,7 +211,7 @@ So none of these exist, on purpose:
 | Backend restart mid-delivery | Assignments are lost, so the robot is treated as unplaced and homed. Its order stays `Preparing` and is dispatched again. | Handled |
 | Telemetry lapses at the counter | Dropped from `atCounter`/`homing`, so the robot homes again when it comes back rather than being trusted to still be there. | Handled |
 | Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. | Surfaced, not resolved |
-| Goal never reaches Nav2 | A publish is dropped if the ROS publisher has not yet discovered `goal_relay_node`. Goal topics are advertised at connection time, so discovery finishes long before the first goal is sent. | Handled |
+| Goal never reaches Nav2 | A publish is dropped if the ROS publisher has not yet discovered Nav2's `bt_navigator`, which subscribes to `/{ns}/goal_pose` itself. Goal topics are advertised at connection time, so discovery finishes long before the first goal is sent. | Handled |
 | Nav2 aborts a goal, or one goes missing anyway | The robot goes idle short of its destination. `navigating: false` with a large `metresToGo` is the signature. Once a grace window has passed, the goal is re-sent; after `MAX_GOAL_ATTEMPTS` the delivery is given up on, the order goes back in the queue, and the robot is sent home and released. Every step logs a warning. | **Handled** |
 | Stale orders | A days-old `Preparing` order is still dispatched, and FIFO puts it **first**. A max-age guard belongs with the other skip checks, so it reports a reason. | **Not handled** |
 | DynamoDB scan fails | Caught and logged; the tick carries on seeing zero orders. The endpoint then reads as an idle restaurant. A `lastError` field would close this. | **Not handled** |
