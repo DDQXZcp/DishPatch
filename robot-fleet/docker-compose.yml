@@ -42,6 +42,19 @@ services:
       retries: 5
 
   # ── Nav2 stack (shared by all robots) ──────────────────────────────────────
+  #
+  # CAPACITY: this one container runs five real-time nodes per robot namespace, so
+  # two robots is ten nodes. It was consolidated here to save image size — that
+  # argument was about disk and never about CPU. On 2026-08-11 the controllers were
+  # missing their 20Hz loop, dropping as low as 6Hz, while the planner failed to
+  # acknowledge goal requests inside Nav2's 20ms default. Shrinking the map from
+  # 16.8M cells to 935k removed most of that load.
+  #
+  # No cpu/memory limits are set here deliberately: capping a container that is
+  # already short of CPU makes it worse. Measure before adding a third robot —
+  #   nproc; docker stats --no-stream
+  #   docker logs nav2 2>&1 | grep -c "Control loop missed"
+  # and split the stack per robot if the loop-miss count is not near zero.
   nav2:
     build:
       context: .
