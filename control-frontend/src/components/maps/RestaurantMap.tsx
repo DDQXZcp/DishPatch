@@ -215,6 +215,9 @@ function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L
     radius: TRAIL_DOT_RADIUS,
     color: '#ff0015',
     fillOpacity: TRAIL_OPACITY,
+    opacity: TRAIL_OPACITY,
+    weight: 0,
+    stroke: false,
     interactive: false
   }).addTo(markerGroup);
 
@@ -240,7 +243,7 @@ function fadeTrailDots(state: RobotMarkerState) {
       return false;
     }
 
-    dot.circle.setStyle({ fillOpacity: TRAIL_OPACITY * (1 - life) });
+    dot.circle.setStyle({ fillOpacity: TRAIL_OPACITY * (1 - life), opacity: TRAIL_OPACITY * (1 - life), stroke: false, weight: 0 });
     return true;
   });
 }
