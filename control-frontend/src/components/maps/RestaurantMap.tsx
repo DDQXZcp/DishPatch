@@ -1,15 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
 import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
 import type { Robot, RobotStatus } from '../../types/Robot';
-import type { Order, OrderItem, OrdersApiResponse } from '../../types/Order';
+import type { Order, OrderItem } from '../../types/Order';
 
 
 const MAP_MANIFEST_URL = "/maps/map-manifest.json";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
-const ORDER_TABLE_POLL_INTERVAL_MS = 15000;
 type FloorplanBounds = [[number, number], [number, number]];
 
 interface OrderTableInfo {
@@ -81,48 +79,83 @@ function resolveOrderTableNo(order: Order): string | undefined {
   return value === undefined || value === null || value === '' ? undefined : String(value);
 }
 
-function formatOrderItems(items: OrderItem[]): string {
-  if (!items || items.length === 0) {
-    return 'No items';
-  }
+function formatOrderItemLine(item: OrderItem): string {
+  const name = item.name ?? item.itemName ?? item.productName ?? 'Item';
+  const quantity = item.quantity ?? item.qty ?? 1;
 
-  return items
-    .map((item) => {
-      const name = item.name ?? item.itemName ?? item.productName ?? 'Item';
-      const quantity = item.quantity ?? item.qty ?? 1;
+  return `${quantity} × ${name}`;
+}
 
-      return `${quantity} × ${name}`;
-    })
-    .join(', ');
+function createDetailRow(label: string, value: string) {
+  const row = document.createElement('div');
+  row.className = 'flex items-baseline justify-between gap-3';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'text-xs text-gray-400';
+  labelEl.textContent = label;
+  row.appendChild(labelEl);
+
+  const valueEl = document.createElement('span');
+  valueEl.className = 'text-xs font-medium text-gray-700';
+  valueEl.textContent = value;
+  row.appendChild(valueEl);
+
+  return row;
 }
 
 function createRobotPopup(robot: Robot, orderTableById: Map<string, OrderTableInfo>) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'text-sm';
+  wrapper.className = 'min-w-[160px] text-sm';
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between gap-3';
 
   const name = document.createElement('strong');
+  name.className = 'text-gray-900';
   name.textContent = robot.name;
-  wrapper.appendChild(name);
-  wrapper.appendChild(document.createElement('br'));
+  header.appendChild(name);
 
   const status = document.createElement('span');
-  status.className = `inline-block px-2 py-1 rounded-full text-xs ${getRobotStatusClassName(robot.status)}`;
+  status.className = `inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${getRobotStatusClassName(robot.status)}`;
   status.textContent = robot.status;
-  wrapper.appendChild(status);
+  header.appendChild(status);
+
+  wrapper.appendChild(header);
 
   if (robot.status === 'Serving' && robot.orderId) {
     const orderTable = orderTableById.get(robot.orderId);
 
     if (orderTable) {
-      const orderLine = document.createElement('div');
-      orderLine.className = 'mt-1 text-xs text-gray-600';
-      orderLine.textContent = `Order #${orderTable.displayId} · Table ${orderTable.tableNo}`;
-      wrapper.appendChild(orderLine);
+      const details = document.createElement('div');
+      details.className = 'mt-2 space-y-1 border-t border-gray-100 pt-2';
 
-      const itemsLine = document.createElement('div');
-      itemsLine.className = 'mt-1 max-w-[200px] text-xs text-gray-500';
-      itemsLine.textContent = formatOrderItems(orderTable.items);
-      wrapper.appendChild(itemsLine);
+      details.appendChild(createDetailRow('Order', `#${orderTable.displayId}`));
+      details.appendChild(createDetailRow('Table', orderTable.tableNo));
+
+      const itemsLabel = document.createElement('div');
+      itemsLabel.className = 'text-xs text-gray-400';
+      itemsLabel.textContent = 'Items';
+      details.appendChild(itemsLabel);
+
+      if (orderTable.items && orderTable.items.length > 0) {
+        const itemsList = document.createElement('ul');
+        itemsList.className = 'max-w-[220px] list-disc space-y-0.5 pl-4 text-xs text-gray-600';
+
+        orderTable.items.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = formatOrderItemLine(item);
+          itemsList.appendChild(li);
+        });
+
+        details.appendChild(itemsList);
+      } else {
+        const noItems = document.createElement('div');
+        noItems.className = 'text-xs text-gray-500';
+        noItems.textContent = 'No items';
+        details.appendChild(noItems);
+      }
+
+      wrapper.appendChild(details);
     }
   }
 
@@ -285,56 +318,27 @@ function RecenterButton({ onClick }: { onClick: () => void }) {
 }
 
 export default function RestaurantMap() {
-  const { robots } = useRobotContext();
+  const { robots, orders } = useRobotContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const markerStatesRef = useRef<Map<number, RobotMarkerState>>(new Map());
   const frameRef = useRef<number | null>(null);
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
-  const [orderTableById, setOrderTableById] = useState<Map<string, OrderTableInfo>>(new Map());
 
-  useEffect(() => {
-    let active = true;
+  const orderTableById = useMemo(() => {
+    const next = new Map<string, OrderTableInfo>();
 
-    const loadOrderTables = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/orders`, { cache: "no-store" });
+    (orders ?? []).forEach((order) => {
+      const tableNo = resolveOrderTableNo(order);
 
-        if (!response.ok) {
-          throw new Error(`Failed to load orders: ${response.status}`);
-        }
-
-        const result = (await response.json()) as OrdersApiResponse;
-
-        if (!active || !result.success || !Array.isArray(result.data)) {
-          return;
-        }
-
-        const next = new Map<string, OrderTableInfo>();
-
-        result.data.forEach((order) => {
-          const tableNo = resolveOrderTableNo(order);
-
-          if (tableNo) {
-            next.set(order.orderId, { displayId: order.displayId, tableNo, items: order.items });
-          }
-        });
-
-        setOrderTableById(next);
-      } catch (error) {
-        console.warn("Unable to load order/table info", error);
+      if (tableNo) {
+        next.set(order.orderId, { displayId: order.displayId, tableNo, items: order.items });
       }
-    };
+    });
 
-    loadOrderTables();
-    const intervalId = window.setInterval(loadOrderTables, ORDER_TABLE_POLL_INTERVAL_MS);
-
-    return () => {
-      active = false;
-      window.clearInterval(intervalId);
-    };
-  }, []);
+    return next;
+  }, [orders]);
 
   useEffect(() => {
     let active = true;
