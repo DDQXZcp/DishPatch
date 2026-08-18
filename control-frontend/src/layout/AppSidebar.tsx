@@ -146,12 +146,7 @@ const othersItems: NavItem[] = [
 ];
 
 const AppSidebar: React.FC = () => {
-  const {
-    isExpanded,
-    isMobileOpen,
-    isHovered,
-    setIsHovered,
-  } = useSidebar();
+  const { isExpanded, isMobileOpen } = useSidebar();
 
   const location = useLocation();
 
@@ -258,7 +253,7 @@ const AppSidebar: React.FC = () => {
                     ? "bg-brand-light text-brand-hover"
                     : "text-gray-600 hover:bg-brand-light hover:text-brand-hover"
                 } ${
-                  !isExpanded && !isHovered
+                  !isExpanded
                     ? "lg:justify-center"
                     : "lg:justify-start"
                 }`}
@@ -273,17 +268,13 @@ const AppSidebar: React.FC = () => {
                   {nav.icon}
                 </span>
 
-                {(isExpanded ||
-                  isHovered ||
-                  isMobileOpen) && (
+                {(isExpanded || isMobileOpen) && (
                   <span className="menu-item-text">
                     {nav.name}
                   </span>
                 )}
 
-                {(isExpanded ||
-                  isHovered ||
-                  isMobileOpen) && (
+                {(isExpanded || isMobileOpen) && (
                   <ChevronDownIcon
                     className={`ml-auto h-5 w-5 transition-transform duration-200 ${
                       isSubmenuOpen
@@ -313,9 +304,7 @@ const AppSidebar: React.FC = () => {
                     {nav.icon}
                   </span>
 
-                  {(isExpanded ||
-                    isHovered ||
-                    isMobileOpen) && (
+                  {(isExpanded || isMobileOpen) && (
                     <span className="menu-item-text">
                       {nav.name}
                     </span>
@@ -324,10 +313,7 @@ const AppSidebar: React.FC = () => {
               )
             )}
 
-            {nav.subItems &&
-              (isExpanded ||
-                isHovered ||
-                isMobileOpen) && (
+            {nav.subItems && (isExpanded || isMobileOpen) && (
                 <div
                   ref={(element) => {
                     subMenuRefs.current[
@@ -401,9 +387,7 @@ const AppSidebar: React.FC = () => {
         ${
           isExpanded || isMobileOpen
             ? "w-[290px]"
-            : isHovered
-              ? "w-[290px]"
-              : "w-[90px]"
+            : "w-[90px]"
         }
         ${
           isMobileOpen
@@ -411,10 +395,6 @@ const AppSidebar: React.FC = () => {
             : "-translate-x-full"
         }
         lg:translate-x-0`}
-      onMouseEnter={() =>
-        !isExpanded && setIsHovered(true)
-      }
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Bottom background image */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%]">
@@ -432,13 +412,13 @@ const AppSidebar: React.FC = () => {
       {/* Logo */}
       <div
         className={`relative z-10 flex py-8 ${
-          !isExpanded && !isHovered
+          !isExpanded
             ? "lg:justify-center"
             : "justify-center"
         }`}
       >
         <Link to="/">
-          {isExpanded || isHovered || isMobileOpen ? (
+          {isExpanded || isMobileOpen ? (
             <img
               src="/images/logo/dishpatch-light.svg"
               alt="DishPatch Logo"
@@ -463,12 +443,12 @@ const AppSidebar: React.FC = () => {
             <div>
               <h2
                 className={`mb-4 flex text-xs uppercase leading-[20px] text-brand ${
-                  !isExpanded && !isHovered
+                  !isExpanded
                     ? "lg:justify-center"
                     : "justify-start"
                 }`}
               >
-                {isExpanded || isHovered || isMobileOpen ? (
+                {isExpanded || isMobileOpen ? (
                   "Menu"
                 ) : (
                   <HorizontaLDots className="size-6" />

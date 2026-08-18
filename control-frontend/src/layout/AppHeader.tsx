@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 
 import { useSidebar } from "../context/SidebarContext";
 // import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import UserDropdown from "../components/header/UserDropdown";
+import DashboardWidgetsToolbar from "../components/dashboard/DashboardWidgetsToolbar";
 
 const AppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  const isDashboardRoute = pathname === "/";
 
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
 
@@ -125,6 +128,8 @@ const AppHeader: React.FC = () => {
             {/* Dark mode button disabled for now */}
             {/* <ThemeToggleButton /> */}
           </div>
+
+          {isDashboardRoute && <DashboardWidgetsToolbar />}
 
           <UserDropdown />
         </div>

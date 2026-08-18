@@ -1,7 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
-import type { Order, OrdersApiResponse } from "../../types/Order";
+import type { Order, OrderStatus, OrdersApiResponse } from "../../types/Order";
 import type { Robot } from "../../types/Robot";
+
+const ALERT_EVENT_WINDOW_MS = 5 * 60 * 1000;
 
 interface AlertItem {
   id: string;
@@ -11,13 +21,6 @@ interface AlertItem {
 }
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
-
-const severityStyles: Record<AlertItem["severity"], string> = {
-  warning: "bg-amber-100 text-amber-700",
-  info: "bg-sky-100 text-sky-700",
-  success: "bg-emerald-100 text-emerald-700",
-  error: "bg-red-100 text-red-700",
-};
 
 const STUCK_ROBOT_THRESHOLD_MS = 20 * 1000;
 
@@ -33,6 +36,8 @@ function buildAlerts(
   robots: Robot[],
   orders: Order[],
   stuckSinceByRobotId: Record<number, number>,
+  newOrderAtByOrderId: Record<string, number>,
+  arrivedAtByOrderId: Record<string, number>,
   now: number
 ): AlertItem[] {
   const alerts: AlertItem[] = [];
@@ -58,18 +63,33 @@ function buildAlerts(
     });
   });
 
-  const recentOrders = orders.filter((order) => {
-    const createdTime = Date.parse(order.orderDate);
-    return !Number.isNaN(createdTime) && now - createdTime <= 5 * 60 * 1000;
+  const newOrders = orders.filter((order) => {
+    const newAt = newOrderAtByOrderId[order.orderId];
+    return typeof newAt === "number" && now - newAt <= ALERT_EVENT_WINDOW_MS;
   });
-  if (recentOrders.length > 0) {
+
+  newOrders.forEach((order) => {
     alerts.push({
-      id: "recent-orders",
-      title: "New orders received",
-      detail: `${recentOrders.length} order${recentOrders.length > 1 ? "s" : ""} arrived in the last 5 minutes.`,
+      id: `recent-order-${order.orderId}`,
+      title: "New order coming",
+      detail: `Order ${order.displayId} just came in for table ${getTableLabel(order)}.`,
       severity: "info",
     });
-  }
+  });
+
+  const arrivedOrders = orders.filter((order) => {
+    const arrivedAt = arrivedAtByOrderId[order.orderId];
+    return typeof arrivedAt === "number" && now - arrivedAt <= ALERT_EVENT_WINDOW_MS;
+  });
+
+  arrivedOrders.forEach((order) => {
+    alerts.push({
+      id: `order-arrived-${order.orderId}`,
+      title: "Order arrived",
+      detail: `Order ${order.displayId} has arrived at table ${getTableLabel(order)}.`,
+      severity: "info",
+    });
+  });
 
   const stuckRobots = robots.filter((robot) => {
     if (!isStuckCandidate(robot)) {
@@ -101,14 +121,38 @@ function buildAlerts(
   return alerts;
 }
 
-export default function AlertsNotificationsWidget() {
-  const { robots } = useRobotContext();
+interface AlertsContextValue {
+  visibleAlerts: AlertItem[];
+  dismissAlert: (id: string) => void;
+}
+
+const AlertsContext = createContext<AlertsContextValue | null>(null);
+
+function useAlerts() {
+  const context = useContext(AlertsContext);
+
+  if (!context) {
+    throw new Error("useAlerts must be used within an AlertsProvider");
+  }
+
+  return context;
+}
+
+export function AlertsProvider({ children }: { children: ReactNode }) {
+  const { robots, orders: liveOrders } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [stuckSinceByRobotId, setStuckSinceByRobotId] = useState<Record<number, number>>({});
+  const [arrivedAtByOrderId, setArrivedAtByOrderId] = useState<Record<string, number>>({});
+  const [newOrderAtByOrderId, setNewOrderAtByOrderId] = useState<Record<string, number>>({});
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const previousOrderStatusById = useRef<Map<string, OrderStatus>>(new Map());
+  const seenOrderIds = useRef<Set<string>>(new Set());
+  // True once `orders` has been populated from a real data source (REST or
+  // websocket) at least once — guards against the pre-fetch `orders === []`
+  // render being mistaken for the transition baseline.
+  const hasLoadedOrdersOnce = useRef(false);
+  const hasBaselinedOrders = useRef(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -160,40 +204,122 @@ export default function AlertsNotificationsWidget() {
         }
 
         if (isMounted) {
+          hasLoadedOrdersOnce.current = true;
           setOrders(result.data);
-          setError(null);
         }
       } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : "Unable to load alerts");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        console.warn("Unable to load orders for alerts", err);
       }
     };
 
     void loadOrders();
-    const intervalId = window.setInterval(() => {
-      void loadOrders();
-    }, 30000);
 
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
     };
   }, []);
 
+  // Backend pushes the full order list live; this keeps new/updated orders
+  // showing up immediately instead of waiting on a REST poll interval.
+  useEffect(() => {
+    if (liveOrders !== null) {
+      hasLoadedOrdersOnce.current = true;
+      setOrders(liveOrders);
+    }
+  }, [liveOrders]);
+
+  useEffect(() => {
+    if (!hasLoadedOrdersOnce.current) {
+      // Skip the pre-fetch render where `orders` is still the initial `[]` —
+      // treating that as the baseline would make every real order look "new"
+      // the moment actual data arrives.
+      return;
+    }
+
+    const previousStatusById = previousOrderStatusById.current;
+    const seenIds = seenOrderIds.current;
+    const now = Date.now();
+    const isBaselineRun = !hasBaselinedOrders.current;
+    const newlyArrivedOrderIds: string[] = [];
+    const newlyCreatedOrderIds: string[] = [];
+
+    orders.forEach((order) => {
+      const previousStatus = previousStatusById.get(order.orderId);
+      if (!isBaselineRun && order.orderStatus === "Completed" && previousStatus !== "Completed") {
+        newlyArrivedOrderIds.push(order.orderId);
+      }
+      if (!isBaselineRun && !seenIds.has(order.orderId)) {
+        newlyCreatedOrderIds.push(order.orderId);
+      }
+      previousStatusById.set(order.orderId, order.orderStatus);
+      seenIds.add(order.orderId);
+    });
+
+    hasBaselinedOrders.current = true;
+
+    if (newlyArrivedOrderIds.length > 0) {
+      setArrivedAtByOrderId((prev) => {
+        const next = { ...prev };
+        newlyArrivedOrderIds.forEach((orderId) => {
+          next[orderId] = now;
+        });
+        return next;
+      });
+    }
+
+    if (newlyCreatedOrderIds.length > 0) {
+      setNewOrderAtByOrderId((prev) => {
+        const next = { ...prev };
+        newlyCreatedOrderIds.forEach((orderId) => {
+          next[orderId] = now;
+        });
+        return next;
+      });
+    }
+  }, [orders]);
+
+  useEffect(() => {
+    const now = Date.now();
+
+    const pruneExpired = (record: Record<string, number>) => {
+      const next: Record<string, number> = {};
+      let changed = false;
+
+      for (const [id, timestamp] of Object.entries(record)) {
+        if (now - timestamp <= ALERT_EVENT_WINDOW_MS) {
+          next[id] = timestamp;
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? next : record;
+    };
+
+    setArrivedAtByOrderId(pruneExpired);
+    setNewOrderAtByOrderId(pruneExpired);
+  }, [currentTime]);
+
   const alerts = useMemo(
-    () => buildAlerts(robots, orders, stuckSinceByRobotId, currentTime),
-    [robots, orders, stuckSinceByRobotId, currentTime]
+    () =>
+      buildAlerts(
+        robots,
+        orders,
+        stuckSinceByRobotId,
+        newOrderAtByOrderId,
+        arrivedAtByOrderId,
+        currentTime
+      ),
+    [robots, orders, stuckSinceByRobotId, newOrderAtByOrderId, arrivedAtByOrderId, currentTime]
   );
 
-  const actionableAlertCount = useMemo(
-    () => alerts.filter((alert) => alert.severity === "warning" || alert.severity === "error").length,
-    [alerts]
-  );
+  useEffect(() => {
+    const activeIds = new Set(alerts.map((alert) => alert.id));
+    setDismissedIds((prev) => {
+      const next = prev.filter((id) => activeIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [alerts]);
 
   const visibleAlerts = useMemo(
     () => alerts.filter((a) => !dismissedIds.includes(a.id)),
@@ -205,70 +331,95 @@ export default function AlertsNotificationsWidget() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div />
-        <span
-          className={
-            `rounded-full px-2.5 py-1 text-xs font-medium ` +
-            (actionableAlertCount === 0
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-red-100 text-red-700")
-          }
-        >
-          {actionableAlertCount} ALERTS
-        </span>
-      </div>
+    <AlertsContext.Provider value={{ visibleAlerts, dismissAlert }}>
+      {children}
+    </AlertsContext.Provider>
+  );
+}
 
-      <div className="flex-1 space-y-2 overflow-auto">
-        {isLoading && alerts.length === 0 && (
-          <p className="text-sm text-gray-500">Loading alerts…</p>
-        )}
+const snackbarStyles: Record<
+  "warning" | "error" | "info",
+  { bar: string; detail: string; dismissButton: string }
+> = {
+  warning: {
+    bar: "bg-red-600 text-white",
+    detail: "text-red-100",
+    dismissButton: "bg-white/20 hover:bg-white/30",
+  },
+  error: {
+    bar: "bg-red-600 text-white",
+    detail: "text-red-100",
+    dismissButton: "bg-white/20 hover:bg-white/30",
+  },
+  info: {
+    bar: "bg-gray-500 text-white",
+    detail: "text-gray-100",
+    dismissButton: "bg-white/20 hover:bg-white/30",
+  },
+};
 
-        {!isLoading && error && (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </p>
-        )}
+export function AlertsSnackbarStack() {
+  const { visibleAlerts, dismissAlert } = useAlerts();
+  const scheduledInfoIds = useRef<Set<string>>(new Set());
+  const timeoutIdsRef = useRef<number[]>([]);
 
-        {!isLoading && !error && alerts.length === 0 && (
-          <p className="text-sm text-gray-500">No active alerts right now.</p>
-        )}
+  const bannerAlerts = visibleAlerts.filter(
+    (alert): alert is AlertItem & { severity: "warning" | "error" | "info" } =>
+      alert.severity === "warning" ||
+      alert.severity === "error" ||
+      alert.severity === "info"
+  );
 
-        {visibleAlerts.map((alert) => (
+  useEffect(() => {
+    bannerAlerts
+      .filter((alert) => alert.severity === "info")
+      .forEach((alert) => {
+        if (scheduledInfoIds.current.has(alert.id)) {
+          return;
+        }
+
+        scheduledInfoIds.current.add(alert.id);
+        timeoutIdsRef.current.push(
+          window.setTimeout(() => dismissAlert(alert.id), 5000)
+        );
+      });
+  }, [bannerAlerts, dismissAlert]);
+
+  useEffect(() => {
+    return () => {
+      timeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+    };
+  }, []);
+
+  if (bannerAlerts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="fixed top-20 left-1/2 z-[100000] flex -translate-x-1/2 flex-col items-center gap-2">
+      {bannerAlerts.map((alert) => {
+        const styles = snackbarStyles[alert.severity];
+
+        return (
           <div
             key={alert.id}
-            className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+            className={`flex w-max max-w-xs items-start gap-2 rounded-lg px-3 py-2 shadow-lg ${styles.bar}`}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-gray-800 dark:text-white/90">
-                  {alert.title}
-                </p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {alert.detail}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`rounded-full px-2 py-1 text-[11px] font-medium capitalize ${severityStyles[alert.severity]}`}
-                >
-                  {alert.severity}
-                </span>
-
-                <button
-                  onClick={() => dismissAlert(alert.id)}
-                  className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
-                  aria-label="Dismiss alert"
-                  title="Dismiss"
-                >
-                  ✕
-                </button>
-              </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold">{alert.title}</p>
+              <p className={`truncate text-xs ${styles.detail}`}>{alert.detail}</p>
             </div>
+            <button
+              onClick={() => dismissAlert(alert.id)}
+              className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${styles.dismissButton}`}
+              aria-label="Dismiss alert"
+              title="Dismiss"
+            >
+              ✕
+            </button>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

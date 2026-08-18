@@ -1,8 +1,11 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
 
 import {
@@ -23,10 +26,6 @@ import type {
   OrdersApiResponse,
   OrderStatus,
 } from "../../types/Order";
-
-interface OrdersProps {
-  framed?: boolean;
-}
 
 type OrderWithTable = Order & {
   tableNo?: string | number;
@@ -75,9 +74,42 @@ const STATUS_CONFIG: Record<
   },
 };
 
-export default function Orders({
-  framed = true,
-}: OrdersProps) {
+interface OrdersContextValue {
+  orders: Order[];
+  filteredOrders: Order[];
+  isLoading: boolean;
+  isRefreshing: boolean;
+  loadError: string | null;
+  actionError: string | null;
+  cancellingOrderId: string | null;
+  activeFilters: Set<OrderStatus>;
+  toggleFilter: (status: OrderStatus) => void;
+  clearFilters: () => void;
+  refresh: () => void;
+  cancelOrder: (order: Order) => void;
+}
+
+const OrdersContext = createContext<OrdersContextValue | null>(
+  null,
+);
+
+function useOrders() {
+  const context = useContext(OrdersContext);
+
+  if (!context) {
+    throw new Error(
+      "useOrders must be used within an OrdersProvider",
+    );
+  }
+
+  return context;
+}
+
+export function OrdersProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const { orders: liveOrders } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,9 +126,6 @@ export default function Orders({
 
   const [cancellingOrderId, setCancellingOrderId] =
     useState<string | null>(null);
-
-  const [filterOpen, setFilterOpen] =
-    useState(false);
 
   const [activeFilters, setActiveFilters] =
     useState<Set<OrderStatus>>(new Set());
@@ -264,133 +293,183 @@ export default function Orders({
     );
   }, [orders, activeFilters]);
 
-  const content = (
-    <>
-      <div
-        className={`mb-4 flex flex-col gap-3 sm:flex-row sm:items-center ${
-          framed
-            ? "sm:justify-between"
-            : "sm:justify-end"
+  const refresh = () => {
+    void loadOrders();
+  };
+
+  return (
+    <OrdersContext.Provider
+      value={{
+        orders,
+        filteredOrders,
+        isLoading,
+        isRefreshing,
+        loadError,
+        actionError,
+        cancellingOrderId,
+        activeFilters,
+        toggleFilter,
+        clearFilters,
+        refresh,
+        cancelOrder: (order) => void cancelOrder(order),
+      }}
+    >
+      {children}
+    </OrdersContext.Provider>
+  );
+}
+
+export function OrdersHeaderActions() {
+  const {
+    isLoading,
+    isRefreshing,
+    refresh,
+    activeFilters,
+    toggleFilter,
+    clearFilters,
+  } = useOrders();
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      onMouseDown={(event) => event.stopPropagation()}
+      onDragStart={(event) => event.preventDefault()}
+    >
+      <button
+        type="button"
+        onClick={refresh}
+        disabled={isLoading || isRefreshing}
+        aria-label={
+          isRefreshing
+            ? "Refreshing orders"
+            : "Refresh orders"
+        }
+        title={
+          isRefreshing
+            ? "Refreshing orders"
+            : "Refresh orders"
+        }
+        className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
+      >
+        <RefreshIcon
+          spinning={isRefreshing}
+          className="h-4 w-4"
+        />
+      </button>
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() =>
+            setFilterOpen((open) => !open)
+          }
+          className={`dropdown-toggle inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-theme-xs font-medium shadow-theme-xs ${
+            activeFilters.size > 0
+              ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-900/20 dark:text-brand-400"
+              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
+          }`}
+          aria-expanded={filterOpen}
+          aria-label="Filter orders by status"
+        >
+          <FilterIcon />
+
+          <span>Filter</span>
+
+          {activeFilters.size > 0 && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-xs text-white">
+              {activeFilters.size}
+            </span>
+          )}
+        </button>
+
+        <Dropdown
+          isOpen={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          className="w-52 p-2"
+        >
+          {ALL_STATUSES.map((status) => {
+            const isSelected = activeFilters.has(status);
+
+            return (
+              <button
+                type="button"
+                key={status}
+                onClick={() => toggleFilter(status)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded border ${
+                    isSelected
+                      ? "border-brand-500 bg-brand-500"
+                      : "border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {isSelected && <CheckIcon />}
+                </span>
+
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    STATUS_CONFIG[status].dotClassName
+                  }`}
+                />
+
+                <span>{status}</span>
+              </button>
+            );
+          })}
+        </Dropdown>
+      </div>
+
+      <button
+        type="button"
+        onClick={clearFilters}
+        disabled={activeFilters.size === 0}
+        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-theme-xs font-medium shadow-theme-xs ${
+          activeFilters.size > 0
+            ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
+            : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
         }`}
       >
-        {framed && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Orders
-            </h3>
+        See all
+      </button>
+    </div>
+  );
+}
 
-            <p className="text-theme-sm text-gray-500 dark:text-gray-400">
-              {orders.length}{" "}
-              {orders.length === 1
-                ? "order"
-                : "orders"}
-            </p>
-          </div>
-        )}
+interface OrdersProps {
+  framed?: boolean;
+}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void loadOrders()}
-            disabled={isLoading || isRefreshing}
-            aria-label={
-              isRefreshing
-                ? "Refreshing orders"
-                : "Refresh orders"
-            }
-            title={
-              isRefreshing
-                ? "Refreshing orders"
-                : "Refresh orders"
-            }
-            className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-          >
-            <RefreshIcon spinning={isRefreshing} />
-          </button>
+export default function Orders({
+  framed = true,
+}: OrdersProps) {
+  const {
+    orders,
+    filteredOrders,
+    isLoading,
+    isRefreshing,
+    loadError,
+    actionError,
+    cancellingOrderId,
+    refresh,
+    cancelOrder,
+  } = useOrders();
 
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() =>
-                setFilterOpen((open) => !open)
-              }
-              className={`dropdown-toggle inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-theme-sm font-medium shadow-theme-xs ${
-                activeFilters.size > 0
-                  ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-900/20 dark:text-brand-400"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-              }`}
-              aria-expanded={filterOpen}
-              aria-label="Filter orders by status"
-            >
-              <FilterIcon />
+  const content = (
+    <>
+      {framed && (
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+            Orders
+          </h3>
 
-              <span>Filter</span>
-
-              {activeFilters.size > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-xs text-white">
-                  {activeFilters.size}
-                </span>
-              )}
-            </button>
-
-            <Dropdown
-              isOpen={filterOpen}
-              onClose={() =>
-                setFilterOpen(false)
-              }
-              className="w-52 p-2"
-            >
-              {ALL_STATUSES.map((status) => {
-                const isSelected =
-                  activeFilters.has(status);
-
-                return (
-                  <button
-                    type="button"
-                    key={status}
-                    onClick={() =>
-                      toggleFilter(status)
-                    }
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-                  >
-                    <span
-                      className={`flex h-4 w-4 items-center justify-center rounded border ${
-                        isSelected
-                          ? "border-brand-500 bg-brand-500"
-                          : "border-gray-300 dark:border-gray-600"
-                      }`}
-                    >
-                      {isSelected && <CheckIcon />}
-                    </span>
-
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        STATUS_CONFIG[status]
-                          .dotClassName
-                      }`}
-                    />
-
-                    <span>{status}</span>
-                  </button>
-                );
-              })}
-            </Dropdown>
-          </div>
-
-          <button
-            type="button"
-            onClick={clearFilters}
-            disabled={activeFilters.size === 0}
-            className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-theme-sm font-medium shadow-theme-xs ${
-              activeFilters.size > 0
-                ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-                : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
-            }`}
-          >
-            See all
-          </button>
+          <p className="text-theme-sm text-gray-500 dark:text-gray-400">
+            {orders.length}{" "}
+            {orders.length === 1 ? "order" : "orders"}
+          </p>
         </div>
-      </div>
+      )}
 
       {isLoading && (
         <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
@@ -405,7 +484,7 @@ export default function Orders({
 
             <button
               type="button"
-              onClick={() => void loadOrders()}
+              onClick={refresh}
               disabled={isRefreshing}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
             >
@@ -621,14 +700,16 @@ function formatTableNumber(
 
 interface RefreshIconProps {
   spinning?: boolean;
+  className?: string;
 }
 
 function RefreshIcon({
   spinning = false,
+  className = "h-5 w-5",
 }: RefreshIconProps) {
   return (
     <svg
-      className={`h-5 w-5 stroke-current ${
+      className={`stroke-current ${className} ${
         spinning ? "animate-spin" : ""
       }`}
       viewBox="0 0 24 24"

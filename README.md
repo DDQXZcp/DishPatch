@@ -23,7 +23,7 @@ DishPatch is an open-source, AWS cloud-based restaurant service-robot platform t
   <a href="https://control.dish-patch.com/">Live Demo</a>
 </p>
 
-<img alt="DishPatch Architecture" src="./img/DishPatch.png" />
+<img alt="DishPatch Architecture" src="./img/DishPatch_v2.png" />
 
 ## Overview
 
@@ -277,6 +277,21 @@ rosbridge WebSocket, with no DDS traffic crossing the network. See
 ## Local Testing
 
 For local development, we need to manually create an **.env** in each component as it need AWS permissions to execute certain operations. Permissions for cloud resources e.g. Lambda, EC2 are managed directly via IAM.
+
+### Local Testing - Map
+
+At the root directory, run the command below once to stage the map. Staged files are gitignored, and all source file lives in the `map-source` folder. Check `map-source/README.md` and `map-source/stage-map-assets.sh` for detailed implementation.
+
+```bash
+# copies the corresponding files from map-source to control-frontend, control-backend, robot-fleet
+./map-source/stage-map-assets.sh
+```
+
+You may also run this command to check if the staged map files are up-to-date.
+
+```bash
+./map-source/stage-map-assets.sh --check
+```
 
 ### Local Testing - POS Backend
 
