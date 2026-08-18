@@ -1,108 +1,106 @@
 # ROS2 Workspace — `robot-fleet/src/`
 
-This workspace contains all ROS2 packages that run inside each robot container.
-Every package is built together with `colcon` and launched via `robot_bringup`.
+Every package here is built with `colcon` into one workspace. Which of them run
+depends on the container: the robot image launches `robot_bringup`, the Nav2
+image launches `nav2_launcher`, and a robot joining from outside the fleet also
+runs `rosbridge_relay`.
 
-## Package Overview
+For the architecture these packages implement, see
+[../README.md](../README.md).
 
-| Package | Type | Node File | Role |
+## Packages
+
+| Package | Type | Entry point | Role |
 |---|---|---|---|
-| [`shared_msgs`](./shared_msgs/) | CMake | — | Custom message definitions shared across all packages |
-| [`robot_navigation`](./robot_navigation/) | Python | `robot_navigation/nav_node.py` | Odometry simulation, velocity command handling |
-| [`robot_status`](./robot_status/) | Python | `robot_status/status_node.py` | Publishes robot status, event-driven |
-| [`robot_core`](./robot_core/) | Python | `robot_core/core_node.py` | State machine and battery simulation |
-| [`robot_bringup`](./robot_bringup/) | Python | `launch/robot_launch.py` | Launch file — starts all nodes for one robot instance |
-| [`robot_location_publisher`](./robot_location_publisher/) | Python | `robot_location_publisher/location_publisher.py` | Legacy location publisher (superseded by robot_navigation) |
-| [`rosbridge_relay`](./rosbridge_relay/) | Python | `rosbridge_relay/relay_node.py` | Joins a robot running off the fleet's ROS graph, over the rosbridge WebSocket |
+| [`shared_msgs`](./shared_msgs/) | CMake | — | Message definitions shared across the fleet |
+| [`robot_hardware`](./robot_hardware/) | Python | `hardware_node` | Battery drain and sensor simulation |
+| [`robot_navigation`](./robot_navigation/) | Python | `nav_node` | Fake driver — integrates `cmd_vel` into odometry and TF |
+| [`robot_status`](./robot_status/) | Python | `status_node` | Aggregates telemetry into `/{ns}/status` |
+| [`robot_bringup`](./robot_bringup/) | Python | `launch/robot_launch.py` | Launches one robot's nodes |
+| [`nav2_launcher`](./nav2_launcher/) | Python | `launch/multi_nav2_launch.py` | Launches the Nav2 stack for a list of namespaces |
+| [`rosbridge_relay`](./rosbridge_relay/) | Python | `relay_node` | Joins a robot running off the fleet's ROS graph, over the rosbridge WebSocket |
+| [`robot_location_publisher`](./robot_location_publisher/) | Python | `location_publisher` | Legacy, superseded by `robot_navigation` |
 
-## Nodes per Robot
+`robot_navigation` also ships `goal_relay_node`, which is **not launched** —
+`bt_navigator` already subscribes to `goal_pose`, and running both put two
+subscribers on the topic so every goal was executed twice. See
+[../README.md](../README.md) before re-adding it anywhere.
 
-Each robot container runs **3 nodes**, launched together by `robot_bringup`:
+## Nodes per robot
 
-| Node | File | Role |
-|---|---|---|
-| `/{ns}/core_node` | `robot_core/core_node.py` | State machine + battery simulation |
-| `/{ns}/nav_node` | `robot_navigation/nav_node.py` | Odometry publisher + cmd_vel subscriber |
-| `/{ns}/status_node` | `robot_status/status_node.py` | Status publisher, event-driven |
+The robot container runs four nodes, launched together by `robot_bringup`:
 
-How `setup.py` maps node name to file:
+| Node | Package |
+|---|---|
+| `/{ns}/hardware_node` | `robot_hardware` |
+| `/{ns}/nav_node` | `robot_navigation` |
+| `/{ns}/status_node` | `robot_status` |
+| `/{ns}/map_to_odom_tf` | `tf2_ros` (static transform publisher) |
+
+The five Nav2 nodes — `map_server`, `planner_server`, `controller_server`,
+`bt_navigator`, `lifecycle_manager` — run in the separate `nav2` container, once
+per namespace.
+
+How `setup.py` maps a node name to a file:
+
 ```python
-# example from robot_core/setup.py
+# robot_hardware/setup.py
 entry_points={
     "console_scripts": [
-        "core_node = robot_core.core_node:main",
+        "hardware_node = robot_hardware.hardware_node:main",
     ],
 }
 ```
 
-## Topics per Robot
+## Topics per robot
 
-Each robot container has **5 topics** under its namespace:
+| Topic | Type | Publisher | Subscriber |
+|---|---|---|---|
+| `/{ns}/goal_pose` | `geometry_msgs/PoseStamped` | backend | `bt_navigator` |
+| `/{ns}/status` | `shared_msgs/RobotStatus` | `status_node` | backend, via rosbridge |
+| `/{ns}/task_command` | `std_msgs/String` (JSON) | backend | `hardware_node` |
+| `/{ns}/battery` | `std_msgs/Float32` | `hardware_node` | `status_node` |
+| `/{ns}/sensor` | `std_msgs/Bool` | `hardware_node` | `status_node` |
+| `/{ns}/odom` | `nav_msgs/Odometry` | `nav_node` | `status_node`, `controller_server` |
+| `/{ns}/cmd_vel` | `geometry_msgs/Twist` | `controller_server` | `nav_node` |
 
-| Topic | Direction | Message Type | Publisher | Subscriber |
-|---|---|---|---|---|
-| `/{ns}/status` | publish | `shared_msgs/RobotStatus` | `status_node` | rosbridge → Java backend |
-| `/{ns}/status_update` | internal | `std_msgs/String` (JSON) | `core_node` | `status_node` |
-| `/{ns}/odom` | publish | `nav_msgs/Odometry` | `nav_node` | `status_node` |
-| `/{ns}/cmd_vel` | subscribe | `geometry_msgs/Twist` | Java backend | `nav_node` |
-| `/{ns}/task_command` | subscribe | `std_msgs/String` (JSON) | Java backend | `core_node` |
+Plus `/map` from `map_server`, and `/{ns}/navigate_to_pose/_action/status` from
+`bt_navigator`, which the backend reads to tell a driving robot from a stranded
+one.
 
-## Node → Topic Flow
+## Message types
 
-```
-core_node ──/status_update──► status_node ──/status──► rosbridge ──► Java backend
-    ▲                               ▲
-    │                               │
-/task_command               /odom (from nav_node)
-    │
-Java backend          nav_node ◄──/cmd_vel── Java backend
-```
+**Custom**, defined in `shared_msgs`:
 
-## Fleet Scale (2 robots)
-
-| | Count |
-|---|---|
-| Nodes | 6 (3 per robot) |
-| Topics | 10 (5 per robot) |
-
-Plus rosbridge adds: `/rosbridge_websocket`, `/rosapi`, `/client_count`, `/connected_clients`
-
-## Message Types Used
-
-**Custom (defined in `shared_msgs`)**
-- `shared_msgs/RobotStatus`
+- `shared_msgs/RobotStatus` — `robot_id`, `battery`, `speed`, `sensor`, `pose`
 - `shared_msgs/TaskStatus`
 
-**Standard ROS2**
-- `nav_msgs/Odometry`
-- `geometry_msgs/Twist`
-- `geometry_msgs/Pose`
-- `geometry_msgs/PoseStamped` *(legacy, robot_location_publisher only)*
-- `std_msgs/String`
-- `builtin_interfaces/Time`
+**Standard:** `nav_msgs/Odometry`, `nav_msgs/OccupancyGrid`,
+`geometry_msgs/Twist`, `geometry_msgs/Pose`, `geometry_msgs/PoseStamped`,
+`std_msgs/String`, `std_msgs/Float32`, `std_msgs/Bool`,
+`action_msgs/GoalStatusArray`.
 
-## DDS Middleware
+## Build order
 
-All containers use **CycloneDDS** (`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`) for reliable node discovery inside Docker. The default FastDDS uses multicast which is unreliable on Docker bridge networks.
-
-## Build Order
-
-`shared_msgs` must be built first because the Python packages depend on its
-generated message interfaces. The `Dockerfile` handles this automatically with
-two colcon passes.
+`shared_msgs` must be built first — the Python packages import its generated
+message interfaces, which do not exist until it is built. The Dockerfiles handle
+this with two colcon passes:
 
 ```bash
-# Inside the container (or for local dev):
 source /opt/ros/jazzy/setup.bash
 colcon build --packages-select shared_msgs
 source install/setup.bash
 colcon build --packages-skip shared_msgs
 ```
 
-## Running a Single Robot Locally
+## Running one robot locally
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 launch robot_bringup robot_launch.py namespace:=robot1
 ```
+
+Nav2 is not part of this, so the robot will publish status and hold still. To
+plan and drive it needs the `nav2` container, or the all-in-one `robot3` image
+described in [../ROBOT3_GUIDE.md](../ROBOT3_GUIDE.md).

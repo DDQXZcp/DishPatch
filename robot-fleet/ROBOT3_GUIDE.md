@@ -14,9 +14,9 @@ nothing from the EC2 side except a reachable port.
   │                          │   /robot3/status │                        │
   │  status_node   ──────────┼──────────────────▶  nav2                  │
   │  nav_node                │  ws://ec2:9090   │  robot1, robot2        │
-  │  goal_relay_node ◀───────┼──────────────────┤                        │
-  │  Nav2 (map, planner,     │ /robot3/goal_pose└────────────┬───────────┘
-  │        controller, bt)   │                               │ ws
+  │  Nav2 (map, planner,  ◀──┼──────────────────┤                        │
+  │       controller, bt)    │ /robot3/goal_pose└────────────┬───────────┘
+  │                          │                               │ ws
   │  relay_node              │                    control-backend
   │                          │                               │
   │  tf, odom, costmaps      │                       control-frontend
@@ -118,7 +118,8 @@ curl -X POST https://controlapi.dish-patch.com/api/nav/goTo \
 ```
 
 Valid destinations come from `GET /api/nav/destinations`. Watch it arrive in
-your container logs — `goal_relay_node` logs every goal it forwards to Nav2.
+your container logs — `relay_node` logs every goal it carries in, and
+`bt_navigator` logs the plan it starts.
 
 ## Configuration
 
