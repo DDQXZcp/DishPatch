@@ -13,6 +13,7 @@ Every package is built together with `colcon` and launched via `robot_bringup`.
 | [`robot_core`](./robot_core/) | Python | `robot_core/core_node.py` | State machine and battery simulation |
 | [`robot_bringup`](./robot_bringup/) | Python | `launch/robot_launch.py` | Launch file — starts all nodes for one robot instance |
 | [`robot_location_publisher`](./robot_location_publisher/) | Python | `robot_location_publisher/location_publisher.py` | Legacy location publisher (superseded by robot_navigation) |
+| [`rosbridge_relay`](./rosbridge_relay/) | Python | `rosbridge_relay/relay_node.py` | Joins a robot running off the fleet's ROS graph, over the rosbridge WebSocket |
 
 ## Nodes per Robot
 
