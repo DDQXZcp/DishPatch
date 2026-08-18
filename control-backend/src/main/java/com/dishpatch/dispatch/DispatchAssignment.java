@@ -16,29 +16,60 @@ package com.dishpatch.dispatch;
  * @param robotId        robot id, matching the {@code /robot{id}} ROS namespace
  * @param destination    drop point id this job is currently headed to
  * @param state          current stage
- * @param deadlineMillis wall clock at which the serve dwell ends; 0 on the driving
- *                       stages, which advance on the robot's reported position
+ * @param deadlineMillis wall clock at which this stage runs out of patience. On
+ *                       {@link DispatchState#AT_TABLE} that is the end of the serve
+ *                       dwell; on the driving stages it is the point past which the
+ *                       robot should have arrived, and has not
+ * @param attempts       how many times the goal for the current stage has been
+ *                       published — 1 on entry, incremented by each re-send
+ * @param goalPublishedAtMillis wall clock of the most recent goal publish for this
+ *                       stage. Nav2 needs a moment to report the goal as live, so
+ *                       nothing may be concluded from its silence before this plus
+ *                       the grace window
  */
 public record DispatchAssignment(
         String orderId,
         int robotId,
         String destination,
         DispatchState state,
-        long deadlineMillis
+        long deadlineMillis,
+        int attempts,
+        long goalPublishedAtMillis
 ) {
 
-    /** Copy of this assignment moved on to its next stage. */
+    /**
+     * Copy of this assignment moved on to its next stage, as a first attempt.
+     *
+     * @param publishedAtMillis when the goal for the new stage went out; 0 for
+     *                          {@link DispatchState#AT_TABLE}, which publishes nothing
+     */
     public DispatchAssignment movedTo(
             DispatchState newState,
             String newDestination,
-            long newDeadlineMillis
+            long newDeadlineMillis,
+            long publishedAtMillis
     ) {
         return new DispatchAssignment(
                 orderId,
                 robotId,
                 newDestination,
                 newState,
-                newDeadlineMillis
+                newDeadlineMillis,
+                1,
+                publishedAtMillis
+        );
+    }
+
+    /** Copy of this assignment with the same stage goal published again. */
+    public DispatchAssignment retried(long newDeadlineMillis, long publishedAtMillis) {
+        return new DispatchAssignment(
+                orderId,
+                robotId,
+                destination,
+                state,
+                newDeadlineMillis,
+                attempts + 1,
+                publishedAtMillis
         );
     }
 }

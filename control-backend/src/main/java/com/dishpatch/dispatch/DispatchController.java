@@ -50,7 +50,9 @@ public class DispatchController {
                     dispatchService.millisRemaining(assignment),
                     dispatchService.metresToGo(assignment),
                     dispatchService.isNavigating(assignment.robotId()),
-                    dispatchService.isRobotStale(assignment.robotId())
+                    dispatchService.isRobotStale(assignment.robotId()),
+                    assignment.attempts(),
+                    dispatchService.hasGoalFailed(assignment.robotId())
             ));
         }
 
@@ -83,9 +85,16 @@ public class DispatchController {
      * @param metresToGo      distance to the destination, or -1 if unknown; the
      *                        thing to read when a delivery is not progressing
      * @param navigating      Nav2 is working on a goal. False during a driving stage
-     *                        means the goal was lost or aborted and is being re-sent
+     *                        means the goal was lost or aborted, and the dispatcher
+     *                        re-sends it once the grace window has passed
      * @param robotStale      robot has stopped reporting telemetry, so it has already
      *                        vanished from the frontend map while still holding this job
+     * @param attempts        goal publishes for the current stage. Anything above 1
+     *                        means a goal was lost and re-sent; when it reaches the
+     *                        cap the delivery is given up on and the robot released
+     * @param goalFailed      the last goal Nav2 reported for this robot ended aborted
+     *                        or cancelled rather than succeeded. Only meaningful while
+     *                        {@code navigating} is false
      */
     public record AssignmentView(
             String orderId,
@@ -95,7 +104,9 @@ public class DispatchController {
             long millisRemaining,
             double metresToGo,
             boolean navigating,
-            boolean robotStale
+            boolean robotStale,
+            int attempts,
+            boolean goalFailed
     ) { }
 
     /** An order that cannot be dispatched, and why. */

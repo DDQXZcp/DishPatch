@@ -54,13 +54,27 @@ public class RosBridgeService extends TextWebSocketHandler {
     /** Hidden topic the NavigateToPose action server publishes its goal states on. */
     private static final String NAV_STATUS_SUFFIX = "/navigate_to_pose/_action/status";
 
-    // action_msgs/msg/GoalStatus codes. The rest (SUCCEEDED, ABORTED, CANCELED)
-    // are terminal and mean Nav2 is no longer driving.
+    // action_msgs/msg/GoalStatus codes. ACCEPTED and EXECUTING mean Nav2 is still
+    // driving; the rest are terminal. SUCCEEDED is not the same news as ABORTED,
+    // and this class used to discard that difference — see lastGoalFailed.
     private static final int GOAL_ACCEPTED = 1;
     private static final int GOAL_EXECUTING = 2;
+    private static final int GOAL_CANCELED = 5;
+    private static final int GOAL_ABORTED = 6;
 
     /** Whether Nav2 currently holds a live goal, per robot id. */
     private final Map<Integer, Boolean> navigating = new ConcurrentHashMap<>();
+
+    /**
+     * Status of the most recently seen goal, per robot id.
+     * <p>
+     * Kept because "Nav2 is idle" answers a different question from "Nav2 gave up".
+     * On 2026-08-11 two robots were stranded by aborted goals whose ABORTED status
+     * arrived here, was parsed, and was collapsed into {@link #navigating} — the one
+     * piece of news that would have identified the failure was discarded a line
+     * before it became useful.
+     */
+    private final Map<Integer, Integer> lastGoalStatus = new ConcurrentHashMap<>();
 
     /**
      * Largest rosbridge frame this client will accept.
@@ -120,7 +134,10 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.session = session;
-        navigating.clear(); // new session — nothing known about Nav2 yet
+        // New session — nothing known about Nav2 yet. Stale goal outcomes are worse
+        // than none: they would describe goals from before the link dropped.
+        navigating.clear();
+        lastGoalStatus.clear();
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
 
         for (int i = 1; i <= robotCount; i++) {
@@ -178,17 +195,24 @@ public class RosBridgeService extends TextWebSocketHandler {
      */
     private void updateNavigating(int id, JsonObject msg) {
         boolean active = false;
+        Integer latest = null;
 
+        // No early exit: the loop has to reach the end of the array to read the
+        // newest goal. The action server appends, so the last entry is the newest.
         for (JsonElement element : msg.getAsJsonArray("status_list")) {
             int status = element.getAsJsonObject().get("status").getAsInt();
+            latest = status;
 
             if (status == GOAL_ACCEPTED || status == GOAL_EXECUTING) {
                 active = true;
-                break;
             }
         }
 
         navigating.put(id, active);
+
+        if (latest != null) {
+            lastGoalStatus.put(id, latest);
+        }
     }
 
     /**
@@ -240,6 +264,25 @@ public class RosBridgeService extends TextWebSocketHandler {
      */
     public boolean isNavigating(int robotId) {
         return Boolean.TRUE.equals(navigating.get(robotId));
+    }
+
+    /**
+     * Whether the most recent goal Nav2 reported for this robot ended in failure
+     * rather than success.
+     * <p>
+     * Only meaningful while {@link #isNavigating} is false — a live goal has no
+     * outcome yet. Read together they separate "still driving" from "arrived" from
+     * "gave up", which is the distinction the dispatcher needs to decide whether to
+     * wait, advance, or re-send.
+     * <p>
+     * False also means "not known yet", so a caller must not treat it as proof the
+     * last goal succeeded. It is an accelerator for the common case, not the only
+     * thing standing between a lost goal and a stranded robot.
+     */
+    public boolean lastGoalFailed(int robotId) {
+        Integer status = lastGoalStatus.get(robotId);
+        return status != null
+                && (status == GOAL_ABORTED || status == GOAL_CANCELED);
     }
 
     /**

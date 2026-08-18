@@ -60,7 +60,9 @@ Nav2's verdict comes from `/robot{id}/navigate_to_pose/_action/status`
 (`action_msgs/GoalStatusArray`). It's a hidden topic so `rosapi` won't list it, but
 it subscribes by name and is latched. A goal counts as live while it is `ACCEPTED`
 or `EXECUTING`; `SUCCEEDED`, `ABORTED` and `CANCELED` all mean Nav2 has stopped
-driving.
+driving. They are not interchangeable, though: the terminal code is kept, because
+"Nav2 stopped" and "Nav2 gave up" call for different responses. Collapsing them was
+what let an aborted goal look exactly like a robot still on its way.
 
 The distance check is a sanity check on top, not the primary signal — it separates
 "stopped because it arrived" from "stopped because the goal was aborted". It is
@@ -73,18 +75,21 @@ map coordinates. `RobotStatus` carries no `frame_id`, so that is a fleet convent
 rather than a guarantee.
 
 A driving stage that shows `navigating: false` on the endpoint means Nav2 has no
-goal for that robot — lost or aborted. Nothing re-sends it automatically; the robot
-will sit still until the backend restarts.
+goal for that robot — lost or aborted. The dispatcher re-sends it once the grace
+window has passed, and gives up on the delivery after `MAX_GOAL_ATTEMPTS`.
 
-A tick runs every 2 seconds:
+A tick runs every second:
 
 1. **Advance** — assignments whose robot has arrived (or whose serve dwell expired)
    move on.
 2. **Home** — robots not known to be at the counter are sent there.
 3. **Assign** — pending orders, oldest first, get a robot while free ones last.
 
-**Nothing blocks.** Spring's default scheduler is one thread, so a sleeping delivery
-would stall every other one. Progress is checked each tick, never waited on.
+**Nothing blocks.** Progress is checked each tick, never waited on. Note the tick does
+not run on a scheduler of its own: enabling the STOMP broker contributes a `TaskScheduler`
+bean, and `@EnableScheduling` binds to it, so dispatch work shares the `MessageBroker-N`
+pool that delivers dashboard updates. A blocking tick would stall the dashboard as well as
+the other deliveries.
 
 ## Debug Endpoint
 
@@ -100,7 +105,8 @@ would stall every other one. Progress is checked each tick, never waited on.
   "active": [
     { "orderId": "a3f1…", "robotId": 2, "destination": "T4", "state": "TO_TABLE",
       "millisRemaining": 0, "metresToGo": 12.4,
-      "navigating": true, "robotStale": false }
+      "navigating": true, "robotStale": false,
+      "attempts": 1, "goalFailed": false }
   ],
   "skipped": [ { "orderId": "b7c2…", "reason": "Unknown destination: T99" } ]
 }
@@ -124,7 +130,7 @@ Two collections make this structural rather than a rule to remember:
 | | Meaning |
 |---|---|
 | `atCounter` | Parked at the counter and idle. This is what `freeRobotIds()` returns. |
-| `homing` | Driving to the counter with no order, mapped to an arrival deadline. |
+| `homing` | Driving to the counter with no order. Re-sent if the goal dies on the way — a homing robot holds no order, so nothing else would notice it had stopped. |
 
 A robot leaves `atCounter` when it takes an order and rejoins it on release. Losing
 telemetry drops it from both, so it homes again on its return rather than being
@@ -139,7 +145,7 @@ The `Map<String, DispatchAssignment>` keyed by order id does three jobs:
 
 1. the state machine's data — what is in flight and how far along
 2. the **re-dispatch guard** — orders stay `Preparing` until delivery completes, so
-   without this a new robot would be assigned every 2 seconds
+   without this a new robot would be assigned every tick
 3. the **robot-busy index** — free robots are fresh robots minus those in this map
 
 So none of these exist, on purpose:
@@ -171,6 +177,6 @@ So none of these exist, on purpose:
 | Telemetry lapses at the counter | Dropped from `atCounter`/`homing`, so the robot homes again when it comes back rather than being trusted to still be there. | Handled |
 | Robot telemetry expires mid-delivery | Drops off the frontend map after 20s while the assignment still holds it. Reported as `robotStale`. Stages advance on position, so the delivery stops progressing until it reports again. | Surfaced, not resolved |
 | Goal never reaches Nav2 | A publish is dropped if the ROS publisher has not yet discovered `goal_relay_node`. Goal topics are advertised at connection time, so discovery finishes long before the first goal is sent. | Handled |
-| Nav2 aborts a goal, or one goes missing anyway | The robot goes idle short of its destination and nothing moves it again — the stage never ends, the order never completes, the robot is never freed. `navigating: false` with a large `metresToGo` is the signature. Never observed in this fleet: 48 goals, 0 aborts. Re-sending the goal while Nav2 is idle would fix it. | **Not handled** |
+| Nav2 aborts a goal, or one goes missing anyway | The robot goes idle short of its destination. `navigating: false` with a large `metresToGo` is the signature. Once a grace window has passed, the goal is re-sent; after `MAX_GOAL_ATTEMPTS` the delivery is given up on, the order goes back in the queue, and the robot is sent home and released. Every step logs a warning. | **Handled** |
 | Stale orders | A days-old `Preparing` order is still dispatched, and FIFO puts it **first**. A max-age guard belongs with the other skip checks, so it reports a reason. | **Not handled** |
 | DynamoDB scan fails | Caught and logged; the tick carries on seeing zero orders. The endpoint then reads as an idle restaurant. A `lastError` field would close this. | **Not handled** |
