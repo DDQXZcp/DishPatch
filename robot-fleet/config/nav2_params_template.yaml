@@ -3,6 +3,22 @@ ROBOT_NS/bt_navigator:
     global_frame: map
     robot_base_frame: ROBOT_NS/base_link
     odom_topic: /ROBOT_NS/odom
+
+    # How long a behavior tree action node waits for its action server to
+    # acknowledge a goal request, in milliseconds.
+    #
+    # Nav2's default is 20ms, which is a single-machine figure. On this fleet ten
+    # navigation nodes share one container, and a plan across the global costmap
+    # measures ~385ms — so planner_server routinely fails to acknowledge inside
+    # 20ms. Two robots were lost to exactly that on 2026-08-11: the tree asked for
+    # a path, the planner did not answer in time, and the whole goal aborted before
+    # the robot had moved.
+    #
+    # Spelled default_server_timeout, not server_timeout. The latter is the
+    # blackboard entry this parameter populates; setting it here would parse
+    # cleanly and do nothing.
+    default_server_timeout: 500
+
     default_nav_to_pose_bt_xml: /ros2_ws/config/navigate_to_pose.xml
     default_nav_through_poses_bt_xml: /ros2_ws/config/navigate_through_poses.xml
 
@@ -65,7 +81,11 @@ ROBOT_NS/local_costmap/local_costmap:
       plugin: "nav2_costmap_2d::InflationLayer"
       cost_scaling_factor: 3.0
       inflation_radius: 0.3
-    always_send_full_costmap: True
+    # Off deliberately. When true this republishes the entire grid on every update
+    # — at the map's native 0.011802 m/pix that is a ~16 MB message per robot per
+    # second across the docker bridge, for no operational benefit. Nothing in this
+    # system consumes the costmap; it exists for RViz, which is not running here.
+    always_send_full_costmap: False
 
 ROBOT_NS/global_costmap/global_costmap:
   ros__parameters:
@@ -82,7 +102,11 @@ ROBOT_NS/global_costmap/global_costmap:
       plugin: "nav2_costmap_2d::InflationLayer"
       cost_scaling_factor: 3.0
       inflation_radius: 0.3
-    always_send_full_costmap: True
+    # Off deliberately. When true this republishes the entire grid on every update
+    # — at the map's native 0.011802 m/pix that is a ~16 MB message per robot per
+    # second across the docker bridge, for no operational benefit. Nothing in this
+    # system consumes the costmap; it exists for RViz, which is not running here.
+    always_send_full_costmap: False
 
 ROBOT_NS/map_server:
   ros__parameters:
