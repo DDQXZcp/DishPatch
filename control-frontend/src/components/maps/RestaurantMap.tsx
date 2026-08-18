@@ -37,7 +37,7 @@ const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.3;
-const TRAIL_DURATION = 5000;
+const TRAIL_DURATION = 3000;
 const TRAIL_SPAWN_INTERVAL_MS = 5000;
 const TRAIL_MAX_DOTS = 20;
 
@@ -240,7 +240,7 @@ function fadeTrailDots(state: RobotMarkerState) {
       return false;
     }
 
-    dot.circle.setStyle({ fillOpacity: Math.max(0, TRAIL_OPACITY * (1 - 2 * life)) });
+    dot.circle.setStyle({ fillOpacity: TRAIL_OPACITY * (1 - life) });
     return true;
   });
 }
