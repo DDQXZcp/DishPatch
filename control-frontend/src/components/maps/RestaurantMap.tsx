@@ -30,15 +30,16 @@ interface RobotMarkerState {
   animationFrameId: number | null;
   trailDots: TrailDot[];
   lastTrailPoint: L.LatLng | null;
+  lastTrailSpawnAt: number | null;
 }
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 4;
-const TRAIL_OPACITY = 0.75;
-const TRAIL_DURATION = 20000;
-const TRAIL_MIN_DIST = 1;
-const TRAIL_MAX_DOTS = 200;
+const TRAIL_OPACITY = 0.5;
+const TRAIL_DURATION = 10000;
+const TRAIL_SPAWN_INTERVAL_MS = 2000;
+const TRAIL_MAX_DOTS = 10;
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -131,6 +132,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
   const startLat = currentLatLng.lat;
   const startLng = currentLatLng.lng;
   const animationStart = performance.now();
+  state.lastTrailSpawnAt = animationStart - TRAIL_SPAWN_INTERVAL_MS;
 
   const step = (now: number) => {
     const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
@@ -142,7 +144,6 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
       easedProgress = 1 - (p * p * p) / 2;
     }
 
-    const prevLatLng = state.marker.getLatLng();
     const newLatLng = L.latLng(
       startLat + deltaLat * easedProgress,
       startLng + deltaLng * easedProgress,
@@ -150,8 +151,9 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
 
     state.marker.setLatLng(newLatLng);
 
-    if (!state.lastTrailPoint || prevLatLng.distanceTo(state.lastTrailPoint) >= TRAIL_MIN_DIST) {
-      spawnTrailDot(state, prevLatLng, markerGroup);
+    if (state.lastTrailSpawnAt === null || now - state.lastTrailSpawnAt >= TRAIL_SPAWN_INTERVAL_MS) {
+      spawnTrailDot(state, newLatLng, markerGroup);
+      state.lastTrailSpawnAt = now;
     }
 
     if (progress < 1) {
@@ -187,6 +189,7 @@ function syncRobotMarkers(
         animationFrameId: null,
         trailDots: [],
         lastTrailPoint: null,
+        lastTrailSpawnAt: null,
       });
 
       return;
