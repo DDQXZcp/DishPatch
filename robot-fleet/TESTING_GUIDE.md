@@ -10,8 +10,20 @@ The active compose stack starts:
 - `robot2`
 
 Robots are moved by publishing a `geometry_msgs/PoseStamped` goal to `/{ns}/goal_pose`.
-The robot-side `goal_relay_node` forwards that topic message to Nav2's
-`NavigateToPose` action.
+Nav2's own `bt_navigator` subscribes to that topic — under a robot namespace its
+relative `goal_pose` subscription resolves to `/{ns}/goal_pose` — and sends itself the
+`NavigateToPose` goal.
+
+Nothing else should subscribe to that topic. The fleet used to run a `goal_relay_node`
+doing the same forwarding, which meant every goal became two action goals a few
+milliseconds apart, the second preempting and aborting the first. It is no longer
+launched. Before adding anything that listens there, check:
+
+```bash
+docker exec nav2 bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 topic info /robot1/goal_pose --verbose'
+```
+
+`Subscription count` should be `1`.
 
 ## 1. Verify Requirements
 
@@ -127,8 +139,8 @@ ros2 topic pub --once /robot2/goal_pose geometry_msgs/msg/PoseStamped \
 The Hive map uses real map-frame coordinates from `map-source/the-hive-drop-points.yaml`.
 Use those drop-point poses for reliable navigation tests.
 
-If a goal is sent too early, `goal_relay_node` can drop it while waiting for the
-Nav2 action server. Wait a few seconds after startup and publish the goal again.
+A goal published before `bt_navigator` has finished coming up is simply not received —
+there is no queue in front of it. Wait a few seconds after startup and publish again.
 
 ## 6. Monitor Robot Status
 

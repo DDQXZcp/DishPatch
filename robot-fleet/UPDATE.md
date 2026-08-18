@@ -68,13 +68,12 @@ hardware_node.py
 |---|---|---|
 | `/{ns}/hardware_node` | `robot_hardware` | Battery drain + sensor simulation, publishes `/{ns}/battery` and `/{ns}/sensor` |
 | `/{ns}/nav_node` | `robot_navigation` | Nav2 fake driver — integrates cmd_vel → odom + TF |
-| `/{ns}/goal_relay_node` | `robot_navigation` | Bridges `/{ns}/goal_pose` topic → `NavigateToPose` action |
 | `/{ns}/status_node` | `robot_status` | Aggregates sensor data → publishes `/{ns}/status` to backend |
 | `/{ns}/map_to_odom_tf` | `tf2_ros` | Static TF `map → {ns}/odom` (identity) |
 | `/{ns}/map_server` | `nav2_map_server` | Serves static map (`map.pgm`) |
 | `/{ns}/planner_server` | `nav2_planner` | Computes global path (NavFn/Dijkstra) |
 | `/{ns}/controller_server` | `nav2_controller` | Computes cmd_vel (RPP, 20 Hz) |
-| `/{ns}/bt_navigator` | `nav2_bt_navigator` | Orchestrates navigation via Behavior Tree |
+| `/{ns}/bt_navigator` | `nav2_bt_navigator` | Orchestrates navigation via Behavior Tree, and subscribes to `/{ns}/goal_pose` itself — this is the only thing that should |
 | `/{ns}/lifecycle_manager` | `nav2_lifecycle_manager` | Activates/deactivates Nav2 nodes on startup |
 
 ---
