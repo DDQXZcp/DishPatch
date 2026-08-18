@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
+import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
 import type { Robot, RobotStatus } from '../../types/Robot';
 
 
@@ -36,6 +38,8 @@ interface RobotMarkerState {
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
+const MAP_MIN_ZOOM = -3;
+const MAP_MAX_ZOOM = 2;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.75;
 const TRAIL_DURATION = 6000;
@@ -54,7 +58,6 @@ function getRobotIcon(status: RobotStatus) {
   let borderColor = '';
 
   if (status === 'Serving') borderColor = 'border-green-500';
-  else if (status === 'Pickup') borderColor = 'border-yellow-500';
   else if (status === 'Returning') borderColor = 'border-blue-500';
   else if (status === 'Waiting') borderColor = 'border-purple-500';
   else if (status === 'Maintenance') borderColor = 'border-red-500';
@@ -70,7 +73,6 @@ function getRobotIcon(status: RobotStatus) {
 
 function getRobotStatusClassName(status: RobotStatus) {
   if (status === 'Serving') return 'bg-green-100 text-green-800';
-  if (status === 'Pickup') return 'bg-yellow-100 text-yellow-800';
   if (status === 'Returning') return 'bg-blue-100 text-blue-800';
   if (status === 'Waiting') return 'bg-purple-100 text-purple-800';
   return 'bg-red-100 text-red-800';
@@ -78,25 +80,83 @@ function getRobotStatusClassName(status: RobotStatus) {
 
 function getRobotStatusColor(status: RobotStatus): string {
   if (status === 'Serving') return '#22c55e';
-  if (status === 'Pickup') return '#facc15';
   if (status === 'Returning') return '#3b82f6';
   if (status === 'Waiting') return '#a855f7';
   return '#ef4444';
 }
 
-function createRobotPopup(robot: Robot) {
+function createDetailRow(label: string, value: string) {
+  const row = document.createElement('div');
+  row.className = 'flex items-baseline justify-between gap-3';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'text-xs text-gray-400';
+  labelEl.textContent = label;
+  row.appendChild(labelEl);
+
+  const valueEl = document.createElement('span');
+  valueEl.className = 'text-xs font-medium text-gray-700';
+  valueEl.textContent = value;
+  row.appendChild(valueEl);
+
+  return row;
+}
+
+function createRobotPopup(robot: Robot, orderTableById: Map<string, OrderTableInfo>) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'text-sm';
+  wrapper.className = 'min-w-[160px] text-sm';
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between gap-3';
 
   const name = document.createElement('strong');
+  name.className = 'text-gray-900';
   name.textContent = robot.name;
-  wrapper.appendChild(name);
-  wrapper.appendChild(document.createElement('br'));
+  header.appendChild(name);
 
   const status = document.createElement('span');
-  status.className = `inline-block px-2 py-1 rounded-full text-xs ${getRobotStatusClassName(robot.status)}`;
+  status.className = `inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${getRobotStatusClassName(robot.status)}`;
   status.textContent = robot.status;
-  wrapper.appendChild(status);
+  header.appendChild(status);
+
+  wrapper.appendChild(header);
+
+  if (robot.status === 'Serving' && robot.orderId) {
+    const orderTable = orderTableById.get(robot.orderId);
+
+    if (orderTable) {
+      const details = document.createElement('div');
+      details.className = 'mt-2 space-y-1 border-t border-gray-100 pt-2';
+
+      details.appendChild(createDetailRow('Order', `#${orderTable.displayId}`));
+      details.appendChild(createDetailRow('Table', orderTable.tableNo));
+
+      const itemsLabel = document.createElement('div');
+      itemsLabel.className = 'text-xs text-gray-400';
+      itemsLabel.textContent = 'Items';
+      details.appendChild(itemsLabel);
+
+      if (orderTable.items && orderTable.items.length > 0) {
+        const itemsList = document.createElement('ul');
+        itemsList.className = 'max-w-[220px] list-disc space-y-0.5 pl-4 text-xs text-gray-600';
+
+        orderTable.items.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = formatOrderItemLine(item);
+          itemsList.appendChild(li);
+        });
+
+        details.appendChild(itemsList);
+      } else {
+        const noItems = document.createElement('div');
+        noItems.className = 'text-xs text-gray-500';
+        noItems.textContent = 'No items';
+        details.appendChild(noItems);
+      }
+
+      wrapper.appendChild(details);
+    }
+  }
 
   return wrapper;
 }
@@ -108,9 +168,14 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
   return [floorplanY, floorplanX];
 }
 
-function createRobotMarker(robot: Robot, manifest: MapManifest) {
-  return L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
-    .bindPopup(createRobotPopup(robot));
+function createRobotMarker(robot: Robot, manifest: MapManifest, orderTableById: Map<string, OrderTableInfo>) {
+  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
+    .bindPopup(createRobotPopup(robot, orderTableById));
+
+  marker.on("mouseover", () => marker.openPopup());
+  marker.on("mouseout", () => marker.closePopup());
+
+  return marker;
 }
 
 function cancelRobotMarkerAnimation(state: RobotMarkerState) {
@@ -120,7 +185,13 @@ function cancelRobotMarkerAnimation(state: RobotMarkerState) {
   }
 }
 
-function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapManifest, markerGroup: L.LayerGroup) {
+function updateRobotMarker(
+  state: RobotMarkerState,
+  robot: Robot,
+  manifest: MapManifest,
+  orderTableById: Map<string, OrderTableInfo>,
+  markerGroup: L.LayerGroup,
+) {
   const targetLatLng = L.latLng(robotPoseToFloorplanPoint(robot, manifest));
   const currentLatLng = state.marker.getLatLng();
   const deltaLat = targetLatLng.lat - currentLatLng.lat;
@@ -128,7 +199,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
   const moveDistance = Math.hypot(deltaLat, deltaLng);
 
   state.marker.setIcon(getRobotIcon(robot.status));
-  state.marker.bindPopup(createRobotPopup(robot));
+  state.marker.bindPopup(createRobotPopup(robot, orderTableById));
 
   if (moveDistance <= ROBOT_MARKER_SNAP_DISTANCE) {
     cancelRobotMarkerAnimation(state);
@@ -182,6 +253,7 @@ function syncRobotMarkers(
   markerStates: React.MutableRefObject<Map<number, RobotMarkerState>>,
   robots: Robot[],
   manifest: MapManifest,
+  orderTableById: Map<string, OrderTableInfo>,
 ) {
   const nextRobotIds = new Set<number>();
 
@@ -191,7 +263,7 @@ function syncRobotMarkers(
     const existingState = markerStates.current.get(robot.id);
 
     if (!existingState) {
-      const marker = createRobotMarker(robot, manifest).addTo(markerGroup);
+      const marker = createRobotMarker(robot, manifest, orderTableById).addTo(markerGroup);
 
       markerStates.current.set(robot.id, {
         marker,
@@ -204,7 +276,7 @@ function syncRobotMarkers(
       return;
     }
 
-    updateRobotMarker(existingState, robot, manifest, markerGroup);
+    updateRobotMarker(existingState, robot, manifest, orderTableById, markerGroup);
   });
 
   markerStates.current.forEach((state, robotId) => {
@@ -268,7 +340,7 @@ function removeAllTrailDots(state: RobotMarkerState) {
   state.trailDots = [];
 }
 
-function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
+function getFitZoom(map: L.Map, bounds: FloorplanBounds) {
   const mapSize = map.getSize();
   const boundsHeight = bounds[1][0] - bounds[0][0];
   const boundsWidth = bounds[1][1] - bounds[0][1];
@@ -277,17 +349,21 @@ function getCoverZoom(map: L.Map, bounds: FloorplanBounds) {
     return map.getZoom();
   }
 
-  const coverScale = Math.max(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
-  const coverZoom = Math.log2(coverScale);
-  const minZoom = map.getMinZoom();
-  const maxZoom = map.getMaxZoom();
+  // Math.min (rather than max) keeps the whole floorplan inside the
+  // window on every axis — the widget's window fits the map, instead of
+  // the map covering the window and cropping whichever axis overflows.
+  const fitScale = Math.min(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
+  const fitZoom = Math.log2(fitScale);
 
-  return Math.max(minZoom, Math.min(maxZoom, coverZoom));
+  // Clamp against the map's fixed zoom range, not map.getMinZoom(), which
+  // this same function's caller mutates on every resize — using the live
+  // value here would turn minZoom into a one-way ratchet across resizes.
+  return Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, fitZoom));
 }
 
-function applyCoverView(map: L.Map, bounds: FloorplanBounds) {
+function applyFitView(map: L.Map, bounds: FloorplanBounds) {
   const center = L.latLngBounds(bounds).getCenter();
-  const zoom = getCoverZoom(map, bounds);
+  const zoom = getFitZoom(map, bounds);
 
   map.setMinZoom(zoom);
   map.setView(center, zoom, { animate: false });
@@ -311,13 +387,15 @@ function RecenterButton({ onClick }: { onClick: () => void }) {
 }
 
 export default function RestaurantMap() {
-  const { robots } = useRobotContext();
+  const { robots, orders } = useRobotContext();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const markerStatesRef = useRef<Map<number, RobotMarkerState>>(new Map());
   const frameRef = useRef<number | null>(null);
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
+
+  const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
 
   useEffect(() => {
     let active = true;
@@ -374,8 +452,8 @@ export default function RestaurantMap() {
       crs: L.CRS.Simple,
       maxBounds: bounds,
       maxBoundsViscosity: 1,
-      minZoom: -3,
-      maxZoom: 2,
+      minZoom: MAP_MIN_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
       zoomDelta: 0.5,
       zoomSnap: 0,
       attributionControl: false,
@@ -385,7 +463,7 @@ export default function RestaurantMap() {
     L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest, orderTableById);
 
     const refreshMapSize = () => {
       if (frameRef.current !== null) {
@@ -394,7 +472,7 @@ export default function RestaurantMap() {
 
       frameRef.current = window.requestAnimationFrame(() => {
         map.invalidateSize({ animate: false });
-        applyCoverView(map, bounds);
+        applyFitView(map, bounds);
         frameRef.current = null;
       });
     };
@@ -404,7 +482,20 @@ export default function RestaurantMap() {
     const resizeObserver = new ResizeObserver(refreshMapSize);
     resizeObserver.observe(container);
 
+    const recenterAtMinZoom = () => {
+      if (map.getZoom() <= map.getMinZoom() + 1e-6) {
+        map.panTo(L.latLngBounds(bounds).getCenter(), { animate: false });
+      }
+    };
+
+    map.on("zoomend", recenterAtMinZoom);
+
+    const handleResetView = () => applyFitView(map, bounds);
+    window.addEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
+
     return () => {
+      window.removeEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
+      map.off("zoomend", recenterAtMinZoom);
       resizeObserver.disconnect();
 
       if (frameRef.current !== null) {
@@ -433,8 +524,8 @@ export default function RestaurantMap() {
       return;
     }
 
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest);
-  }, [robots, loadedMap]);
+    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest, orderTableById);
+  }, [robots, loadedMap, orderTableById]);
 
   if (!loadedMap) {
     return <div className="h-full w-full rounded-lg bg-gray-100" />;
@@ -443,7 +534,7 @@ export default function RestaurantMap() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg">
       <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
-      <RecenterButton onClick={() => mapRef.current && applyCoverView(mapRef.current, loadedMap.bounds)} />
+      <RecenterButton onClick={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)} />
     </div>
   );
 }

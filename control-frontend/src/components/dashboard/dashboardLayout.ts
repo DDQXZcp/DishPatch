@@ -1,7 +1,9 @@
 import { WIDGET_IDS, type WidgetId } from "./types";
 
 export const DASHBOARD_WIDGET_STORAGE_KEY =
-  "dishpatch.control.dashboard.widgets.v2";
+  "dishpatch.control.dashboard.widgets.v4";
+
+export const DASHBOARD_RESET_VIEW_EVENT = "dashboard:reset-widget-view";
 
 export const MIN_ROW_HEIGHT = 260;
 export const DEFAULT_ROW_HEIGHT = 420;
@@ -27,19 +29,16 @@ export interface DashboardWidgetState {
 
 const DEFAULT_ROWS: DashboardWidgetRow[] = [
   {
-    id: "row-main",
-    height: 620,
-    columns: [
-      { widgetId: "robot-map", width: 60 },
-      { widgetId: "robot-list", width: 40 },
-    ],
+    id: "row-map",
+    height: 480,
+    columns: [{ widgetId: "robot-map", width: 100 }],
   },
   {
-    id: "row-secondary",
-    height: 360,
+    id: "row-lists",
+    height: 420,
     columns: [
+      { widgetId: "robot-list", width: 50 },
       { widgetId: "pos-orders", width: 50 },
-      { widgetId: "alerts-notifications", width: 50 },
     ],
   },
 ];

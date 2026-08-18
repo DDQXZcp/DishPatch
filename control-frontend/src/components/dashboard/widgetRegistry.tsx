@@ -1,7 +1,12 @@
 import DemographicCard from "../ecommerce/DemographicCard";
-import RobotStatus from "../ecommerce/RobotStatus";
-import Orders from "../ecommerce/Orders";
-import AlertsNotificationsWidget from "./AlertsNotificationsWidget";
+import RobotStatus, {
+  RobotStatusFilterProvider,
+  RobotStatusHeaderActions,
+} from "../ecommerce/RobotStatus";
+import Orders, {
+  OrdersProvider,
+  OrdersHeaderActions,
+} from "../ecommerce/Orders";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
@@ -16,6 +21,10 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     title: "Robot",
     description: "Live robot fleet status",
     render: () => <RobotStatus framed={false} />,
+    renderHeaderActions: () => <RobotStatusHeaderActions />,
+    wrap: (children) => (
+      <RobotStatusFilterProvider>{children}</RobotStatusFilterProvider>
+    ),
   },
   {
     id: "pos-orders",
@@ -28,12 +37,10 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
       // />
       <Orders framed={false} />
     ),
-  },
-  {
-    id: "alerts-notifications",
-    title: "Alerts / Notifications",
-    description: "Operational alerts and service notifications",
-    render: () => <AlertsNotificationsWidget />, 
+    renderHeaderActions: () => <OrdersHeaderActions />,
+    wrap: (children) => (
+      <OrdersProvider>{children}</OrdersProvider>
+    ),
   },
 ];
 

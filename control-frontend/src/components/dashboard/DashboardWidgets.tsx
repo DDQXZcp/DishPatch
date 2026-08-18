@@ -8,23 +8,19 @@ import {
 } from "react";
 
 import { CloseIcon } from "../../icons";
+import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
+import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget";
 import {
-  DASHBOARD_WIDGET_STORAGE_KEY,
   MIN_COLUMN_WIDTH,
-  defaultWidgetState,
-  hideWidgetInState,
   isWidgetId,
   moveWidgetNearTarget,
   moveWidgetToBottom,
-  readStoredWidgetState,
   setColumnPairWidths,
   setRowHeight,
-  showWidgetInState,
   type DropPosition,
   type DashboardWidgetRow,
-  type DashboardWidgetState,
 } from "./dashboardLayout";
-import { DASHBOARD_WIDGETS, WIDGET_BY_ID } from "./widgetRegistry";
+import { WIDGET_BY_ID } from "./widgetRegistry";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 type ActiveDropTarget =
@@ -113,7 +109,7 @@ function HideButton({ onClick }: { onClick: () => void }) {
 
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
       {widget.render()}
     </div>
   );
@@ -131,14 +127,17 @@ function WidgetHeader({
   return (
     <div
       {...dragHandleProps}
-      className={`flex min-h-[74px] items-start justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800 sm:px-5 ${
+      className={`flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5 ${
         dragHandleProps
           ? "select-none cursor-grab active:cursor-grabbing"
           : ""
       }`}
     >
       <ToolbarTitle widget={widget} />
-      <HideButton onClick={onHide} />
+      <div className="flex items-center gap-2">
+        {widget.renderHeaderActions?.()}
+        <HideButton onClick={onHide} />
+      </div>
     </div>
   );
 }
@@ -156,18 +155,24 @@ function WidgetFrame({
   dragHandleProps?: DragHandleProps;
   isDragging?: boolean;
 }) {
-  return (
-    <div
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03] ${
-        isDragging ? "opacity-60" : ""
-      }`}
-    >
+  const frameContent = (
+    <>
       <WidgetHeader
         widget={widget}
         onHide={onHide}
         dragHandleProps={dragHandleProps}
       />
       <WidgetBody widget={widget} />
+    </>
+  );
+
+  return (
+    <div
+      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03] ${
+        isDragging ? "opacity-60" : ""
+      }`}
+    >
+      {widget.wrap ? widget.wrap(frameContent) : frameContent}
       {children}
     </div>
   );
@@ -180,10 +185,16 @@ function MobileWidget({
   widget: DashboardWidgetDefinition;
   onHide: () => void;
 }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+  const content = (
+    <>
       <WidgetHeader widget={widget} onHide={onHide} />
       <WidgetBody widget={widget} />
+    </>
+  );
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+      {widget.wrap ? widget.wrap(content) : content}
     </div>
   );
 }
@@ -436,7 +447,7 @@ function DashboardRow({
       }}
     >
       <div
-        className="grid h-full gap-4"
+        className="grid h-full gap-3"
         style={{
           gridTemplateColumns: row.columns
             .map((column) => `minmax(0, ${column.width}fr)`)
@@ -523,7 +534,7 @@ function DesktopWorkspace({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {rows.map((row) => (
         <DashboardRow
           key={row.id}
@@ -556,9 +567,8 @@ function DesktopWorkspace({
 }
 
 export default function DashboardWidgets() {
-  const [initialWidgetState] = useState(readStoredWidgetState);
-  const [widgetState, setWidgetState] =
-    useState<DashboardWidgetState>(initialWidgetState);
+  const { widgetState, setWidgetState, visibleWidgets, hideWidget } =
+    useDashboardWidgets();
   const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
   const [activeDropTarget, setActiveDropTarget] =
     useState<ActiveDropTarget | null>(null);
@@ -569,31 +579,7 @@ export default function DashboardWidgets() {
     useState<ColumnResizeState | null>(null);
   const isDesktopWorkspace = useMediaQuery(DESKTOP_WIDGET_MEDIA_QUERY);
 
-  const { rows, visibleWidgetIds } = widgetState;
-
-  const visibleWidgets = useMemo(
-    () =>
-      visibleWidgetIds
-        .map((widgetId) => WIDGET_BY_ID.get(widgetId))
-        .filter((widget): widget is DashboardWidgetDefinition => Boolean(widget)),
-    [visibleWidgetIds],
-  );
-
-  const visibleIdSet = useMemo(
-    () => new Set<WidgetId>(visibleWidgets.map((widget) => widget.id)),
-    [visibleWidgets],
-  );
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        DASHBOARD_WIDGET_STORAGE_KEY,
-        JSON.stringify(widgetState),
-      );
-    } catch (error) {
-      console.warn("Unable to persist dashboard widget layout", error);
-    }
-  }, [widgetState]);
+  const { rows } = widgetState;
 
   useEffect(() => {
     setDraggedWidgetId(null);
@@ -718,18 +704,6 @@ export default function DashboardWidgets() {
     };
   }, [columnResizeState]);
 
-  function hideWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => hideWidgetInState(currentState, widgetId));
-  }
-
-  function toggleWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => showWidgetInState(currentState, widgetId));
-  }
-
-  function resetLayout() {
-    setWidgetState(defaultWidgetState());
-  }
-
   function getDraggedWidgetId(event: DragEvent<HTMLDivElement>) {
     const widgetId = event.dataTransfer.getData("text/plain");
 
@@ -838,70 +812,35 @@ export default function DashboardWidgets() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-theme-md dark:border-gray-800 dark:bg-gray-900 dark:shadow-theme-xl lg:sticky lg:top-[88px] lg:z-9999 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-            Dashboard Widgets
-          </h2>
-          <p className="text-theme-xs text-gray-500 dark:text-gray-400">
-            Toggle visible widgets and arrange them in the desktop workspace.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {DASHBOARD_WIDGETS.map((widget) => {
-            const isVisible = visibleIdSet.has(widget.id);
-            return (
-              <button
+    <AlertsProvider>
+      <div className="space-y-4">
+        <AlertsSnackbarStack />
+        {isDesktopWorkspace ? (
+          <DesktopWorkspace
+            activeDropTarget={activeDropTarget}
+            draggedWidgetId={draggedWidgetId}
+            onColumnResizeStart={handleColumnResizeStart}
+            onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
+            onDropOnBottom={handleDropOnBottom}
+            onDropOnWidget={handleDropOnWidget}
+            onHideWidget={hideWidget}
+            onRowResizeStart={handleRowResizeStart}
+            onSetActiveDropTarget={setActiveDropTarget}
+            rows={rows}
+          />
+        ) : (
+          <div className="space-y-3">
+            {visibleWidgets.map((widget) => (
+              <MobileWidget
                 key={widget.id}
-                type="button"
-                onClick={() => toggleWidget(widget.id)}
-                className={`rounded-lg border px-3 py-2 text-theme-xs font-medium transition ${
-                  isVisible
-                    ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-500/15 dark:text-brand-300"
-                    : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.03]"
-                }`}
-                aria-pressed={isVisible}
-              >
-                {widget.title}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={resetLayout}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]"
-          >
-            Reset layout
-          </button>
-        </div>
+                widget={widget}
+                onHide={() => hideWidget(widget.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {isDesktopWorkspace ? (
-        <DesktopWorkspace
-          activeDropTarget={activeDropTarget}
-          draggedWidgetId={draggedWidgetId}
-          onColumnResizeStart={handleColumnResizeStart}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-          onDropOnBottom={handleDropOnBottom}
-          onDropOnWidget={handleDropOnWidget}
-          onHideWidget={hideWidget}
-          onRowResizeStart={handleRowResizeStart}
-          onSetActiveDropTarget={setActiveDropTarget}
-          rows={rows}
-        />
-      ) : (
-        <div className="space-y-4">
-          {visibleWidgets.map((widget) => (
-            <MobileWidget
-              key={widget.id}
-              widget={widget}
-              onHide={() => hideWidget(widget.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    </AlertsProvider>
   );
 }
