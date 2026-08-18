@@ -37,9 +37,9 @@ const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.75;
-const TRAIL_DURATION = 5000;
+const TRAIL_DURATION = 10000;
 const TRAIL_SPAWN_INTERVAL_MS = 5000;
-const TRAIL_MAX_DOTS = 5;
+const TRAIL_MAX_DOTS = 8;
 
 // Fix for default Leaflet markers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
