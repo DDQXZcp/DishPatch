@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useModal } from "../../hooks/useModal";
-import { useAuth } from "../../context/authContext";
+import { useAuth } from "../../context/AuthContext";
 import { Modal } from "../ui/modal";
 import Button from "../ui/button/Button";
 import Input from "../form/input/InputField";
