@@ -75,6 +75,14 @@ function getRobotStatusClassName(status: RobotStatus) {
   return 'bg-red-100 text-red-800';
 }
 
+function getRobotStatusColor(status: RobotStatus): string {
+  if (status === 'Serving') return '#22c55e';
+  if (status === 'Pickup') return '#facc15';
+  if (status === 'Returning') return '#3b82f6';
+  if (status === 'Waiting') return '#a855f7';
+  return '#ef4444';
+}
+
 function createRobotPopup(robot: Robot) {
   const wrapper = document.createElement('div');
   wrapper.className = 'text-sm';
@@ -152,7 +160,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
     state.marker.setLatLng(newLatLng);
 
     if (state.lastTrailSpawnAt === null || now - state.lastTrailSpawnAt >= TRAIL_SPAWN_INTERVAL_MS) {
-      spawnTrailDot(state, newLatLng, markerGroup);
+      spawnTrailDot(state, newLatLng, markerGroup, getRobotStatusColor(robot.status));
       state.lastTrailSpawnAt = now;
     }
 
@@ -210,10 +218,11 @@ function syncRobotMarkers(
   });
 }
 
-function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup) {
+function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup, color: string) {
   const circle = L.circleMarker(latlng, {
     radius: TRAIL_DOT_RADIUS,
-    color: '#726a6b',
+    color,
+    fillColor: color,
     fillOpacity: TRAIL_OPACITY,
     opacity: TRAIL_OPACITY,
     weight: 0,
