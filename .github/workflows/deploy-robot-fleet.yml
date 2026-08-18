@@ -2,9 +2,7 @@ name: Deploy Robot Fleet (Docker Compose -> EC2)
 
 on:
   push:
-    # TEMPORARY: fix/robot-stuck is here to try the 2026-08-11 stall fix on the live
-    # fleet. Remove it once the branch is merged to main or backed out.
-    branches: [ main, fix/robot-stuck ]
+    branches: [ main ]
     paths:
       - 'robot-fleet/**'
       - 'map-source/**'

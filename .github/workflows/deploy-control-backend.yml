@@ -19,9 +19,6 @@ on:
     branches:
       - main
       - control-docker-deployment
-      # TEMPORARY: trying the 2026-08-11 stall fix on the live fleet. Remove once
-      # it has either been merged to main or backed out.
-      - fix/robot-stuck
     paths:
       - "control-nginx/**"
       - "control-backend/**"
