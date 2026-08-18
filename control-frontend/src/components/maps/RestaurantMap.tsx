@@ -23,6 +23,7 @@ interface LoadedMap {
 interface TrailDot {
   circle: L.CircleMarker;
   createdAt: number;
+  status: RobotStatus;
 }
 
 interface RobotMarkerState {
@@ -160,7 +161,7 @@ function updateRobotMarker(state: RobotMarkerState, robot: Robot, manifest: MapM
     state.marker.setLatLng(newLatLng);
 
     if (state.lastTrailSpawnAt === null || now - state.lastTrailSpawnAt >= TRAIL_SPAWN_INTERVAL_MS) {
-      spawnTrailDot(state, newLatLng, markerGroup, getRobotStatusColor(robot.status));
+      spawnTrailDot(state, newLatLng, markerGroup, getRobotStatusColor(robot.status), robot.status);
       state.lastTrailSpawnAt = now;
     }
 
@@ -218,7 +219,7 @@ function syncRobotMarkers(
   });
 }
 
-function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup, color: string) {
+function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L.LayerGroup, color: string, status: RobotStatus) {
   const circle = L.circleMarker(latlng, {
     radius: TRAIL_DOT_RADIUS,
     color,
@@ -230,7 +231,7 @@ function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L
     interactive: false
   }).addTo(markerGroup);
 
-  const dot: TrailDot = { circle, createdAt: performance.now() };
+  const dot: TrailDot = { circle, createdAt: performance.now(), status };
   state.trailDots.push(dot);
   state.lastTrailPoint = latlng;
 
@@ -240,12 +241,17 @@ function spawnTrailDot(state: RobotMarkerState, latlng: L.LatLng, markerGroup: L
   }
 }
 
+function getTrailFadeMult(status: RobotStatus): number {
+  return status === 'Waiting' ? 2 : 1;
+}
+
 function fadeTrailDots(state: RobotMarkerState) {
   const now = performance.now();
 
   state.trailDots = state.trailDots.filter((dot) => {
     const age = now - dot.createdAt;
-    const life = age / TRAIL_DURATION;
+    const mult = getTrailFadeMult(dot.status)
+    const life = age / (TRAIL_DURATION / mult);
 
     if (life >= 1) {
       dot.circle.remove();
