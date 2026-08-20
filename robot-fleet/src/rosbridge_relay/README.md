@@ -36,8 +36,16 @@ one, then forwards messages in both directions as rosbridge `publish` ops.
 Messages are converted with `rosidl_runtime_py`, so no type is hand-coded.
 
 The connection is outbound only and retried every 5 seconds. While it is down,
-telemetry is dropped rather than queued — a status sample from a minute ago is
-not worth delivering, and the backend expires stale robots anyway.
+messages are dropped rather than queued — a backlog of stale samples is not
+worth delivering, and the backend expires stale robots anyway.
+
+The last value of each uplink topic is kept and replayed on reconnect. This
+matters for `navigate_to_pose/_action/status`, which is not telemetry: Nav2
+publishes it only when a goal changes state, and it is `transient_local` on the
+local graph, so a late subscriber is handed the current state. Relaying it as an
+ordinary rosbridge topic drops that guarantee — a goal that finished while the
+link was down would leave the backend believing the robot is still driving, with
+no later message to correct it.
 
 Once `/{ns}/status` appears on the fleet's graph, the backend's own topic
 discovery picks the robot up within about 10 seconds. Nothing on the fleet side

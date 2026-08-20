@@ -72,6 +72,13 @@ class RelayNode(Node):
         self._connection = None
         self._lock = threading.Lock()
 
+        # Last payload per uplink topic, replayed on reconnect. The action
+        # status topic is transient_local on the local graph, so a subscriber
+        # that joins late is handed the current state; relaying it as an
+        # ordinary rosbridge topic loses that, and a terminal status produced
+        # while the link is down would otherwise never be republished.
+        self._last_uplink = {}
+
         # ── downlink: remote publishes we republish locally ────────────
         self._downlink = {}
 
@@ -158,6 +165,15 @@ class RelayNode(Node):
                 "type": type_name,
             }))
 
+        # The uplink carries state, not only samples: a goal transition that
+        # happened while the link was down has no later message to correct it,
+        # because Nav2 only publishes when a goal changes. Replaying the last
+        # value restores what transient_local gives a subscriber locally.
+        #
+        # Snapshotted — _forward writes this from the executor thread.
+        for payload in list(self._last_uplink.values()):
+            connection.send(payload)
+
     def _receive_until_closed(self, connection) -> None:
         while rclpy.ok():
             try:
@@ -209,9 +225,16 @@ class RelayNode(Node):
             "msg": message_to_ordereddict(message),
         })
 
+        # Before the lock, and before the early return: the message that matters
+        # is the one that arrives while the link is down.
+        self._last_uplink[topic] = payload
+
         with self._lock:
             if self._connection is None:
-                return  # telemetry is live data — a dropped sample is not worth queueing
+                # Dropped rather than queued — a backlog of stale samples is
+                # not worth delivering. The cache above is what carries the
+                # current value across the gap.
+                return
 
             try:
                 self._connection.send(payload)
