@@ -4,7 +4,11 @@
 
 import path from "path";
 
-import { ConfigParams, devServerConfig, mainConfig } from "@foxglove/studio-web/src/webpackConfigs";
+import {
+  ConfigParams,
+  devServerConfig,
+  mainConfig,
+} from "@foxglove/studio-web/src/webpackConfigs";
 
 import packageJson from "../package.json";
 
@@ -16,5 +20,19 @@ const params: ConfigParams = {
   version: packageJson.version,
 };
 
+const devConfig = devServerConfig(params);
+
+if (devConfig.devServer) {
+  devConfig.devServer.client = {
+    ...(typeof devConfig.devServer.client === "object"
+      ? devConfig.devServer.client
+      : {}),
+    overlay: {
+      errors: true,
+      warnings: false,
+    },
+  };
+}
+
 // foxglove-depcheck-used: webpack-dev-server
-export default [devServerConfig(params), mainConfig(params)];
+export default [devConfig, mainConfig(params)];
