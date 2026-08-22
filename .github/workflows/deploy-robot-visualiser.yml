@@ -197,7 +197,7 @@ jobs:
 
         working-directory: robot-visualiser
 
-        run: yarn install --immutable
+        run: yarn install
 
 
       # build production foxglove frontend
