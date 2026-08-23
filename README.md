@@ -364,3 +364,16 @@ Verify the Docker tools with:
 sudo docker --version
 sudo docker compose version
 sudo docker buildx version
+```
+
+# Nginx
+
+```
+sudo apt update
+sudo apt install -y certbot
+sudo mkdir -p /var/www/certbot
+sudo certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  -d rosbridge.dish-patch.com
+```
