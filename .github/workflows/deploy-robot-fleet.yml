@@ -2,11 +2,12 @@ name: Deploy Robot Fleet (Docker Compose -> EC2)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'robot-fleet/**'
       - 'map-source/**'
       - '.github/workflows/deploy-robot-fleet.yml'
+
   workflow_dispatch: {}
 
 permissions:
@@ -21,220 +22,389 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     concurrency:
       group: dishpatch-robot-fleet-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
+
+      # ── checkout ───────────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # ── prepare nav2 map ───────────────────────────────────────────────────
       - name: Stage Nav2 map source
         run: bash robot-fleet/scripts/stage_nav2_map.sh
 
       - name: Validate staged Nav2 map source
         run: bash robot-fleet/scripts/stage_nav2_map.sh --check
 
+
+      # ── validate docker compose ────────────────────────────────────────────
       - name: Validate Docker Compose config
         working-directory: robot-fleet
         run: docker compose -f docker-compose.yml config >/dev/null
 
+
+      # ── prepare ssh key ────────────────────────────────────────────────────
       - name: Prepare SSH key
         env:
           ROS_SSH_KEY: ${{ secrets.ROS_SSH_KEY }}
         run: |
           set -euo pipefail
+
           if [ -z "${ROS_SSH_KEY}" ]; then
             echo "::error::GitHub secret ROS_SSH_KEY is missing or empty."
             exit 1
           fi
+
           printf '%s\n' "${ROS_SSH_KEY}" | tr -d '\r' > key.pem
           chmod 600 key.pem
+
           if ! grep -q 'BEGIN .*PRIVATE KEY' key.pem; then
             echo "::error::ROS_SSH_KEY must contain the private key, not the public key."
             exit 1
           fi
+
           ssh-keygen -y -f key.pem > key.pub
+
           echo "Using ROS_SSH_KEY public fingerprint:"
           ssh-keygen -lf key.pub
 
+
+      # ── validate ssh connection ────────────────────────────────────────────
       - name: Validate SSH connection
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no \
+
+          ssh \
+            -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -i key.pem \
             "${EC2_USER}@${EC2_HOST}" \
             "echo Connected to \$(hostname) as \$(whoami)"
 
+
+      # ── package robot fleet ────────────────────────────────────────────────
       - name: Package robot fleet
         run: |
           set -euo pipefail
+
           tar -czf robot-fleet.tar.gz -C robot-fleet .
 
+
+      # ── copy package to ec2 ────────────────────────────────────────────────
       - name: Copy robot fleet package to EC2
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=no \
+
+          scp \
+            -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -i key.pem \
             robot-fleet.tar.gz \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}:/tmp/robot-fleet.tar.gz"
+            "${EC2_USER}@${EC2_HOST}:/tmp/robot-fleet.tar.gz"
 
+
+      # ── replace deployed robot fleet directory ─────────────────────────────
       - name: Unpack robot fleet on EC2
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no \
+
+          ssh \
+            -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' bash -s" <<'REMOTE_SCRIPT'
+            "${EC2_USER}@${EC2_HOST}" \
+            "SERVICE_NAME='${SERVICE_NAME}' REMOTE_DIR='${REMOTE_DIR}' bash -s" <<'REMOTE_SCRIPT'
+
           set -euo pipefail
+
           test -n "${REMOTE_DIR}"
           test "${REMOTE_DIR}" != "/"
 
+          # Stop systemd service before replacing the deployment.
           sudo systemctl stop "${SERVICE_NAME}.service" || true
+
+          # Stop existing containers.
+          #
+          # Deliberately do NOT use:
+          #
+          #   docker compose down -v
+          #
+          # Persistent Docker volumes must survive deployments.
           if command -v docker >/dev/null 2>&1 && [ -f "${REMOTE_DIR}/docker-compose.yml" ]; then
-            sudo docker compose -f "${REMOTE_DIR}/docker-compose.yml" down --remove-orphans || true
+            sudo docker compose \
+              -f "${REMOTE_DIR}/docker-compose.yml" \
+              down --remove-orphans || true
           fi
 
+          # Extract new deployment into a temporary directory first.
           rm -rf "${REMOTE_DIR}.next"
           mkdir -p "${REMOTE_DIR}.next"
-          tar -xzf /tmp/robot-fleet.tar.gz -C "${REMOTE_DIR}.next"
+
+          tar -xzf /tmp/robot-fleet.tar.gz \
+            -C "${REMOTE_DIR}.next"
+
           rm -f /tmp/robot-fleet.tar.gz
+
+          # Replace the old application directory completely.
+          #
+          # This intentionally removes:
+          #   /home/ubuntu/robot-fleet
+          #
+          # TLS certificates are NOT stored here.
+          # They live separately under /etc/letsencrypt on the EC2 host.
           rm -rf "${REMOTE_DIR}"
           mv "${REMOTE_DIR}.next" "${REMOTE_DIR}"
+
           REMOTE_SCRIPT
 
+
+      # ── install / restart systemd service ──────────────────────────────────
       - name: Install and restart robot fleet service
         run: |
           set -euo pipefail
-          # Rebuilds every Docker image, which can hold this session open for a long
-          # time with little output. Without the keepalive that ends as
-          # "client_loop: send disconnect: Broken pipe", exit 255.
-          ssh -o StrictHostKeyChecking=no \
+
+          # Rebuilding Docker images can take some time.
+          # SSH keepalive prevents the connection being dropped while building.
+          ssh \
+            -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
             -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "REMOTE_DIR='${{ env.REMOTE_DIR }}' SERVICE_USER='${{ env.EC2_USER }}' bash '${{ env.REMOTE_DIR }}/deployment-scripts/setup-robot-fleet-service.sh'"
+            "${EC2_USER}@${EC2_HOST}" \
+            "REMOTE_DIR='${REMOTE_DIR}' SERVICE_USER='${EC2_USER}' bash '${REMOTE_DIR}/deployment-scripts/setup-robot-fleet-service.sh'"
 
+
+      # ── verify deployment ──────────────────────────────────────────────────
       - name: Verify robot fleet service
         run: |
           set -euo pipefail
 
-          # Fingerprint the map we are shipping.
-          EXPECTED_MAP_SHA=$(sha256sum robot-fleet/config/map.yaml robot-fleet/config/map.png \
-            | awk '{print $1}' | sha256sum | awk '{print $1}')
+          EXPECTED_MAP_SHA=$(
+            sha256sum \
+              robot-fleet/config/map.yaml \
+              robot-fleet/config/map.png \
+            | awk '{print $1}' \
+            | sha256sum \
+            | awk '{print $1}'
+          )
+
           echo "Staged map fingerprint: ${EXPECTED_MAP_SHA}"
 
-          # ServerAlive*: the checks below poll for up to five minutes while the
-          # fleet comes up, and an SSH session left idle that long gets dropped —
-          # "client_loop: send disconnect: Broken pipe", exit 255.
-          ssh -o StrictHostKeyChecking=no \
+          ssh \
+            -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o ServerAliveInterval=30 \
             -o ServerAliveCountMax=10 \
             -i key.pem \
-            "${{ env.EC2_USER }}@${{ env.EC2_HOST }}" \
-            "SERVICE_NAME='${{ env.SERVICE_NAME }}' REMOTE_DIR='${{ env.REMOTE_DIR }}' EXPECTED_MAP_SHA='${EXPECTED_MAP_SHA}' bash -s" <<'REMOTE_SCRIPT'
+            "${EC2_USER}@${EC2_HOST}" \
+            "SERVICE_NAME='${SERVICE_NAME}' REMOTE_DIR='${REMOTE_DIR}' EXPECTED_MAP_SHA='${EXPECTED_MAP_SHA}' bash -s" <<'REMOTE_SCRIPT'
+
           set -euo pipefail
+
           cd "${REMOTE_DIR}"
 
+
+          # ── wait for systemd service ───────────────────────────────────────
           for attempt in $(seq 1 30); do
+
             if sudo systemctl is-active --quiet "${SERVICE_NAME}.service"; then
               break
             fi
+
             if [ "${attempt}" -eq 30 ]; then
               echo "::error::${SERVICE_NAME}.service did not become active."
-              sudo systemctl --no-pager status "${SERVICE_NAME}.service" || true
+
+              sudo systemctl \
+                --no-pager \
+                status "${SERVICE_NAME}.service" || true
+
               exit 1
             fi
+
             sleep 2
           done
 
+
+          # ── wait for containers ────────────────────────────────────────────
           for attempt in $(seq 1 60); do
+
             missing=""
-            for container in rosbridge nav2 robot1 robot2; do
+
+            for container in nginx rosbridge nav2 robot1 robot2; do
+
               if [ "$(sudo docker inspect -f '{{.State.Running}}' "${container}" 2>/dev/null || true)" != "true" ]; then
                 missing="${missing} ${container}"
               fi
+
             done
+
             if [ -z "${missing}" ]; then
               break
             fi
+
             if [ "${attempt}" -eq 60 ]; then
+
               echo "::error::Timed out waiting for containers to run:${missing}"
-              sudo docker compose -f docker-compose.yml ps || true
+
+              sudo docker compose \
+                -f docker-compose.yml \
+                ps || true
+
+              echo "--- nginx logs ---"
+              sudo docker logs nginx || true
+
+              echo "--- rosbridge logs ---"
+              sudo docker logs rosbridge || true
+
+              echo "--- nav2 logs ---"
+              sudo docker logs nav2 || true
+
               exit 1
             fi
+
             sleep 5
           done
 
-          check_ros_graph() {
-            local topics actions topic action
-            topics=$(sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' 2>/dev/null) || return 1
-            actions=$(sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' 2>/dev/null) || return 1
 
-            for topic in /robot1/status /robot2/status /robot1/goal_pose /robot2/goal_pose; do
+          # ── validate nginx ─────────────────────────────────────────────────
+          echo "Checking nginx configuration..."
+
+          if ! sudo docker exec nginx nginx -t; then
+
+            echo "::error::nginx configuration is invalid."
+
+            echo "--- nginx logs ---"
+            sudo docker logs nginx || true
+
+            exit 1
+          fi
+
+          echo "nginx configuration is valid."
+
+
+          # ── verify ros graph ────────────────────────────────────────────────
+          check_ros_graph() {
+
+            local topics actions topic action
+
+            topics=$(
+              sudo docker exec rosbridge bash -lc \
+                'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' \
+                2>/dev/null
+            ) || return 1
+
+            actions=$(
+              sudo docker exec rosbridge bash -lc \
+                'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' \
+                2>/dev/null
+            ) || return 1
+
+
+            for topic in \
+              /robot1/status \
+              /robot2/status \
+              /robot1/goal_pose \
+              /robot2/goal_pose
+            do
+
               if ! printf '%s\n' "${topics}" | grep -Fx "${topic}" >/dev/null; then
                 return 1
               fi
+
             done
 
-            for action in /robot1/navigate_to_pose /robot2/navigate_to_pose; do
+
+            for action in \
+              /robot1/navigate_to_pose \
+              /robot2/navigate_to_pose
+            do
+
               if ! printf '%s\n' "${actions}" | grep -Fx "${action}" >/dev/null; then
                 return 1
               fi
+
             done
           }
+
 
           ros_graph_ready=""
 
           for attempt in $(seq 1 60); do
+
             if check_ros_graph; then
               ros_graph_ready="yes"
               break
             fi
+
             sleep 5
           done
 
+
           if [ -z "${ros_graph_ready}" ]; then
+
             echo "::error::Timed out waiting for expected ROS topics and actions."
-            sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' || true
-            sudo docker exec rosbridge bash -lc 'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' || true
+
+            sudo docker exec rosbridge bash -lc \
+              'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 topic list' \
+              || true
+
+            sudo docker exec rosbridge bash -lc \
+              'source /opt/ros/jazzy/setup.bash && source /ros2_ws/install/setup.bash && ros2 action list' \
+              || true
+
             exit 1
           fi
 
-          # Did the map we staged actually reach the running fleet? It is baked into
-          # the nav2 image by COPY rather than mounted, and the systemd unit starts
-          # the stack with `compose up` and no --build, so a rebuild that did not
-          # happen leaves the fleet quietly navigating an old map. Nothing else in
-          # this pipeline would notice — which is how an 18x oversized costmap ran in
-          # production for months.
-          #
-          # Asserted once, not polled: a file on disk does not become correct by
-          # waiting, and retrying it is what turned a wrong map into a five-minute
-          # silence and an SSH broken pipe.
-          actual_map_sha=$(sudo docker exec nav2 sh -c \
-            'sha256sum /ros2_ws/config/map.yaml /ros2_ws/config/map.png | awk "{print \$1}" | sha256sum | awk "{print \$1}"')
+
+          # ── verify nav2 map ────────────────────────────────────────────────
+          actual_map_sha=$(
+            sudo docker exec nav2 sh -c \
+              'sha256sum /ros2_ws/config/map.yaml /ros2_ws/config/map.png | awk "{print \$1}" | sha256sum | awk "{print \$1}"'
+          )
+
 
           if [ "${actual_map_sha}" != "${EXPECTED_MAP_SHA}" ]; then
-            echo "::error::The nav2 container is not running the map that was just staged. The image was probably not rebuilt from the new assets."
+
+            echo "::error::The nav2 container is not running the map that was just staged."
+            echo "The image was probably not rebuilt from the new assets."
+
             echo "  staged:   ${EXPECTED_MAP_SHA}"
             echo "  deployed: ${actual_map_sha}"
-            echo "--- map.yaml inside the nav2 container ---"
-            sudo docker exec nav2 cat /ros2_ws/config/map.yaml || true
+
+            echo "--- map.yaml inside nav2 ---"
+
+            sudo docker exec nav2 \
+              cat /ros2_ws/config/map.yaml || true
+
             exit 1
           fi
 
+
           echo "Map fingerprint matches: ${actual_map_sha}"
-          sudo systemctl --no-pager status "${SERVICE_NAME}.service"
-          sudo docker compose -f docker-compose.yml ps
+
+
+          # ── final status ───────────────────────────────────────────────────
+          echo
+          echo "Robot fleet deployment successful."
+          echo
+
+          sudo systemctl \
+            --no-pager \
+            status "${SERVICE_NAME}.service"
+
+          sudo docker compose \
+            -f docker-compose.yml \
+            ps
+
           REMOTE_SCRIPT
