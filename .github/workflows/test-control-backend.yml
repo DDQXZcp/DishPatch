@@ -1,22 +1,5 @@
 # Runs the control-backend test suite on pull requests and pushes.
-#
-# Deliberately a separate workflow from deploy-control-backend.yml. That one
-# holds a workflow-level `concurrency: control-platform-production` with
-# cancel-in-progress disabled, so a test job living inside it would queue behind
-# every production deploy. This one has its own group instead, and superseded
-# pushes cancel rather than pile up.
-#
-# The deploy workflow runs the suite again before it packages, so a red test
-# cannot reach EC2 even on a direct push to main or a manual dispatch. The
-# duplication costs a few seconds and does not depend on branch protection
-# being configured.
-#
-# The paths below are deliberately narrower than the deploy workflow's: that one
-# also watches control-nginx/**, which is reverse-proxy config and cannot change
-# the outcome of a Java test. A control-nginx-only PR therefore gets no check
-# here. It still cannot deploy untested — the deploy run executes the suite
-# itself before it packages — it just gets that signal after merge rather than
-# before. Add control-nginx/** here if that trade stops being worth it.
+# Deliberately a separate workflow from deploy-control-backend.yml.
 
 name: Test Control Backend
 
