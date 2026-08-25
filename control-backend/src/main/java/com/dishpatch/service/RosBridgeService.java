@@ -1,5 +1,6 @@
 package com.dishpatch.service;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -8,6 +9,7 @@ import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -16,16 +18,26 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import org.springframework.web.socket.CloseStatus;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Connects to rosbridge as a WebSocket client to exchange ROS2 topics with the
  * robot fleet.
  *
- * Subscribes (per robot id 1..robotCount):
+ * The fleet size is not configured. rosbridge is asked what is on the ROS graph
+ * (via the {@code /rosapi/topics} service) and every {@code /robot{id}/status}
+ * topic it reports becomes a robot this backend follows — so robots that boot
+ * after the backend are picked up on the next discovery pass.
+ *
+ * Subscribes (per discovered robot id):
  *   /robot{id}/status    shared_msgs/msg/RobotStatus   (robot_id, battery, speed, sensor, pose)
  *
  * Publishes (on demand, via {@link #publishGoal}):
@@ -33,7 +45,6 @@ import java.util.logging.Logger;
  *
  * Configure in application.properties:
  *   rosbridge.url=ws://<IP>:9090
- *   rosbridge.robot-count=10
  */
 @Service
 public class RosBridgeService extends TextWebSocketHandler {
@@ -43,16 +54,35 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Value("${rosbridge.url}")
     private String rosbridgeUrl;
 
-    @Value("${rosbridge.robot-count}")
-    private int robotCount;
-
     @Autowired
     private RobotService robotService;
 
     private WebSocketSession session;
 
+    /**
+     * Guards writes to the session. rosbridge messages are sent from the
+     * rosbridge thread, the discovery pass and the dispatch scheduler, and a
+     * WebSocket session rejects a second write while one is still in flight.
+     */
+    private final Object sendLock = new Object();
+
     /** Hidden topic the NavigateToPose action server publishes its goal states on. */
     private static final String NAV_STATUS_SUFFIX = "/navigate_to_pose/_action/status";
+
+    /** rosapi service listing every topic currently on the ROS graph. */
+    private static final String TOPICS_SERVICE = "/rosapi/topics";
+
+    /** Tags our own {@link #TOPICS_SERVICE} calls, so the responses are ours to read. */
+    private static final String DISCOVERY_ID = "dishpatch-robot-discovery";
+
+    /** How often the fleet is re-checked for robots that have since come online. */
+    private static final long DISCOVERY_INTERVAL_MS = 10_000;
+
+    /** A robot exists, as far as this backend is concerned, when it publishes this. */
+    private static final Pattern STATUS_TOPIC = Pattern.compile("^/robot(\\d+)/status$");
+
+    /** Assumed status type when rosapi reports a topic without one. */
+    private static final String STATUS_TYPE = "shared_msgs/msg/RobotStatus";
 
     // action_msgs/msg/GoalStatus codes. ACCEPTED and EXECUTING mean Nav2 is still
     // driving; the rest are terminal. SUCCEEDED is not the same news as ABORTED,
@@ -64,6 +94,15 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     /** Whether Nav2 currently holds a live goal, per robot id. */
     private final Map<Integer, Boolean> navigating = new ConcurrentHashMap<>();
+
+    /**
+     * Robots discovered and subscribed to on this session, so each is set up once.
+     * <p>
+     * Nothing is ever removed: a robot that dies keeps its status topic on the
+     * graph for as long as we subscribe to it, so its disappearance is not
+     * visible here. RobotService's telemetry expiry is what marks it gone.
+     */
+    private final Set<Integer> followed = ConcurrentHashMap.newKeySet();
 
     /**
      * Status of the most recently seen goal, per robot id.
@@ -129,42 +168,66 @@ public class RosBridgeService extends TextWebSocketHandler {
 
     /**
      * Called when the WebSocket connection to rosbridge is established.
-     * Subscribes to all robot topics based on robotCount from config.
+     * <p>
+     * Nothing is subscribed here — which robots exist is a question for the ROS
+     * graph, so the session starts empty and asks.
      */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         this.session = session;
+
+        followed.clear();
+
         // New session — nothing known about Nav2 yet. Stale goal outcomes are worse
         // than none: they would describe goals from before the link dropped.
         navigating.clear();
         lastGoalStatus.clear();
         logger.info("Connected to rosbridge at " + rosbridgeUrl);
-
-        for (int i = 1; i <= robotCount; i++) {
-            subscribe("/robot" + i + "/status", "shared_msgs/msg/RobotStatus");
-            subscribe("/robot" + i + NAV_STATUS_SUFFIX, "action_msgs/msg/GoalStatusArray");
-
-            // Advertised up front, not on first publish. A freshly advertised
-            // publisher has to discover goal_relay_node's subscription, and
-            // anything published before that completes is dropped silently.
-            advertiseGoal(i);
-        }
-
-        logger.info("Subscribed and advertised for " + robotCount + " robots.");
+        discoverRobots();
     }
 
+    /**
+     * Asks rosbridge which topics exist, so the fleet does not have to be
+     * configured. The answer arrives asynchronously — see {@link #adoptRobots}.
+     * <p>
+     * Runs on a timer as well as at connection time: a robot container started
+     * later joins the graph without any event reaching us, and only shows up on
+     * a later pass.
+     */
+    @Scheduled(fixedDelay = DISCOVERY_INTERVAL_MS)
+    public void discoverRobots() {
+        if (!isConnected()) {
+            return; // nothing to ask, and the reconnect will discover on arrival
+        }
+
+        try {
+            send(String.format(
+                "{\"op\":\"call_service\",\"id\":\"%s\",\"service\":\"%s\",\"args\":{}}",
+                DISCOVERY_ID, TOPICS_SERVICE
+            ));
+        } catch (Exception e) {
+            logger.warning("Failed to ask rosbridge for the topic list: " + e.getMessage());
+        }
+    }
 
     /**
      * Called on each incoming message from rosbridge.
-     * Routes Nav2 goal status, and forwards everything else to
-     * RobotService.updateField().
+     * Routes discovery results and Nav2 goal status, and forwards everything else
+     * to RobotService.updateField().
      */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
             JsonObject json = JsonParser.parseString(message.getPayload()).getAsJsonObject();
 
-            if (!"publish".equals(json.get("op").getAsString())) return;
+            String op = json.get("op").getAsString();
+
+            if ("service_response".equals(op)) {
+                handleServiceResponse(json);
+                return;
+            }
+
+            if (!"publish".equals(op)) return;
 
             String     topic = json.get("topic").getAsString();
             JsonObject msg   = json.getAsJsonObject("msg");
@@ -184,6 +247,101 @@ public class RosBridgeService extends TextWebSocketHandler {
 
         } catch (Exception e) {
             logger.warning("Error handling rosbridge message: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Reads the answer to a {@link #TOPICS_SERVICE} call.
+     * <p>
+     * Responses to anything else are ignored, and a failed call is logged rather
+     * than retried here — the next discovery pass is the retry.
+     */
+    private void handleServiceResponse(JsonObject json) throws Exception {
+        JsonElement id = json.get("id");
+
+        if (id == null || !id.isJsonPrimitive()
+                || !DISCOVERY_ID.equals(id.getAsString())) {
+            return;
+        }
+
+        JsonElement result = json.get("result");
+        JsonElement values = json.get("values");
+
+        // rosbridge answers a failed call with result:false and the error text in
+        // values, so the payload is not the object the success case returns.
+        if ((result != null && !result.getAsBoolean())
+                || values == null
+                || !values.isJsonObject()) {
+            logger.warning("Robot discovery failed — is rosapi running? " + values);
+            return;
+        }
+
+        adoptRobots(values.getAsJsonObject());
+    }
+
+    /**
+     * Turns a rosapi topic list into subscriptions.
+     * <p>
+     * Every {@code /robot{id}/status} on the graph is a robot, and each one is
+     * only set up the first time it is seen, so re-running this is free.
+     *
+     * @param values rosapi_msgs/Topics response: parallel "topics" and "types" arrays
+     */
+    private void adoptRobots(JsonObject values) throws Exception {
+        JsonArray topics = values.getAsJsonArray("topics");
+
+        if (topics == null) return;
+
+        JsonArray types = values.getAsJsonArray("types");
+        List<Integer> discovered = new ArrayList<>();
+
+        for (int i = 0; i < topics.size(); i++) {
+            Matcher matcher = STATUS_TOPIC.matcher(topics.get(i).getAsString());
+
+            if (!matcher.matches()) continue;
+
+            // Take the type the graph reports rather than assuming it: a robot
+            // publishing something else is a mismatch worth failing loudly on.
+            String type = (types != null && i < types.size())
+                    ? types.get(i).getAsString()
+                    : STATUS_TYPE;
+
+            int id = Integer.parseInt(matcher.group(1));
+
+            if (followRobot(id, type)) {
+                discovered.add(id);
+            }
+        }
+
+        if (!discovered.isEmpty()) {
+            logger.info("Discovered robots " + discovered
+                    + " — now following " + followed.size() + " robot(s)");
+        }
+    }
+
+    /**
+     * Subscribes to one robot's topics and advertises its goal topic.
+     *
+     * @return true when this robot was new, false when it was already followed
+     */
+    private boolean followRobot(int id, String statusType) throws Exception {
+        if (!followed.add(id)) return false;
+
+        try {
+            subscribe("/robot" + id + "/status", statusType);
+            subscribe("/robot" + id + NAV_STATUS_SUFFIX, "action_msgs/msg/GoalStatusArray");
+
+            // Advertised up front, not on first publish. A freshly advertised
+            // publisher has to discover goal_relay_node's subscription, and
+            // anything published before that completes is dropped silently.
+            advertiseGoal(id);
+            return true;
+
+        } catch (Exception e) {
+            // Half set up is worse than not set up: drop it so the next
+            // discovery pass tries again.
+            followed.remove(id);
+            throw e;
         }
     }
 
@@ -240,19 +398,36 @@ public class RosBridgeService extends TextWebSocketHandler {
         String payload = String.format(
             "{\"op\":\"subscribe\",\"topic\":\"%s\",\"type\":\"%s\"}", topic, type
         );
-        session.sendMessage(new TextMessage(payload));
+        send(payload);
     }
 
     /** Advertises a robot's goal_pose topic, so later publishes are not dropped. */
     private void advertiseGoal(int id) throws Exception {
-        session.sendMessage(new TextMessage(String.format(
+        send(String.format(
             "{\"op\":\"advertise\",\"topic\":\"/robot%d/goal_pose\",\"type\":\"geometry_msgs/PoseStamped\"}", id
-        )));
+        ));
+    }
+
+    /** Sends one rosbridge message; serialised, since a session takes one write at a time. */
+    private void send(String payload) throws Exception {
+        synchronized (sendLock) {
+            session.sendMessage(new TextMessage(payload));
+        }
     }
 
     /** True when the rosbridge session is open and goals can actually be sent. */
     public boolean isConnected() {
         return session != null && session.isOpen();
+    }
+
+    /**
+     * Robot ids found on the ROS graph and subscribed to, ascending.
+     * <p>
+     * The fleet as rosbridge reports it, which is not the same as the fleet that
+     * is alive — see {@link RobotService#getFreshRobotIds()} for that.
+     */
+    public List<Integer> followedRobotIds() {
+        return followed.stream().sorted().toList();
     }
 
     /**
@@ -312,7 +487,7 @@ public class RosBridgeService extends TextWebSocketHandler {
             "\"orientation\":{\"x\":0.0,\"y\":0.0,\"z\":%f,\"w\":%f}}}}",
             topic, x, y, oz, ow
         );
-        session.sendMessage(new TextMessage(payload));
+        send(payload);
         logger.info("Published goal for robot " + id + " → (" + x + ", " + y + ", yaw=" + yaw + ")");
     }
 }

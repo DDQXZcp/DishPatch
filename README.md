@@ -268,6 +268,12 @@ ros2 topic list -t
 ros2 topic echo /robot/location geometry_msgs/msg/PoseStamped
 ```
 
+### Step 4 - Optional: Run a Robot on Your Own Machine
+
+A robot can also run on a laptop or in WSL and join the EC2 fleet over the
+rosbridge WebSocket, with no DDS traffic crossing the network. See
+[robot-fleet/ROBOT3_GUIDE.md](robot-fleet/ROBOT3_GUIDE.md).
+
 ## Local Testing
 
 For local development, we need to manually create an **.env** in each component as it need AWS permissions to execute certain operations. Permissions for cloud resources e.g. Lambda, EC2 are managed directly via IAM.
