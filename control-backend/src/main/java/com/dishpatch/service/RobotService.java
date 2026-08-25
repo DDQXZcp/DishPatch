@@ -256,7 +256,8 @@ public class RobotService {
         }
     }
 
-    private boolean isFreshAt(int id, long currentTime) {
+    /** Package-private so RobotServiceTest can exercise the window without waiting 20s. */
+    boolean isFreshAt(int id, long currentTime) {
         Long lastUpdate = robotLastUpdMap.get(id);
         return lastUpdate != null && (currentTime - lastUpdate) < EXPIRY_MILLIS;
     }

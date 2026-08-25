@@ -1,0 +1,90 @@
+# Runs the control-backend test suite on pull requests and pushes.
+# Deliberately a separate workflow from deploy-control-backend.yml.
+
+name: Test Control Backend
+
+on:
+  pull_request:
+    paths:
+      - "control-backend/**"
+      - "map-source/**"
+      - ".github/workflows/test-control-backend.yml"
+
+  push:
+    branches:
+      - main
+      - control-docker-deployment
+    paths:
+      - "control-backend/**"
+      - "map-source/**"
+      - ".github/workflows/test-control-backend.yml"
+
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the PR number where there is one, so the push and pull_request events
+  # for the same commit collapse into one run. Keying on github.ref alone would give
+  # them different groups — refs/heads/<branch> vs refs/pull/N/merge — and run the
+  # whole suite twice for every push to a branch with an open PR.
+  group: control-backend-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # JDK 17 is what the pom targets. Mockito cannot instrument classes on
+      # much newer JVMs, and the failure reads as "Mockito cannot mock this
+      # class" rather than anything about the JDK.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: control-backend/pom.xml
+
+      # Writes control-backend/src/main/resources/drop-points.json. The map
+      # tests read it straight off the classpath and DispatchFixture loads the
+      # real geometry from it, so this must run before the suite. The file is
+      # gitignored and absent from a fresh checkout.
+      - name: Stage map assets
+        run: bash map-source/stage-map-assets.sh
+
+      - name: Validate staged map assets
+        run: bash map-source/stage-map-assets.sh --check
+
+      - name: Run tests
+        working-directory: control-backend
+        run: |
+          set -Eeuo pipefail
+          mvn --batch-mode --no-transfer-progress test
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: control-backend/target/surefire-reports/
+          retention-days: 7
+
+      # always(), not failure(): a coverage report is most wanted on a green run.
+      # JaCoCo is bound to the test phase, so the report exists by the time this
+      # step runs. Reported figure is branch coverage — see
+      # docs/control-backend-test-quality.md for why line coverage is not the
+      # number to quote.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage
+          path: control-backend/target/site/jacoco/
+          retention-days: 7

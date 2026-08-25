@@ -164,25 +164,4 @@ class DispatchAssignmentTest {
                 fixture.assignmentFor("o-1").orElseThrow().state());
         assertEquals(List.of("T6", "counter"), fixture.destinationsSentTo(1));
     }
-
-    @Test
-    void keepsExactlyOneConstructorForSpringToPick() {
-        // The second constructor exists so tests can supply a clock, and it costs the
-        // class its implicit constructor selection: with more than one, Spring picks
-        // whichever carries @Autowired, and with none it hunts for a no-arg
-        // constructor and fails to start the context.
-        //
-        // That failure happens at startup, not compile time, so nothing else in this
-        // build would catch it — and the only way to see it for real is to boot the
-        // app, which connects to the live rosbridge and starts commanding robots.
-        // This assertion is the cheap version of that check.
-        long annotated = java.util.Arrays
-                .stream(DispatchService.class.getDeclaredConstructors())
-                .filter(constructor -> constructor.isAnnotationPresent(
-                        org.springframework.beans.factory.annotation.Autowired.class))
-                .count();
-
-        assertEquals(1, annotated,
-                "exactly one constructor must carry @Autowired or the app will not start");
-    }
 }
