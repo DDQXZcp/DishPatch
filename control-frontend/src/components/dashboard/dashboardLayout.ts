@@ -9,8 +9,6 @@ export const MIN_ROW_HEIGHT = 260;
 export const DEFAULT_ROW_HEIGHT = 420;
 export const MIN_COLUMN_WIDTH = 18;
 
-export type DropPosition = "top" | "right" | "bottom" | "left";
-
 export interface DashboardWidgetColumn {
   widgetIds: WidgetId[];
   width: number;
@@ -160,74 +158,6 @@ export function showWidgetInState(
   return sanitizeWidgetState({
     visibleWidgetIds: [...state.visibleWidgetIds, widgetId],
     rows: appendWidgetAsRow(removeWidgetFromRows(state.rows, widgetId), widgetId),
-  });
-}
-
-export function moveWidgetToBottom(
-  rows: DashboardWidgetRow[],
-  widgetId: WidgetId,
-) {
-  return appendWidgetAsRow(removeWidgetFromRows(rows, widgetId), widgetId);
-}
-
-export function moveWidgetNearTarget(
-  rows: DashboardWidgetRow[],
-  widgetId: WidgetId,
-  targetWidgetId: WidgetId,
-  position: DropPosition,
-) {
-  if (widgetId === targetWidgetId) {
-    return rows;
-  }
-
-  const rowsWithoutWidget = removeWidgetFromRows(rows, widgetId);
-  const targetRowIndex = rowsWithoutWidget.findIndex((row) =>
-    row.columns.some((column) => column.widgetIds.includes(targetWidgetId)),
-  );
-
-  if (targetRowIndex === -1) {
-    return rows;
-  }
-
-  if (position === "top" || position === "bottom") {
-    const targetRow = rowsWithoutWidget[targetRowIndex];
-    const insertIndex = position === "top" ? targetRowIndex : targetRowIndex + 1;
-    const nextRows = [...rowsWithoutWidget];
-
-    nextRows.splice(
-      insertIndex,
-      0,
-      createSingleWidgetRow(widgetId, targetRow.height),
-    );
-
-    return nextRows;
-  }
-
-  return rowsWithoutWidget.map((row, rowIndex) => {
-    if (rowIndex !== targetRowIndex) {
-      return row;
-    }
-
-    const targetColumnIndex = row.columns.findIndex((column) =>
-      column.widgetIds.includes(targetWidgetId),
-    );
-
-    if (targetColumnIndex === -1) {
-      return row;
-    }
-
-    const insertIndex =
-      position === "left" ? targetColumnIndex : targetColumnIndex + 1;
-    const insertedWidth = 100 / (row.columns.length + 1);
-    const retainedWidthScale = (100 - insertedWidth) / 100;
-    const columns = row.columns.map((column) => ({
-      ...column,
-      width: column.width * retainedWidthScale,
-    }));
-
-    columns.splice(insertIndex, 0, { widgetIds: [widgetId], width: insertedWidth });
-
-    return { ...row, columns: normalizeColumns(columns) };
   });
 }
 

@@ -7,7 +7,7 @@ const AppLayout: React.FC = () => {
     <DashboardWidgetsProvider>
       <div className="flex h-screen flex-col">
         <AppHeader />
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 mx-auto w-full max-w-(--breakpoint-2xl) md:p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 w-full md:p-6">
           <Outlet />
         </div>
       </div>
