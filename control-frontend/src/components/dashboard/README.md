@@ -4,7 +4,7 @@ This dashboard uses a snapped row-and-column layout instead of a free-floating w
 
 ## Main Files
 
-- `DashboardWidgets.tsx`: renders the toolbar, desktop row workspace, mobile stacked layout, drag/drop targets, resize handles, and localStorage persistence.
+- `DashboardWidgets.tsx`: renders the toolbar, desktop row workspace, mobile stacked layout, resize handles, and localStorage persistence.
 - `dashboardLayout.ts`: owns the v2 layout state model, default layout, sanitizers, and pure layout mutations.
 - `types.ts`: declares the supported widget ids and widget definition shape.
 - `widgetRegistry.tsx`: maps widget ids to titles, descriptions, and render functions.
@@ -58,7 +58,7 @@ The important invariants are:
     - avoid global DOM ids that could collide if the widget is remounted
     - clean up timers, sockets, observers, map instances, and direct DOM libraries on unmount
 5. Run `npx tsc --noEmit` and `npm run build` from `control-frontend`.
-6. Manually test drag/drop, resize, reset, refresh persistence, and mobile stacked mode.
+6. Manually test resize, reset, refresh persistence, and mobile stacked mode.
 
 ## Persistence
 
@@ -76,21 +76,13 @@ Storage writes are guarded. If the browser blocks storage or quota is exceeded, 
 
 Desktop and tablet layouts are enabled at `lg` and above, currently `min-width: 1024px`.
 
-Drag starts from the widget header. The widget body is left alone so maps, tables, dropdowns, and scroll areas remain usable.
-
-Drop zones are snapped:
-
-- left/right drop zones insert the dragged widget into the target row
-- top/bottom drop zones create a new row above or below the target row
-- the bottom workspace drop zone creates a new final row
-
-Removing the last widget in a row removes that row. Showing a hidden widget appends it as a new row at the bottom.
+Widgets render at a fixed position in the layout; there is no drag-to-reorder. Showing a hidden widget appends it as a new row at the bottom.
 
 Row resize handles change only that row's pixel height. Rows below keep their own heights, and the total workspace grows or shrinks. Column resize handles only adjust the adjacent column pair in the same row. Resize cleanup listens for pointer up, pointer cancel, window blur, Escape, viewport mode changes, and unmount.
 
 ## Mobile Behavior
 
-Below `lg`, the same visible widgets render as stacked cards. Drag/drop and resize controls are not mounted. This avoids hidden desktop widgets keeping imperative resources alive while mobile widgets are active.
+Below `lg`, the same visible widgets render as stacked cards. Resize controls are not mounted. This avoids hidden desktop widgets keeping imperative resources alive while mobile widgets are active.
 
 ## Map Widget Caveats
 

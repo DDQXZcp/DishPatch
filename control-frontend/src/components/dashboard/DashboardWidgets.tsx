@@ -2,7 +2,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type DragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -12,30 +11,12 @@ import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget
 import {
   DEFAULT_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
-  isWidgetId,
-  moveWidgetNearTarget,
-  moveWidgetToBottom,
   setColumnPairWidths,
   setRowHeight,
-  type DropPosition,
   type DashboardWidgetRow,
 } from "./dashboardLayout";
 import { WIDGET_BY_ID } from "./widgetRegistry";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
-
-type ActiveDropTarget =
-  | {
-      type: "widget";
-      targetWidgetId: WidgetId;
-      position: DropPosition;
-    }
-  | { type: "bottom" };
-
-interface DragHandleProps {
-  draggable: true;
-  onDragStart: (event: DragEvent<HTMLDivElement>) => void;
-  onDragEnd: () => void;
-}
 
 interface RowResizeState {
   rowId: string;
@@ -99,22 +80,9 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   );
 }
 
-function WidgetHeader({
-  widget,
-  dragHandleProps,
-}: {
-  widget: DashboardWidgetDefinition;
-  dragHandleProps?: DragHandleProps;
-}) {
+function WidgetHeader({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div
-      {...dragHandleProps}
-      className={`flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5 ${
-        dragHandleProps
-          ? "select-none cursor-grab active:cursor-grabbing"
-          : ""
-      }`}
-    >
+    <div className="flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5">
       <ToolbarTitle widget={widget} />
       <div className="flex items-center gap-2">
         {widget.renderHeaderActions?.()}
@@ -126,27 +94,19 @@ function WidgetHeader({
 function WidgetFrame({
   widget,
   children,
-  dragHandleProps,
-  isDragging = false,
 }: {
   widget: DashboardWidgetDefinition;
   children?: ReactNode;
-  dragHandleProps?: DragHandleProps;
-  isDragging?: boolean;
 }) {
   const frameContent = (
     <>
-      <WidgetHeader widget={widget} dragHandleProps={dragHandleProps} />
+      <WidgetHeader widget={widget} />
       <WidgetBody widget={widget} />
     </>
   );
 
   return (
-    <div
-      className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03] ${
-        isDragging ? "opacity-60" : ""
-      }`}
-    >
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs transition dark:border-gray-800 dark:bg-white/[0.03]">
       {widget.wrap ? widget.wrap(frameContent) : frameContent}
       {children}
     </div>
@@ -171,170 +131,8 @@ function MobileWidget({ widget }: { widget: DashboardWidgetDefinition }) {
   );
 }
 
-function isSameDropTarget(
-  activeDropTarget: ActiveDropTarget | null,
-  nextDropTarget: ActiveDropTarget,
-) {
-  if (!activeDropTarget || activeDropTarget.type !== nextDropTarget.type) {
-    return false;
-  }
-
-  if (activeDropTarget.type === "bottom" && nextDropTarget.type === "bottom") {
-    return true;
-  }
-
-  if (activeDropTarget.type === "widget" && nextDropTarget.type === "widget") {
-    return (
-      activeDropTarget.targetWidgetId === nextDropTarget.targetWidgetId &&
-      activeDropTarget.position === nextDropTarget.position
-    );
-  }
-
-  return false;
-}
-
-function getDropZoneClassName(position: DropPosition, isActive: boolean) {
-  const activeClassName = isActive
-    ? "bg-brand-500/10"
-    : "bg-transparent hover:bg-brand-500/5";
-
-  const positionClassNames: Record<DropPosition, string> = {
-    top: `inset-x-0 top-0 h-1/3 ${
-      isActive ? "border-t-4 border-brand-500" : ""
-    }`,
-    right: `right-0 top-1/3 bottom-1/3 w-1/2 ${
-      isActive ? "border-r-4 border-brand-500" : ""
-    }`,
-    bottom: `inset-x-0 bottom-0 h-1/3 ${
-      isActive ? "border-b-4 border-brand-500" : ""
-    }`,
-    left: `left-0 top-1/3 bottom-1/3 w-1/2 ${
-      isActive ? "border-l-4 border-brand-500" : ""
-    }`,
-  };
-
-  return `absolute z-20 ${positionClassNames[position]} ${activeClassName}`;
-}
-
-function WidgetDropZone({
-  position,
-  isActive,
-  onActivate,
-  onClear,
-  onDrop,
-}: {
-  position: DropPosition;
-  isActive: boolean;
-  onActivate: () => void;
-  onClear: () => void;
-  onDrop: (event: DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      aria-hidden="true"
-      className={getDropZoneClassName(position, isActive)}
-      onDragLeave={onClear}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        onActivate();
-      }}
-      onDrop={onDrop}
-    />
-  );
-}
-
-function BottomDropZone({
-  isActive,
-  onActivate,
-  onClear,
-  onDrop,
-}: {
-  isActive: boolean;
-  onActivate: () => void;
-  onClear: () => void;
-  onDrop: (event: DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      className={`flex h-20 items-center justify-center rounded-2xl border border-dashed text-theme-sm transition ${
-        isActive
-          ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-500/15 dark:text-brand-300"
-          : "border-gray-300 bg-white text-gray-500 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-400"
-      }`}
-      onDragLeave={onClear}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        onActivate();
-      }}
-      onDrop={onDrop}
-    >
-      Drop here to snap widget to the bottom
-    </div>
-  );
-}
-
-function WidgetTile({
-  widget,
-  draggedWidgetId,
-  activeDropTarget,
-  onDragStart,
-  onDragEnd,
-  onDropOnWidget,
-  onSetActiveDropTarget,
-}: {
-  widget: DashboardWidgetDefinition;
-  draggedWidgetId: WidgetId | null;
-  activeDropTarget: ActiveDropTarget | null;
-  onDragStart: (widgetId: WidgetId, event: DragEvent<HTMLDivElement>) => void;
-  onDragEnd: () => void;
-  onDropOnWidget: (
-    targetWidgetId: WidgetId,
-    position: DropPosition,
-    event: DragEvent<HTMLDivElement>,
-  ) => void;
-  onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
-}) {
-  const isDragging = draggedWidgetId === widget.id;
-  const canDropOnWidget = Boolean(draggedWidgetId && !isDragging);
-  const dragHandleProps: DragHandleProps = {
-    draggable: true,
-    onDragStart: (event) => onDragStart(widget.id, event),
-    onDragEnd,
-  };
-
-  return (
-    <WidgetFrame
-      widget={widget}
-      dragHandleProps={dragHandleProps}
-      isDragging={isDragging}
-    >
-      {canDropOnWidget &&
-        (["top", "right", "bottom", "left"] as const).map((position) => {
-          const dropTarget: ActiveDropTarget = {
-            type: "widget",
-            targetWidgetId: widget.id,
-            position,
-          };
-
-          return (
-            <WidgetDropZone
-              key={position}
-              position={position}
-              isActive={isSameDropTarget(activeDropTarget, dropTarget)}
-              onActivate={() => onSetActiveDropTarget(dropTarget)}
-              onClear={() => {
-                if (isSameDropTarget(activeDropTarget, dropTarget)) {
-                  onSetActiveDropTarget(null);
-                }
-              }}
-              onDrop={(event) => onDropOnWidget(widget.id, position, event)}
-            />
-          );
-        })}
-    </WidgetFrame>
-  );
+function WidgetTile({ widget }: { widget: DashboardWidgetDefinition }) {
+  return <WidgetFrame widget={widget} />;
 }
 
 function RowResizeHandle({
@@ -375,35 +173,19 @@ function ColumnResizeHandle({
 
 function DashboardRow({
   row,
-  activeDropTarget,
-  draggedWidgetId,
   onColumnResizeStart,
-  onDragEnd,
-  onDragStart,
-  onDropOnWidget,
   onRowResizeStart,
-  onSetActiveDropTarget,
 }: {
   row: DashboardWidgetRow;
-  activeDropTarget: ActiveDropTarget | null;
-  draggedWidgetId: WidgetId | null;
   onColumnResizeStart: (
     row: DashboardWidgetRow,
     columnIndex: number,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => void;
-  onDragEnd: () => void;
-  onDragStart: (widgetId: WidgetId, event: DragEvent<HTMLDivElement>) => void;
-  onDropOnWidget: (
-    targetWidgetId: WidgetId,
-    position: DropPosition,
-    event: DragEvent<HTMLDivElement>,
-  ) => void;
   onRowResizeStart: (
     row: DashboardWidgetRow,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => void;
-  onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
 }) {
   return (
     <div
@@ -439,28 +221,12 @@ function DashboardRow({
               className="relative min-h-0 min-w-0"
             >
               {widgets.length === 1 ? (
-                <WidgetTile
-                  widget={widgets[0]}
-                  activeDropTarget={activeDropTarget}
-                  draggedWidgetId={draggedWidgetId}
-                  onDragEnd={onDragEnd}
-                  onDragStart={onDragStart}
-                  onDropOnWidget={onDropOnWidget}
-                  onSetActiveDropTarget={onSetActiveDropTarget}
-                />
+                <WidgetTile widget={widgets[0]} />
               ) : (
                 <div className="flex h-full flex-col gap-3">
                   {widgets.map((widget) => (
                     <div key={widget.id} className="min-h-0 flex-1">
-                      <WidgetTile
-                        widget={widget}
-                        activeDropTarget={activeDropTarget}
-                        draggedWidgetId={draggedWidgetId}
-                        onDragEnd={onDragEnd}
-                        onDragStart={onDragStart}
-                        onDropOnWidget={onDropOnWidget}
-                        onSetActiveDropTarget={onSetActiveDropTarget}
-                      />
+                      <WidgetTile widget={widget} />
                     </div>
                   ))}
                 </div>
@@ -482,38 +248,20 @@ function DashboardRow({
 }
 
 function DesktopWorkspace({
-  activeDropTarget,
-  draggedWidgetId,
   onColumnResizeStart,
-  onDragEnd,
-  onDragStart,
-  onDropOnBottom,
-  onDropOnWidget,
   rows,
   onRowResizeStart,
-  onSetActiveDropTarget,
 }: {
-  activeDropTarget: ActiveDropTarget | null;
-  draggedWidgetId: WidgetId | null;
   onColumnResizeStart: (
     row: DashboardWidgetRow,
     columnIndex: number,
     event: ReactPointerEvent<HTMLButtonElement>,
-  ) => void;
-  onDragEnd: () => void;
-  onDragStart: (widgetId: WidgetId, event: DragEvent<HTMLDivElement>) => void;
-  onDropOnBottom: (event: DragEvent<HTMLDivElement>) => void;
-  onDropOnWidget: (
-    targetWidgetId: WidgetId,
-    position: DropPosition,
-    event: DragEvent<HTMLDivElement>,
   ) => void;
   rows: DashboardWidgetRow[];
   onRowResizeStart: (
     row: DashboardWidgetRow,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => void;
-  onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -529,28 +277,10 @@ function DesktopWorkspace({
         <DashboardRow
           key={row.id}
           row={row}
-          activeDropTarget={activeDropTarget}
-          draggedWidgetId={draggedWidgetId}
           onColumnResizeStart={onColumnResizeStart}
-          onDragEnd={onDragEnd}
-          onDragStart={onDragStart}
-          onDropOnWidget={onDropOnWidget}
           onRowResizeStart={onRowResizeStart}
-          onSetActiveDropTarget={onSetActiveDropTarget}
         />
       ))}
-      {draggedWidgetId && (
-        <BottomDropZone
-          isActive={isSameDropTarget(activeDropTarget, { type: "bottom" })}
-          onActivate={() => onSetActiveDropTarget({ type: "bottom" })}
-          onClear={() => {
-            if (isSameDropTarget(activeDropTarget, { type: "bottom" })) {
-              onSetActiveDropTarget(null);
-            }
-          }}
-          onDrop={onDropOnBottom}
-        />
-      )}
     </div>
   );
 }
@@ -558,9 +288,6 @@ function DesktopWorkspace({
 export default function DashboardWidgets() {
   const { widgetState, setWidgetState, visibleWidgets } =
     useDashboardWidgets();
-  const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
-  const [activeDropTarget, setActiveDropTarget] =
-    useState<ActiveDropTarget | null>(null);
   const [rowResizeState, setRowResizeState] = useState<RowResizeState | null>(
     null,
   );
@@ -571,8 +298,6 @@ export default function DashboardWidgets() {
   const { rows } = widgetState;
 
   useEffect(() => {
-    setDraggedWidgetId(null);
-    setActiveDropTarget(null);
     setRowResizeState(null);
     setColumnResizeState(null);
   }, [isDesktopWorkspace]);
@@ -693,73 +418,6 @@ export default function DashboardWidgets() {
     };
   }, [columnResizeState]);
 
-  function getDraggedWidgetId(event: DragEvent<HTMLDivElement>) {
-    const widgetId = event.dataTransfer.getData("text/plain");
-
-    if (isWidgetId(widgetId)) {
-      return widgetId;
-    }
-
-    return draggedWidgetId;
-  }
-
-  function handleDragStart(
-    widgetId: WidgetId,
-    event: DragEvent<HTMLDivElement>,
-  ) {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", widgetId);
-    setDraggedWidgetId(widgetId);
-  }
-
-  function handleDragEnd() {
-    setDraggedWidgetId(null);
-    setActiveDropTarget(null);
-  }
-
-  function handleDropOnWidget(
-    targetWidgetId: WidgetId,
-    position: DropPosition,
-    event: DragEvent<HTMLDivElement>,
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const widgetId = getDraggedWidgetId(event);
-    if (!widgetId) {
-      handleDragEnd();
-      return;
-    }
-
-    setWidgetState((currentState) => ({
-      ...currentState,
-      rows: moveWidgetNearTarget(
-        currentState.rows,
-        widgetId,
-        targetWidgetId,
-        position,
-      ),
-    }));
-    handleDragEnd();
-  }
-
-  function handleDropOnBottom(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const widgetId = getDraggedWidgetId(event);
-    if (!widgetId) {
-      handleDragEnd();
-      return;
-    }
-
-    setWidgetState((currentState) => ({
-      ...currentState,
-      rows: moveWidgetToBottom(currentState.rows, widgetId),
-    }));
-    handleDragEnd();
-  }
-
   function handleRowResizeStart(
     row: DashboardWidgetRow,
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -807,15 +465,8 @@ export default function DashboardWidgets() {
         {isDesktopWorkspace ? (
           <div className="min-h-0 flex-1">
             <DesktopWorkspace
-              activeDropTarget={activeDropTarget}
-              draggedWidgetId={draggedWidgetId}
               onColumnResizeStart={handleColumnResizeStart}
-              onDragEnd={handleDragEnd}
-              onDragStart={handleDragStart}
-              onDropOnBottom={handleDropOnBottom}
-              onDropOnWidget={handleDropOnWidget}
               onRowResizeStart={handleRowResizeStart}
-              onSetActiveDropTarget={setActiveDropTarget}
               rows={rows}
             />
           </div>
