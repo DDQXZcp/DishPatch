@@ -1,41 +1,17 @@
-import { SidebarProvider, useSidebar } from "../context/SidebarContext";
 import { DashboardWidgetsProvider } from "../context/DashboardWidgetsContext";
 import { Outlet } from "react-router";
 import AppHeader from "./AppHeader";
-import Backdrop from "./Backdrop";
-import AppSidebar from "./AppSidebar";
-
-const LayoutContent: React.FC = () => {
-  const { isExpanded, isMobileOpen } = useSidebar();
-
-  return (
-    <div className="min-h-screen xl:flex">
-      {/* Increase the z-index of Sidebar so it won't be blocked */}
-      <div className="fixed z-[2000]">
-        <AppSidebar />
-        <Backdrop />
-      </div>
-      <div
-        className={`flex-1 transition-all duration-300 ease-in-out ${
-          isExpanded ? "lg:ml-[290px]" : "lg:ml-[90px]"
-        } ${isMobileOpen ? "ml-0" : ""}`}
-      >
-        <AppHeader />
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
-          <Outlet />
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const AppLayout: React.FC = () => {
   return (
-    <SidebarProvider>
-      <DashboardWidgetsProvider>
-        <LayoutContent />
-      </DashboardWidgetsProvider>
-    </SidebarProvider>
+    <DashboardWidgetsProvider>
+      <div className="flex h-screen flex-col">
+        <AppHeader />
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 mx-auto w-full max-w-(--breakpoint-2xl) md:p-6">
+          <Outlet />
+        </div>
+      </div>
+    </DashboardWidgetsProvider>
   );
 };
 

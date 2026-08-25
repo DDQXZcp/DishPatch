@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   Table,
   TableBody,
@@ -10,7 +11,7 @@ import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import type { Robot, RobotStatus } from '../../types/Robot';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
-import { buildOrderTableIndex, formatOrderItemLine } from '../../utils/orderTable';
+import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
 
 const ALL_STATUSES: RobotStatus[] = ['Serving', 'Returning', 'Waiting', 'Maintenance'];
 
@@ -173,6 +174,131 @@ export function RobotStatusHeaderActions() {
   );
 }
 
+const CURRENT_TASK_POPOVER_WIDTH = 256;
+
+function CurrentTaskCell({
+  orderTable,
+}: {
+  orderTable: OrderTableInfo | undefined;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+
+  function cancelClose() {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }
+
+  function scheduleClose() {
+    cancelClose();
+    closeTimeoutRef.current = window.setTimeout(() => setIsOpen(false), 150);
+  }
+
+  function openPopover() {
+    cancelClose();
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+    const left = Math.min(
+      rect.left,
+      window.innerWidth - CURRENT_TASK_POPOVER_WIDTH - 12,
+    );
+    setPosition({ top: rect.bottom + 6, left: Math.max(8, left) });
+    setIsOpen(true);
+  }
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        (target as HTMLElement).closest?.("[data-current-task-popover]")
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("scroll", openPopover, true);
+    window.addEventListener("resize", openPopover);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("scroll", openPopover, true);
+      window.removeEventListener("resize", openPopover);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  useEffect(() => () => cancelClose(), []);
+
+  if (!orderTable) {
+    return (
+      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+        –
+      </TableCell>
+    );
+  }
+
+  const itemCount = orderTable.items.length;
+  const summary = `#${orderTable.displayId} · ${orderTable.tableNo} · ${itemCount} item${
+    itemCount === 1 ? "" : "s"
+  }`;
+
+  return (
+    <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseEnter={openPopover}
+        onMouseLeave={scheduleClose}
+        onClick={openPopover}
+        className="block max-w-full truncate text-left underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-brand-600 hover:decoration-brand-400 dark:decoration-gray-600"
+      >
+        {summary}
+      </button>
+
+      {isOpen &&
+        position &&
+        createPortal(
+          <div
+            data-current-task-popover
+            style={{ position: "fixed", top: position.top, left: position.left }}
+            className="z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            <p className="text-theme-xs font-semibold text-gray-800 dark:text-white/90">
+              Order #{orderTable.displayId} · {orderTable.tableNo}
+            </p>
+            {itemCount > 0 ? (
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-theme-xs text-gray-500 dark:text-gray-400">
+                {orderTable.items.map((item, index) => (
+                  <li key={index}>{formatOrderItemLine(item)}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-theme-xs text-gray-500 dark:text-gray-400">
+                No items
+              </p>
+            )}
+          </div>,
+          document.body,
+        )}
+    </TableCell>
+  );
+}
+
 interface RobotStatusProps {
   framed?: boolean;
 }
@@ -215,27 +341,15 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
               </TableCell>
               <TableCell
                 isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[80px]"
+                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[90px]"
               >
                 Status
               </TableCell>
               <TableCell
                 isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[80px]"
+                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[150px]"
               >
-                Order
-              </TableCell>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[60px]"
-              >
-                Table
-              </TableCell>
-              <TableCell
-                isHeader
-                className="py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400 min-w-[160px]"
-              >
-                Items
+                Current Task
               </TableCell>
             </TableRow>
           </TableHeader>
@@ -244,14 +358,14 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
             {filteredRobots.map((robot: Robot) => (
-              <TableRow key={robot.id} className="">
+              <TableRow key={robot.id} className="h-[52px]">
                 <TableCell className="py-3">
                   <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                     {robot.name}
                   </p>
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {robot.speed} kph
+                  {robot.speed.toFixed(2)} kph
                 </TableCell>
                 <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                   <Badge
@@ -269,34 +383,13 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
                     {robot.status}
                   </Badge>
                 </TableCell>
-                {(() => {
-                  const orderTable =
+                <CurrentTaskCell
+                  orderTable={
                     robot.status === "Serving" && robot.orderId
                       ? orderTableById.get(robot.orderId)
-                      : undefined;
-
-                  return (
-                    <>
-                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                        {orderTable ? `#${orderTable.displayId}` : "-"}
-                      </TableCell>
-                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                        {orderTable ? orderTable.tableNo : "-"}
-                      </TableCell>
-                      <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                        {orderTable && orderTable.items.length > 0 ? (
-                          <ul className="list-disc space-y-0.5 pl-4">
-                            {orderTable.items.map((item, index) => (
-                              <li key={index}>{formatOrderItemLine(item)}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                    </>
-                  );
-                })()}
+                      : undefined
+                  }
+                />
               </TableRow>
             ))}
           </TableBody>

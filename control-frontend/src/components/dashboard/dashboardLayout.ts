@@ -1,7 +1,7 @@
 import { WIDGET_IDS, type WidgetId } from "./types";
 
 export const DASHBOARD_WIDGET_STORAGE_KEY =
-  "dishpatch.control.dashboard.widgets.v4";
+  "dishpatch.control.dashboard.widgets.v5";
 
 export const DASHBOARD_RESET_VIEW_EVENT = "dashboard:reset-widget-view";
 
@@ -12,7 +12,7 @@ export const MIN_COLUMN_WIDTH = 18;
 export type DropPosition = "top" | "right" | "bottom" | "left";
 
 export interface DashboardWidgetColumn {
-  widgetId: WidgetId;
+  widgetIds: WidgetId[];
   width: number;
 }
 
@@ -29,16 +29,11 @@ export interface DashboardWidgetState {
 
 const DEFAULT_ROWS: DashboardWidgetRow[] = [
   {
-    id: "row-map",
+    id: "row-main",
     height: 480,
-    columns: [{ widgetId: "robot-map", width: 100 }],
-  },
-  {
-    id: "row-lists",
-    height: 420,
     columns: [
-      { widgetId: "robot-list", width: 50 },
-      { widgetId: "pos-orders", width: 50 },
+      { widgetIds: ["robot-map"], width: 61.5 },
+      { widgetIds: ["robot-list", "pos-orders"], width: 38.5 },
     ],
   },
 ];
@@ -110,17 +105,20 @@ export function sanitizeWidgetState(
   const rows: DashboardWidgetRow[] = [];
 
   for (const row of state.rows) {
-    const columns = row.columns.filter((column) => {
-      if (
-        !visibleIdSet.has(column.widgetId) ||
-        seenWidgetIds.has(column.widgetId)
-      ) {
-        return false;
-      }
+    const columns = row.columns
+      .map((column) => {
+        const widgetIds = column.widgetIds.filter((widgetId) => {
+          if (!visibleIdSet.has(widgetId) || seenWidgetIds.has(widgetId)) {
+            return false;
+          }
 
-      seenWidgetIds.add(column.widgetId);
-      return true;
-    });
+          seenWidgetIds.add(widgetId);
+          return true;
+        });
+
+        return { ...column, widgetIds };
+      })
+      .filter((column) => column.widgetIds.length > 0);
 
     if (columns.length > 0) {
       rows.push({
@@ -184,7 +182,7 @@ export function moveWidgetNearTarget(
 
   const rowsWithoutWidget = removeWidgetFromRows(rows, widgetId);
   const targetRowIndex = rowsWithoutWidget.findIndex((row) =>
-    row.columns.some((column) => column.widgetId === targetWidgetId),
+    row.columns.some((column) => column.widgetIds.includes(targetWidgetId)),
   );
 
   if (targetRowIndex === -1) {
@@ -210,8 +208,8 @@ export function moveWidgetNearTarget(
       return row;
     }
 
-    const targetColumnIndex = row.columns.findIndex(
-      (column) => column.widgetId === targetWidgetId,
+    const targetColumnIndex = row.columns.findIndex((column) =>
+      column.widgetIds.includes(targetWidgetId),
     );
 
     if (targetColumnIndex === -1) {
@@ -227,7 +225,7 @@ export function moveWidgetNearTarget(
       width: column.width * retainedWidthScale,
     }));
 
-    columns.splice(insertIndex, 0, { widgetId, width: insertedWidth });
+    columns.splice(insertIndex, 0, { widgetIds: [widgetId], width: insertedWidth });
 
     return { ...row, columns: normalizeColumns(columns) };
   });
@@ -307,14 +305,19 @@ function parseRows(value: unknown) {
         return null;
       }
 
-      const column = columnItem as { widgetId?: unknown; width?: unknown };
+      const column = columnItem as { widgetIds?: unknown; width?: unknown };
 
-      if (!isWidgetId(column.widgetId) || typeof column.width !== "number") {
+      if (
+        !Array.isArray(column.widgetIds) ||
+        column.widgetIds.length === 0 ||
+        !column.widgetIds.every(isWidgetId) ||
+        typeof column.width !== "number"
+      ) {
         return null;
       }
 
       columns.push({
-        widgetId: column.widgetId,
+        widgetIds: column.widgetIds,
         width: column.width,
       });
     }
@@ -340,7 +343,7 @@ function createSingleWidgetRow(
   return {
     id: createDashboardRowId(),
     height,
-    columns: [{ widgetId, width: 100 }],
+    columns: [{ widgetIds: [widgetId], width: 100 }],
   };
 }
 
@@ -348,7 +351,12 @@ function removeWidgetFromRows(rows: DashboardWidgetRow[], widgetId: WidgetId) {
   return rows
     .map((row) => ({
       ...row,
-      columns: row.columns.filter((column) => column.widgetId !== widgetId),
+      columns: row.columns
+        .map((column) => ({
+          ...column,
+          widgetIds: column.widgetIds.filter((id) => id !== widgetId),
+        }))
+        .filter((column) => column.widgetIds.length > 0),
     }))
     .filter((row) => row.columns.length > 0)
     .map((row) => ({ ...row, columns: normalizeColumns(row.columns) }));
@@ -361,7 +369,7 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
 
   const fallbackWidth = 100 / columns.length;
   const rawColumns = columns.map((column) => ({
-    widgetId: column.widgetId,
+    widgetIds: column.widgetIds,
     width:
       Number.isFinite(column.width) && column.width > 0
         ? column.width
@@ -405,6 +413,9 @@ function uniqueWidgetIds(widgetIds: WidgetId[]) {
 function cloneRows(rows: DashboardWidgetRow[]) {
   return rows.map((row) => ({
     ...row,
-    columns: row.columns.map((column) => ({ ...column })),
+    columns: row.columns.map((column) => ({
+      ...column,
+      widgetIds: [...column.widgetIds],
+    })),
   }));
 }
