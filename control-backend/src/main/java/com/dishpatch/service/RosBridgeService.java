@@ -23,7 +23,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,7 +62,12 @@ public class RosBridgeService extends TextWebSocketHandler {
     @Autowired
     private RobotService robotService;
 
-    private WebSocketSession session;
+    /**
+     * Written on the WebSocket container's callback thread, read from the scheduler
+     * thread, the dispatch tick and the retry loop — so it is volatile. A stale read
+     * here is a wrong answer to "is the fleet link up".
+     */
+    private volatile WebSocketSession session;
 
     /**
      * Guards writes to the session. rosbridge messages are sent from the
@@ -141,29 +151,73 @@ public class RosBridgeService extends TextWebSocketHandler {
         return new StandardWebSocketClient(container);
     }
 
+    /** How long one handshake gets before it is abandoned and retried. */
+    private static final long HANDSHAKE_TIMEOUT_MS = 10_000;
+
+    /** Delay between connection attempts. */
+    private long retryDelayMs = 5_000;
+
     /**
-     * Initiates a WebSocket connection to rosbridge on startup.
-     * Retries every 5 seconds until the connection is established.
+     * True while a retry loop is running.
+     * <p>
+     * {@link #afterConnectionClosed} calls {@link #connect()}, which can arrive while a
+     * loop is already sleeping between attempts.
+     */
+    private final AtomicBoolean connecting = new AtomicBoolean();
+
+    /**
+     * Connects to rosbridge, retrying every {@link #retryDelayMs} until it succeeds.
+     * <p>
+     * Runs on its own thread rather than a {@code @Scheduled} tick because the wait
+     * below blocks: {@code @EnableScheduling} binds to the STOMP broker's TaskScheduler,
+     * shared with the dashboard pushes and the dispatch tick, and blocking there stalls
+     * both.
      */
     @PostConstruct
     public void connect() {
+        if (!connecting.compareAndSet(false, true)) {
+            return; // a loop is already retrying; a second would race it for the session
+        }
+
         new Thread(() -> {
-            while (true) {
-                try {
-                    logger.info("RosBridgeService connecting to " + rosbridgeUrl);
-                    client.execute(this, rosbridgeUrl);
-                    return;
-                } catch (Exception e) {
-                    logger.warning("Failed to connect to rosbridge, retrying in 5s: " + e.getMessage());
+            try {
+                while (!isConnected()) {
                     try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
+                        logger.info("RosBridgeService connecting to " + rosbridgeUrl);
+
+                        // The result has to be waited on. execute() hands the handshake
+                        // to another thread and reports a refused connection by
+                        // completing this future exceptionally — it does not throw here.
+                        openSession().get(HANDSHAKE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                         return;
+                    } catch (ExecutionException | TimeoutException e) {
+                        logger.warning("Failed to connect to rosbridge, retrying in "
+                                + retryDelayMs + "ms: " + e.getMessage());
                     }
+
+                    Thread.sleep(retryDelayMs);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                connecting.set(false);
             }
-        }).start();
+        }, "rosbridge-connect").start();
+    }
+
+    /**
+     * Opens one session.
+     * <p>
+     * The only line that touches the network, kept overridable so the retry loop can be
+     * tested without a rosbridge.
+     */
+    protected CompletableFuture<WebSocketSession> openSession() {
+        return client.execute(this, rosbridgeUrl);
+    }
+
+    /** Test seam: shortens the backoff so the retry loop can be exercised quickly. */
+    void setRetryDelayMs(long retryDelayMs) {
+        this.retryDelayMs = retryDelayMs;
     }
 
     /**
@@ -374,18 +428,13 @@ public class RosBridgeService extends TextWebSocketHandler {
     }
 
     /**
-     * Called when the rosbridge connection is closed.
-     * Waits 5 seconds then attempts to reconnect.
+     * Called when the rosbridge connection is closed. Hands straight back to
+     * {@link #connect()}, which retries until the link is back.
      */
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        logger.warning("Rosbridge disconnected (" + status + "). Reconnecting in 5s...");
-        try {
-            Thread.sleep(5000);
-            connect();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        logger.warning("Rosbridge disconnected (" + status + "). Reconnecting...");
+        connect();
     }
 
     /**
