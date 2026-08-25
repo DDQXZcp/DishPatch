@@ -165,6 +165,15 @@ Initial development will focus on a virtual/simulated environment to validate en
 DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate to AWS using IAM OIDC (no stored AWS keys).
 See [deployment.md](./docs/deployment.md) for details.
 
+## Testing
+
+The control backend has 152 tests across unit, integration and API levels, run on every pull request by
+[test-control-backend.yml](./.github/workflows/test-control-backend.yml) and again before every deployment.
+
+Measured fault detection, branch coverage, determinism and test-smell results are in
+[control-backend-test-quality.md](./docs/control-backend-test-quality.md), along with the commands to
+reproduce every figure.
+
 ## Contributing
 
 Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
