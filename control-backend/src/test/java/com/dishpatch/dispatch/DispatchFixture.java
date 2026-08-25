@@ -105,13 +105,20 @@ final class DispatchFixture {
     private final List<RobotUpdate> robotUpdates = new ArrayList<>();
 
     /**
-     * Everything the pipeline has logged this JVM, and where this fixture came in.
+     * What the pipeline has logged on this thread, and where this fixture came in.
      * <p>
-     * Shared and installed once: the logger is keyed on the class name, so a handler
-     * per fixture would pile up across the suite and every one of them would also
-     * receive the next test's records.
+     * The handler is installed once: the logger is keyed on the class name, so a
+     * handler per fixture would pile up across the suite and every one of them would
+     * also receive the next test's records.
+     * <p>
+     * What it writes to is per-thread. A single shared list is correct only while
+     * surefire runs one test at a time — turn on parallel execution and
+     * {@link #warnings()} starts reading records logged by a concurrent fixture,
+     * which fails in the confusing direction: tests pass because someone else's
+     * warning happened to be there.
      */
-    private static final List<LogRecord> LOG_RECORDS = new ArrayList<>();
+    private static final ThreadLocal<List<LogRecord>> LOG_RECORDS =
+            ThreadLocal.withInitial(ArrayList::new);
     private static boolean logHandlerInstalled;
     private final int logMark;
 
@@ -270,13 +277,13 @@ final class DispatchFixture {
 
     /** Warnings the pipeline logged. A recovery that says nothing is half a recovery. */
     List<String> warnings() {
-        synchronized (LOG_RECORDS) {
-            return LOG_RECORDS.subList(logMark, LOG_RECORDS.size()).stream()
-                    .filter(record -> record.getLevel().intValue()
-                            >= Level.WARNING.intValue())
-                    .map(LogRecord::getMessage)
-                    .collect(Collectors.toList());
-        }
+        List<LogRecord> records = LOG_RECORDS.get();
+
+        return records.subList(logMark, records.size()).stream()
+                .filter(record -> record.getLevel().intValue()
+                        >= Level.WARNING.intValue())
+                .map(LogRecord::getMessage)
+                .collect(Collectors.toList());
     }
 
     /** Current status of an order, as DynamoDB would hold it. */
@@ -414,9 +421,10 @@ final class DispatchFixture {
             Logger.getLogger(DispatchService.class.getName()).addHandler(new Handler() {
                 @Override
                 public void publish(LogRecord record) {
-                    synchronized (LOG_RECORDS) {
-                        LOG_RECORDS.add(record);
-                    }
+                    // Filed against whichever thread logged it. The pipeline logs
+                    // from inside tick(), which these tests call themselves, so a
+                    // record always lands on the list of the test that caused it.
+                    LOG_RECORDS.get().add(record);
                 }
 
                 @Override
@@ -428,8 +436,6 @@ final class DispatchFixture {
             logHandlerInstalled = true;
         }
 
-        synchronized (LOG_RECORDS) {
-            return LOG_RECORDS.size();
-        }
+        return LOG_RECORDS.get().size();
     }
 }

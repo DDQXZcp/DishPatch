@@ -1,7 +1,9 @@
 package com.dishpatch.service;
 
+import jakarta.websocket.WebSocketContainer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
@@ -11,6 +13,8 @@ import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,6 +87,34 @@ class RosBridgeServiceTest {
             }
             return true;
         });
+    }
+
+    /**
+     * #68: the client's container defaulted to an 8 KB text buffer, and Nav2's
+     * retained goal-status array grew past it under load. Every connection then
+     * died on the first frame it received and reconnected straight into the same
+     * failure, which blanked the frontend and stranded a robot in RETURNING.
+     * <p>
+     * The fix is one line in {@code createClient}, it has no other test, and
+     * removing it would look harmless in review.
+     */
+    @Test
+    void raisesTheReceiveBufferWellPastNav2sRetainedStatusArray() {
+        // Read off the client the service will actually dial with, not a container
+        // built alongside it. The wiring is half the fix: ContainerProvider hands out
+        // a fresh 8 KB container per call, so a createClient() that dropped the
+        // argument would be straight back in #68 while a freshly built container
+        // still measured 1 MB. StandardWebSocketClient exposes no getter, hence the
+        // reflection — a Spring field rename fails this loudly rather than quietly
+        // passing.
+        Object client = ReflectionTestUtils.getField(new RosBridgeService(), "client");
+        WebSocketContainer container = (WebSocketContainer)
+                ReflectionTestUtils.getField(client, "webSocketContainer");
+
+        // Compared against a literal rather than MAX_TEXT_MESSAGE_BYTES: reading the
+        // constant back would pass no matter what it was changed to.
+        assertTrue(container.getDefaultMaxTextMessageBufferSize() >= 1024 * 1024,
+                "text buffer is back near the 8 KB default that caused #68");
     }
 
     @Test
@@ -189,11 +221,17 @@ class RosBridgeServiceTest {
     @Test
     void keepsRetryingUntilTheHandshakeSucceeds() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
+        CountDownLatch thirdAttempt = new CountDownLatch(3);
+        CountDownLatch fourthAttempt = new CountDownLatch(4);
 
         RosBridgeService retrying = new RosBridgeService() {
             @Override
             protected CompletableFuture<WebSocketSession> openSession() {
-                if (attempts.incrementAndGet() < 3) {
+                int attempt = attempts.incrementAndGet();
+                thirdAttempt.countDown();
+                fourthAttempt.countDown();
+
+                if (attempt < 3) {
                     return CompletableFuture.failedFuture(new ConnectException("refused"));
                 }
                 return CompletableFuture.completedFuture(session);
@@ -203,40 +241,51 @@ class RosBridgeServiceTest {
 
         retrying.connect();
 
-        long deadline = System.currentTimeMillis() + 2000;
-        while (attempts.get() < 3 && System.currentTimeMillis() < deadline) {
-            Thread.sleep(5);
-        }
-
-        assertEquals(3, attempts.get(),
-                "should have retried past the refused connections");
+        // Waits for the third dial rather than for a fixed stretch of time, so a
+        // loaded CI runner makes this slower rather than red.
+        assertTrue(thirdAttempt.await(5, TimeUnit.SECONDS),
+                "should have retried past the refused connections; saw "
+                        + attempts.get() + " attempt(s)");
 
         // And stops once connected, rather than reconnecting over a live session.
-        Thread.sleep(50);
-        assertEquals(3, attempts.get(), "kept dialing after the handshake succeeded");
+        // A fourth dial would be due 5ms after the third, so 200ms of silence is
+        // a 40x margin on the answer being "it stopped".
+        assertFalse(fourthAttempt.await(200, TimeUnit.MILLISECONDS),
+                "kept dialing after the handshake succeeded");
     }
 
     /** One close does not start a second retry loop on top of the running one. */
     @Test
     void doesNotStackRetryLoops() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
+        CountDownLatch firstAttempt = new CountDownLatch(1);
+        CountDownLatch secondAttempt = new CountDownLatch(2);
 
         RosBridgeService retrying = new RosBridgeService() {
             @Override
             protected CompletableFuture<WebSocketSession> openSession() {
                 attempts.incrementAndGet();
+                firstAttempt.countDown();
+                secondAttempt.countDown();
                 return CompletableFuture.failedFuture(new ConnectException("refused"));
             }
         };
-        retrying.setRetryDelayMs(1000);
+        retrying.setRetryDelayMs(5_000);
 
         retrying.connect();
+
+        assertTrue(firstAttempt.await(5, TimeUnit.SECONDS),
+                "the first loop never dialled at all");
+
         retrying.afterConnectionClosed(session, CloseStatus.SESSION_NOT_RELIABLE);
         retrying.connect();
 
-        Thread.sleep(100);
-
-        assertEquals(1, attempts.get(),
-                "each connect() started its own loop; they will race for the session");
+        // A loop dials before it sleeps, so a second one would land within
+        // microseconds — 500ms is an enormous margin for detecting it. The window
+        // only has to stay under the 5s retry delay to avoid mistaking the first
+        // loop's own second dial for a stacked one.
+        assertFalse(secondAttempt.await(500, TimeUnit.MILLISECONDS),
+                "a second retry loop started dialling; the two will race for the session");
+        assertEquals(1, attempts.get());
     }
 }
