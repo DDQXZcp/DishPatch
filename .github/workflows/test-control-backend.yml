@@ -75,3 +75,16 @@ jobs:
           name: surefire-reports
           path: control-backend/target/surefire-reports/
           retention-days: 7
+
+      # always(), not failure(): a coverage report is most wanted on a green run.
+      # JaCoCo is bound to the test phase, so the report exists by the time this
+      # step runs. Reported figure is branch coverage — see
+      # docs/control-backend-test-quality.md for why line coverage is not the
+      # number to quote.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage
+          path: control-backend/target/site/jacoco/
+          retention-days: 7
