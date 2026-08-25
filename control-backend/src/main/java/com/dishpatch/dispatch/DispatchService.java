@@ -149,8 +149,9 @@ public class DispatchService {
      * {@code @Autowired} is load-bearing, not decoration. A class with a single
      * constructor gets it used implicitly; add a second and Spring finds two
      * candidates, picks neither, and falls back to looking for a no-arg constructor
-     * — the context then fails to start. That failure is at startup, not compile
-     * time, so nothing catches it but running the app.
+     * — the context then fails to start. That failure is at startup rather than
+     * compile time, so it is caught by {@code ApplicationContextTest} and by
+     * nothing else in the build.
      */
     @Autowired
     public DispatchService(
