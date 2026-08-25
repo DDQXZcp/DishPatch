@@ -2,12 +2,16 @@ package com.dishpatch.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -172,5 +176,67 @@ class RosBridgeServiceTest {
         assertEquals(List.of(1), service.followedRobotIds());
         assertTrue(sentContaining("\"op\":\"subscribe\"", "\"topic\":\"/robot1/status\""),
                 "did not resubscribe after reconnect, sent: " + sent);
+    }
+
+    /**
+     * The retry loop has to keep trying after a refused connection.
+     *
+     * It used to stop after one attempt: {@code execute} completes its future
+     * exceptionally rather than throwing, and the loop never looked at it. A backend
+     * that started while rosbridge was down — every fleet redeploy — stayed down until
+     * the container was restarted.
+     */
+    @Test
+    void keepsRetryingUntilTheHandshakeSucceeds() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+
+        RosBridgeService retrying = new RosBridgeService() {
+            @Override
+            protected CompletableFuture<WebSocketSession> openSession() {
+                if (attempts.incrementAndGet() < 3) {
+                    return CompletableFuture.failedFuture(new ConnectException("refused"));
+                }
+                return CompletableFuture.completedFuture(session);
+            }
+        };
+        retrying.setRetryDelayMs(5);
+
+        retrying.connect();
+
+        long deadline = System.currentTimeMillis() + 2000;
+        while (attempts.get() < 3 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5);
+        }
+
+        assertEquals(3, attempts.get(),
+                "should have retried past the refused connections");
+
+        // And stops once connected, rather than reconnecting over a live session.
+        Thread.sleep(50);
+        assertEquals(3, attempts.get(), "kept dialing after the handshake succeeded");
+    }
+
+    /** One close does not start a second retry loop on top of the running one. */
+    @Test
+    void doesNotStackRetryLoops() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+
+        RosBridgeService retrying = new RosBridgeService() {
+            @Override
+            protected CompletableFuture<WebSocketSession> openSession() {
+                attempts.incrementAndGet();
+                return CompletableFuture.failedFuture(new ConnectException("refused"));
+            }
+        };
+        retrying.setRetryDelayMs(1000);
+
+        retrying.connect();
+        retrying.afterConnectionClosed(session, CloseStatus.SESSION_NOT_RELIABLE);
+        retrying.connect();
+
+        Thread.sleep(100);
+
+        assertEquals(1, attempts.get(),
+                "each connect() started its own loop; they will race for the session");
     }
 }
