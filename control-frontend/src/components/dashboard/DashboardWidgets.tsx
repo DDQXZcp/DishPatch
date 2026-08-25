@@ -7,10 +7,10 @@ import {
   type ReactNode,
 } from "react";
 
-import { CloseIcon } from "../../icons";
 import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
 import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget";
 import {
+  DEFAULT_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
   isWidgetId,
   moveWidgetNearTarget,
@@ -91,22 +91,6 @@ function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
   );
 }
 
-function HideButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseDown={(event) => event.stopPropagation()}
-      onDragStart={(event) => event.preventDefault()}
-      className="flex size-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-white/5 dark:hover:text-gray-300"
-      aria-label="Hide widget"
-      title="Hide widget"
-    >
-      <CloseIcon className="size-4" />
-    </button>
-  );
-}
-
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
@@ -117,11 +101,9 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
 
 function WidgetHeader({
   widget,
-  onHide,
   dragHandleProps,
 }: {
   widget: DashboardWidgetDefinition;
-  onHide: () => void;
   dragHandleProps?: DragHandleProps;
 }) {
   return (
@@ -136,7 +118,6 @@ function WidgetHeader({
       <ToolbarTitle widget={widget} />
       <div className="flex items-center gap-2">
         {widget.renderHeaderActions?.()}
-        <HideButton onClick={onHide} />
       </div>
     </div>
   );
@@ -144,24 +125,18 @@ function WidgetHeader({
 
 function WidgetFrame({
   widget,
-  onHide,
   children,
   dragHandleProps,
   isDragging = false,
 }: {
   widget: DashboardWidgetDefinition;
-  onHide: () => void;
   children?: ReactNode;
   dragHandleProps?: DragHandleProps;
   isDragging?: boolean;
 }) {
   const frameContent = (
     <>
-      <WidgetHeader
-        widget={widget}
-        onHide={onHide}
-        dragHandleProps={dragHandleProps}
-      />
+      <WidgetHeader widget={widget} dragHandleProps={dragHandleProps} />
       <WidgetBody widget={widget} />
     </>
   );
@@ -178,22 +153,19 @@ function WidgetFrame({
   );
 }
 
-function MobileWidget({
-  widget,
-  onHide,
-}: {
-  widget: DashboardWidgetDefinition;
-  onHide: () => void;
-}) {
+function MobileWidget({ widget }: { widget: DashboardWidgetDefinition }) {
   const content = (
     <>
-      <WidgetHeader widget={widget} onHide={onHide} />
+      <WidgetHeader widget={widget} />
       <WidgetBody widget={widget} />
     </>
   );
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+    <div
+      className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+      style={{ height: DEFAULT_ROW_HEIGHT }}
+    >
       {widget.wrap ? widget.wrap(content) : content}
     </div>
   );
@@ -310,7 +282,6 @@ function WidgetTile({
   onDragStart,
   onDragEnd,
   onDropOnWidget,
-  onHide,
   onSetActiveDropTarget,
 }: {
   widget: DashboardWidgetDefinition;
@@ -323,7 +294,6 @@ function WidgetTile({
     position: DropPosition,
     event: DragEvent<HTMLDivElement>,
   ) => void;
-  onHide: () => void;
   onSetActiveDropTarget: (dropTarget: ActiveDropTarget | null) => void;
 }) {
   const isDragging = draggedWidgetId === widget.id;
@@ -337,7 +307,6 @@ function WidgetTile({
   return (
     <WidgetFrame
       widget={widget}
-      onHide={onHide}
       dragHandleProps={dragHandleProps}
       isDragging={isDragging}
     >
@@ -412,7 +381,6 @@ function DashboardRow({
   onDragEnd,
   onDragStart,
   onDropOnWidget,
-  onHideWidget,
   onRowResizeStart,
   onSetActiveDropTarget,
 }: {
@@ -431,7 +399,6 @@ function DashboardRow({
     position: DropPosition,
     event: DragEvent<HTMLDivElement>,
   ) => void;
-  onHideWidget: (widgetId: WidgetId) => void;
   onRowResizeStart: (
     row: DashboardWidgetRow,
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -440,10 +407,11 @@ function DashboardRow({
 }) {
   return (
     <div
-      className="relative"
+      className="relative flex-1"
       data-dashboard-row="true"
       style={{
-        height: row.height,
+        minHeight: row.height,
+        flexBasis: 0,
       }}
     >
       <div
@@ -455,24 +423,48 @@ function DashboardRow({
         }}
       >
         {row.columns.map((column, columnIndex) => {
-          const widget = WIDGET_BY_ID.get(column.widgetId);
+          const widgets = column.widgetIds
+            .map((widgetId) => WIDGET_BY_ID.get(widgetId))
+            .filter((widget): widget is DashboardWidgetDefinition =>
+              Boolean(widget),
+            );
 
-          if (!widget) {
+          if (widgets.length === 0) {
             return null;
           }
 
           return (
-            <div key={column.widgetId} className="relative min-h-0 min-w-0">
-              <WidgetTile
-                widget={widget}
-                activeDropTarget={activeDropTarget}
-                draggedWidgetId={draggedWidgetId}
-                onDragEnd={onDragEnd}
-                onDragStart={onDragStart}
-                onDropOnWidget={onDropOnWidget}
-                onHide={() => onHideWidget(column.widgetId)}
-                onSetActiveDropTarget={onSetActiveDropTarget}
-              />
+            <div
+              key={column.widgetIds.join("-")}
+              className="relative min-h-0 min-w-0"
+            >
+              {widgets.length === 1 ? (
+                <WidgetTile
+                  widget={widgets[0]}
+                  activeDropTarget={activeDropTarget}
+                  draggedWidgetId={draggedWidgetId}
+                  onDragEnd={onDragEnd}
+                  onDragStart={onDragStart}
+                  onDropOnWidget={onDropOnWidget}
+                  onSetActiveDropTarget={onSetActiveDropTarget}
+                />
+              ) : (
+                <div className="flex h-full flex-col gap-3">
+                  {widgets.map((widget) => (
+                    <div key={widget.id} className="min-h-0 flex-1">
+                      <WidgetTile
+                        widget={widget}
+                        activeDropTarget={activeDropTarget}
+                        draggedWidgetId={draggedWidgetId}
+                        onDragEnd={onDragEnd}
+                        onDragStart={onDragStart}
+                        onDropOnWidget={onDropOnWidget}
+                        onSetActiveDropTarget={onSetActiveDropTarget}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               {columnIndex < row.columns.length - 1 && (
                 <ColumnResizeHandle
                   onResizeStart={(event) =>
@@ -498,7 +490,6 @@ function DesktopWorkspace({
   onDropOnBottom,
   onDropOnWidget,
   rows,
-  onHideWidget,
   onRowResizeStart,
   onSetActiveDropTarget,
 }: {
@@ -518,7 +509,6 @@ function DesktopWorkspace({
     event: DragEvent<HTMLDivElement>,
   ) => void;
   rows: DashboardWidgetRow[];
-  onHideWidget: (widgetId: WidgetId) => void;
   onRowResizeStart: (
     row: DashboardWidgetRow,
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -527,14 +517,14 @@ function DesktopWorkspace({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-theme-sm text-gray-500 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-400">
+      <div className="flex h-full min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white text-theme-sm text-gray-500 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-400">
         Select at least one widget to build the dashboard.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full flex-col gap-3">
       {rows.map((row) => (
         <DashboardRow
           key={row.id}
@@ -545,7 +535,6 @@ function DesktopWorkspace({
           onDragEnd={onDragEnd}
           onDragStart={onDragStart}
           onDropOnWidget={onDropOnWidget}
-          onHideWidget={onHideWidget}
           onRowResizeStart={onRowResizeStart}
           onSetActiveDropTarget={onSetActiveDropTarget}
         />
@@ -567,7 +556,7 @@ function DesktopWorkspace({
 }
 
 export default function DashboardWidgets() {
-  const { widgetState, setWidgetState, visibleWidgets, hideWidget } =
+  const { widgetState, setWidgetState, visibleWidgets } =
     useDashboardWidgets();
   const [draggedWidgetId, setDraggedWidgetId] = useState<WidgetId | null>(null);
   const [activeDropTarget, setActiveDropTarget] =
@@ -813,30 +802,27 @@ export default function DashboardWidgets() {
 
   return (
     <AlertsProvider>
-      <div className="space-y-4">
+      <div className="flex h-full flex-col gap-4">
         <AlertsSnackbarStack />
         {isDesktopWorkspace ? (
-          <DesktopWorkspace
-            activeDropTarget={activeDropTarget}
-            draggedWidgetId={draggedWidgetId}
-            onColumnResizeStart={handleColumnResizeStart}
-            onDragEnd={handleDragEnd}
-            onDragStart={handleDragStart}
-            onDropOnBottom={handleDropOnBottom}
-            onDropOnWidget={handleDropOnWidget}
-            onHideWidget={hideWidget}
-            onRowResizeStart={handleRowResizeStart}
-            onSetActiveDropTarget={setActiveDropTarget}
-            rows={rows}
-          />
+          <div className="min-h-0 flex-1">
+            <DesktopWorkspace
+              activeDropTarget={activeDropTarget}
+              draggedWidgetId={draggedWidgetId}
+              onColumnResizeStart={handleColumnResizeStart}
+              onDragEnd={handleDragEnd}
+              onDragStart={handleDragStart}
+              onDropOnBottom={handleDropOnBottom}
+              onDropOnWidget={handleDropOnWidget}
+              onRowResizeStart={handleRowResizeStart}
+              onSetActiveDropTarget={setActiveDropTarget}
+              rows={rows}
+            />
+          </div>
         ) : (
           <div className="space-y-3">
             {visibleWidgets.map((widget) => (
-              <MobileWidget
-                key={widget.id}
-                widget={widget}
-                onHide={() => hideWidget(widget.id)}
-              />
+              <MobileWidget key={widget.id} widget={widget} />
             ))}
           </div>
         )}

@@ -19,10 +19,10 @@ import {
 import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
+import { formatOrderItemLine } from "../../utils/orderTable";
 
 import type {
   Order,
-  OrderItem,
   OrdersApiResponse,
   OrderStatus,
 } from "../../types/Order";
@@ -527,35 +527,35 @@ export default function Orders({
                 <TableRow>
                   <TableCell
                     isHeader
-                    className="min-w-[130px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    className="min-w-[65px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Order ID
                   </TableCell>
 
                   <TableCell
                     isHeader
-                    className="min-w-[260px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    className="min-w-[190px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Items
                   </TableCell>
 
                   <TableCell
                     isHeader
-                    className="min-w-[100px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Table
                   </TableCell>
 
                   <TableCell
                     isHeader
-                    className="min-w-[120px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Status
                   </TableCell>
 
                   <TableCell
                     isHeader
-                    className="min-w-[64px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                    className="min-w-[50px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                   >
                     Action
                   </TableCell>
@@ -582,8 +582,16 @@ export default function Orders({
                         </p>
                       </TableCell>
 
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatItems(order.items)}
+                      <TableCell className="py-3 text-theme-xs text-gray-500 dark:text-gray-400">
+                        {order.items && order.items.length > 0 ? (
+                          <ul className="list-disc space-y-0.5 pl-4">
+                            {order.items.map((item, index) => (
+                              <li key={index}>{formatOrderItemLine(item)}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          "No items"
+                        )}
                       </TableCell>
 
                       <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
@@ -653,29 +661,6 @@ export default function Orders({
       {content}
     </div>
   );
-}
-
-function formatItems(items: OrderItem[]): string {
-  if (!items || items.length === 0) {
-    return "No items";
-  }
-
-  return items
-    .map((item) => {
-      const name =
-        item.name ??
-        item.itemName ??
-        item.productName ??
-        "Item";
-
-      const quantity =
-        item.quantity ??
-        item.qty ??
-        1;
-
-      return `${quantity} × ${name}`;
-    })
-    .join(", ");
 }
 
 function formatTableNumber(

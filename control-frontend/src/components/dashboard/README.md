@@ -19,25 +19,26 @@ The persisted state is `DashboardWidgetState`:
   rows: [
     {
       id: "row-main",
-      height: 620,
+      height: 480,
       columns: [
-        { widgetId: "robot-map", width: 66 },
-        { widgetId: "robot-list", width: 34 },
+        { widgetIds: ["robot-map"], width: 61.5 },
+        { widgetIds: ["robot-list", "pos-orders"], width: 38.5 },
       ],
     },
   ],
-  visibleWidgetIds: ["robot-map", "robot-list"],
+  visibleWidgetIds: ["robot-map", "robot-list", "pos-orders"],
 }
 ```
 
-Rows own their own pixel `height`. Columns inside one row share that row height and use relative `width` values that are normalized back to 100. There is no fixed total canvas height; the workspace height is the sum of all row heights plus gaps, so the page can scroll naturally.
+Rows own their own pixel `height`. Columns inside one row share that row height and use relative `width` values that are normalized back to 100. A column holds an ordered `widgetIds` list: a single id renders as one widget filling the column, while 2+ ids render as an equal-height vertical stack that fills the column (each widget gets the same share of the row's height). There is no fixed total canvas height; the workspace height is the sum of all row heights plus gaps, so the page can scroll naturally.
 
 The important invariants are:
 
-- every visible widget appears exactly once in `rows`
+- every visible widget appears exactly once across all `widgetIds` in `rows`
 - hidden widgets do not appear in `rows`
 - unknown widget ids are rejected
 - duplicate widget ids are dropped
+- columns with an empty `widgetIds` list are removed
 - empty rows are removed
 - row ids are unique after sanitizing
 - row heights never go below `MIN_ROW_HEIGHT`
@@ -57,7 +58,7 @@ The important invariants are:
     - avoid global DOM ids that could collide if the widget is remounted
     - clean up timers, sockets, observers, map instances, and direct DOM libraries on unmount
 5. Run `npx tsc --noEmit` and `npm run build` from `control-frontend`.
-6. Manually test hide/show, drag/drop, resize, reset, refresh persistence, and mobile stacked mode.
+6. Manually test drag/drop, resize, reset, refresh persistence, and mobile stacked mode.
 
 ## Persistence
 

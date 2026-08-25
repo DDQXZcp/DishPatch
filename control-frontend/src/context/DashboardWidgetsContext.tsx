@@ -13,7 +13,6 @@ import {
   DASHBOARD_RESET_VIEW_EVENT,
   DASHBOARD_WIDGET_STORAGE_KEY,
   defaultWidgetState,
-  hideWidgetInState,
   readStoredWidgetState,
   showWidgetInState,
   type DashboardWidgetState,
@@ -26,7 +25,6 @@ interface DashboardWidgetsContextValue {
   setWidgetState: Dispatch<SetStateAction<DashboardWidgetState>>;
   visibleWidgets: DashboardWidgetDefinition[];
   visibleIdSet: Set<WidgetId>;
-  hideWidget: (widgetId: WidgetId) => void;
   toggleWidget: (widgetId: WidgetId) => void;
   resetLayout: () => void;
 }
@@ -66,10 +64,6 @@ export function DashboardWidgetsProvider({
     [visibleWidgets],
   );
 
-  function hideWidget(widgetId: WidgetId) {
-    setWidgetState((currentState) => hideWidgetInState(currentState, widgetId));
-  }
-
   function toggleWidget(widgetId: WidgetId) {
     setWidgetState((currentState) => showWidgetInState(currentState, widgetId));
   }
@@ -84,7 +78,6 @@ export function DashboardWidgetsProvider({
     setWidgetState,
     visibleWidgets,
     visibleIdSet,
-    hideWidget,
     toggleWidget,
     resetLayout,
   };

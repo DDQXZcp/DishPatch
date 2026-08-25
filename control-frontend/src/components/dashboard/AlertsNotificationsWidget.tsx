@@ -108,16 +108,6 @@ function buildAlerts(
     });
   }
 
-  const lowBatteryRobots = robots.filter((robot) => robot.battery <= 20);
-  if (lowBatteryRobots.length > 0) {
-    alerts.push({
-      id: "low-battery",
-      title: "Battery low",
-      detail: `${lowBatteryRobots.map((robot) => robot.name).join(", ")} have low battery and may need charging.`,
-      severity: "warning",
-    });
-  }
-
   return alerts;
 }
 
