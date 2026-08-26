@@ -350,8 +350,9 @@ function getFitZoom(map: L.Map, bounds: FloorplanBounds) {
   }
 
   // Math.min (rather than max) keeps the whole floorplan inside the
-  // window on every axis — the widget's window fits the map, instead of
-  // the map covering the window and cropping whichever axis overflows.
+  // window on every axis — equivalent to preserveAspectRatio="xMidYMid
+  // meet". No part of the map is ever cropped; any leftover space is
+  // centered letterboxing on whichever axis doesn't match.
   const fitScale = Math.min(mapSize.x / boundsWidth, mapSize.y / boundsHeight);
   const fitZoom = Math.log2(fitScale);
 
@@ -528,12 +529,14 @@ export default function RestaurantMap() {
   }, [robots, loadedMap, orderTableById]);
 
   if (!loadedMap) {
-    return <div className="h-full w-full rounded-lg bg-gray-100" />;
+    return <div className="h-full w-full rounded-lg" style={{ backgroundColor: '#ffffff' }} />;
   }
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg">
-      <div ref={containerRef} className="h-full w-full rounded-lg bg-gray-100" />
+      {/* Leaflet's own stylesheet sets .leaflet-container background to #ddd;
+          an inline style is needed to win over that rule. */}
+      <div ref={containerRef} className="h-full w-full rounded-lg" style={{ backgroundColor: '#ffffff' }} />
       <RecenterButton onClick={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)} />
     </div>
   );
