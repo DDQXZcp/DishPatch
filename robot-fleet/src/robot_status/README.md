@@ -8,7 +8,7 @@ Publishes the robot's current status to rosbridge so the Java backend can consum
 
 | Topic | Direction | Message Type | Description |
 |---|---|---|---|
-| `/{ns}/status` | **publish** | `shared_msgs/RobotStatus` | Full robot status at 1 Hz |
+| `/{ns}/status` | **publish** | `shared_msgs/RobotStatus` | Full robot status at 10 Hz |
 | `/{ns}/battery` | **publish** | `std_msgs/Float32` | Battery percentage at 1 Hz |
 | `/{ns}/odom` | **subscribe** | `nav_msgs/Odometry` | Keeps pose and speed in sync from `robot_navigation` |
 | `/{ns}/sensor` | **subscribe** | `std_msgs/Bool` | Hardware sensor input (placeholder) |
@@ -28,7 +28,7 @@ Publishes the robot's current status to rosbridge so the Java backend can consum
 |---|---|---|
 | `robot_namespace` | `"robot"` | Namespace prefix used in topic names |
 | `robot_id` | `"robot"` | Value written into the `robot_id` field of every status message |
-| `heartbeat_rate` | `1.0` | Publish rate in Hz |
+| `heartbeat_rate` | `10.0` | Publish rate in Hz |
 | `initial_battery` | `100.0` | Starting battery percentage (0–100) |
 
 ## Behaviour

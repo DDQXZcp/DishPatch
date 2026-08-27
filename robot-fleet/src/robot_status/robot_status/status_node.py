@@ -24,7 +24,7 @@ class StatusNode(Node):
         # ── parameters ────────────────────────────────────────────────
         self.declare_parameter("robot_namespace", "robot")
         self.declare_parameter("robot_id", "robot")
-        self.declare_parameter("heartbeat_rate", 1.0)
+        self.declare_parameter("heartbeat_rate", 10.0)
 
         ns = self.get_parameter("robot_namespace").value
         self._robot_id = self.get_parameter("robot_id").value
