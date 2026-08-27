@@ -36,14 +36,14 @@ interface RobotMarkerState {
   lastTrailSpawnAt: number | null;
 }
 
-const ROBOT_MARKER_ANIMATION_DURATION_MS = 280;
+const ROBOT_MARKER_ANIMATION_DURATION_MS = 120;
 const ROBOT_MARKER_SNAP_DISTANCE = 0.01;
 const MAP_MIN_ZOOM = -3;
 const MAP_MAX_ZOOM = 2;
 const TRAIL_DOT_RADIUS = 2.5;
 const TRAIL_OPACITY = 0.75;
 const TRAIL_DURATION = 6000;
-const TRAIL_SPAWN_INTERVAL_MS = 5000;
+const TRAIL_SPAWN_INTERVAL_MS = 1000;
 const TRAIL_MAX_DOTS = 6;
 
 // Fix for default Leaflet markers
@@ -212,25 +212,19 @@ function updateRobotMarker(
   const startLat = currentLatLng.lat;
   const startLng = currentLatLng.lng;
   const animationStart = performance.now();
-  state.lastTrailSpawnAt = animationStart - TRAIL_SPAWN_INTERVAL_MS;
 
   const step = (now: number) => {
     const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
-    let easedProgress: number;
-    if (progress < 0.5) {
-      easedProgress = 4 * progress * progress * progress;
-    } else {
-      const p = 1 - progress;
-      easedProgress = 1 - (p * p * p) / 2;
-    }
 
     const newLatLng = L.latLng(
-      startLat + deltaLat * easedProgress,
-      startLng + deltaLng * easedProgress,
+      startLat + deltaLat * progress,
+      startLng + deltaLng * progress,
     );
 
     state.marker.setLatLng(newLatLng);
 
+    // lastTrailSpawnAt deliberately survives across animations, so the trail is
+    // paced by wall-clock and not by how often status arrives.
     if (state.lastTrailSpawnAt === null || now - state.lastTrailSpawnAt >= TRAIL_SPAWN_INTERVAL_MS) {
       spawnTrailDot(state, newLatLng, markerGroup, getRobotStatusColor(robot.status), robot.status);
       state.lastTrailSpawnAt = now;
