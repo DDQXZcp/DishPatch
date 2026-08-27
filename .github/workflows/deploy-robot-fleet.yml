@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - robot-infrastructure
+      - increase-robot-polling-rate
     paths:
       - 'robot-fleet/**'
       - 'map-source/**'
