@@ -85,7 +85,7 @@ Backend (Java, via rosbridge)
     |              +-- /{ns}/battery   -> battery level
     |              +-- /{ns}/sensor    -> sensor state
     |                   |
-    +-- subscribe <- /{ns}/status  (RobotStatus @ 1 Hz)
+    +-- subscribe <- /{ns}/status  (RobotStatus @ 10 Hz)
 
 hardware_node
     +-- publish -> /{ns}/battery  (Float32)  drains 0.05%/s
@@ -138,7 +138,7 @@ namespace list so one container serves the fleet.
 | Topic | Type | Direction |
 |---|---|---|
 | `/{ns}/goal_pose` | `geometry_msgs/PoseStamped` | backend to robot |
-| `/{ns}/status` | `shared_msgs/RobotStatus` | robot to backend, 1 Hz |
+| `/{ns}/status` | `shared_msgs/RobotStatus` | robot to backend, 10 Hz |
 | `/{ns}/navigate_to_pose/_action/status` | `action_msgs/GoalStatusArray` | robot to backend |
 | `/{ns}/task_command` | `std_msgs/String` (JSON) | backend to robot |
 
