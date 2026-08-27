@@ -5,7 +5,7 @@ name: Deploy Control Frontend (Vite → S3 + CloudFront)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, increase-robot-polling-rate ]
     paths:
       - 'control-frontend/**'
       - 'map-source/**'
