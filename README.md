@@ -343,6 +343,25 @@ VITE_BACKEND_URL=http://localhost:3000/
 VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southeast-2.amazonaws.com
 ```
 
+### Local Testing - Robot Visualiser
+
+Create this **.env** file in pos-frontend folder.
+
+Enable corepack with admin/sudo permission and install dependencies (Run once)
+```
+# Enable the corepack
+corepack enable
+# Open a new terminal and install the dependencies
+yarn install
+```
+
+Launch Frontend (Run Everytime)
+```
+yarn start
+```
+
+Then every
+
 ## EC2 Prerequisites
 
 The deployment assumes the EC2 instance is already prepared with:
@@ -360,3 +379,16 @@ Verify the Docker tools with:
 sudo docker --version
 sudo docker compose version
 sudo docker buildx version
+```
+
+# Nginx
+
+```
+sudo apt update
+sudo apt install -y certbot
+sudo mkdir -p /var/www/certbot
+sudo certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  -d rosbridge.dish-patch.com
+```

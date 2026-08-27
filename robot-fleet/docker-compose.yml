@@ -1,16 +1,33 @@
-# ── DishPatch Robot Fleet — docker-compose.yml ────────────────────────────────
+# ── dishpatch robot fleet — docker-compose.yml ────────────────────────────────
 #
-# Services
+# services
 # ────────
-#   rosbridge   — bridges ROS2 topics to WebSocket on port 9090
-#   nav2        — shared Nav2 stack for all robots
+#   nginx       — public reverse proxy for rosbridge
+#   rosbridge   — bridges ros2 topics to websocket on port 9090
+#   nav2        — shared nav2 stack for all robots
 #   robot1      — simulated robot, namespace=robot1
 #   robot2      — simulated robot, namespace=robot2
 #
-# All containers share the "ros_net" Docker network and ROS_DOMAIN_ID=0
+# external access:
+#
+#   existing application
+#          ↓
+#   ec2 :9090
+#          ↓
+#   rosbridge
+#
+#   foxglove
+#          ↓
+#   wss://rosbridge.dish-patch.com
+#          ↓
+#   nginx :443
+#          ↓
+#   rosbridge:9090
+#
+# all containers share the "ros_net" docker network and ROS_DOMAIN_ID=0
 # so they see each other's topics without using host networking.
 #
-# To add more robots: copy the robot1 block, change the service name,
+# to add more robots: copy the robot1 block, change the service name,
 # ROBOT_NAMESPACE, and container_name.
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -20,66 +37,115 @@ networks:
 
 services:
 
-  # ── Rosbridge ──────────────────────────────────────────────────────────────
+  # ── nginx reverse proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+
+    networks:
+      - ros_net
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /var/www/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+    depends_on:
+      rosbridge:
+        condition: service_healthy
+
+
+  # ── rosbridge ──────────────────────────────────────────────────────────────
   rosbridge:
     build:
       context: .
       dockerfile: Dockerfile.rosbridge
+
     container_name: rosbridge
     restart: unless-stopped
+
     networks:
       - ros_net
+
+    # keep existing host port because your current application uses it
     ports:
-      - "9090:9090"           # exposed to host so the Java backend can connect
+      - "9090:9090"
+
     environment:
       - ROS_DOMAIN_ID=0
       - PYTHONUNBUFFERED=1
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9090), 2); s.close()\""]
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9090), 2); s.close()\""
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ── Nav2 stack (shared by all robots) ──────────────────────────────────────
+
+  # ── nav2 stack (shared by all robots) ──────────────────────────────────────
   #
-  # CAPACITY: this one container runs five real-time nodes per robot namespace, so
-  # two robots is ten nodes. It was consolidated here to save image size — that
-  # argument was about disk and never about CPU. On 2026-08-11 the controllers were
-  # missing their 20Hz loop, dropping as low as 6Hz, while the planner failed to
-  # acknowledge goal requests inside Nav2's 20ms default. Shrinking the map from
-  # 16.8M cells to 935k removed most of that load.
+  # capacity: this one container runs five real-time nodes per robot namespace,
+  # so two robots is ten nodes. it was consolidated here to save image size —
+  # that argument was about disk and never about cpu.
   #
-  # No cpu/memory limits are set here deliberately: capping a container that is
-  # already short of CPU makes it worse. Measure before adding a third robot —
-  #   nproc; docker stats --no-stream
+  # on 2026-08-11 the controllers were missing their 20hz loop, dropping as low
+  # as 6hz, while the planner failed to acknowledge goal requests inside nav2's
+  # 20ms default. shrinking the map from 16.8m cells to 935k removed most of
+  # that load.
+  #
+  # no cpu/memory limits are set here deliberately: capping a container that is
+  # already short of cpu makes it worse.
+  #
+  # measure before adding a third robot:
+  #
+  #   nproc
+  #   docker stats --no-stream
   #   docker logs nav2 2>&1 | grep -c "Control loop missed"
-  # and split the stack per robot if the loop-miss count is not near zero.
+  #
+  # split the stack per robot if the loop-miss count is not near zero.
   nav2:
     build:
       context: .
       dockerfile: Dockerfile.nav2
+
     container_name: nav2
     restart: unless-stopped
+
     networks:
       - ros_net
+
     environment:
       - ROS_DOMAIN_ID=0
       - PYTHONUNBUFFERED=1
       - ROBOT_NAMESPACES=robot1,robot2
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
     depends_on:
       - rosbridge
 
-  # ── Robot 1 ───────────────────────────────────────────────────────────────
+
+  # ── robot 1 ────────────────────────────────────────────────────────────────
   robot1:
     build:
       context: .
       dockerfile: Dockerfile.robot
+
     container_name: robot1
     restart: unless-stopped
+
     networks:
       - ros_net
+
     environment:
       - ROS_DOMAIN_ID=0
       - PYTHONUNBUFFERED=1
@@ -90,42 +156,53 @@ services:
       - INITIAL_Y=9.241
       - INITIAL_THETA=0.0
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
     depends_on:
       - rosbridge
       - nav2
 
-  # ── Robot 2 ───────────────────────────────────────────────────────────────
+
+  # ── robot 2 ────────────────────────────────────────────────────────────────
   robot2:
     build:
       context: .
       dockerfile: Dockerfile.robot
+
     container_name: robot2
     restart: unless-stopped
+
     networks:
       - ros_net
+
     environment:
       - ROS_DOMAIN_ID=0
       - PYTHONUNBUFFERED=1
       - ROBOT_NAMESPACE=robot2
       - AUTO_CYCLE=true
-      - INITIAL_BATTERY=75.0    # start at different battery level for variety
+      - INITIAL_BATTERY=75.0
       - INITIAL_X=13.100
       - INITIAL_Y=9.241
       - INITIAL_THETA=0.0
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
     depends_on:
       - rosbridge
       - nav2
 
-  #     # ── Robot 3 ───────────────────────────────────────────────────────────────
+
+  # ── robot 3 ────────────────────────────────────────────────────────────────
+  #
   # robot3:
   #   build:
   #     context: .
   #     dockerfile: Dockerfile.robot
+  #
   #   container_name: robot3
   #   restart: unless-stopped
+  #
   #   networks:
   #     - ros_net
+  #
   #   environment:
   #     - ROS_DOMAIN_ID=0
   #     - PYTHONUNBUFFERED=1
@@ -133,6 +210,7 @@ services:
   #     - AUTO_CYCLE=true
   #     - INITIAL_BATTERY=50.0
   #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  #
   #   depends_on:
   #     - rosbridge
   #     - nav2

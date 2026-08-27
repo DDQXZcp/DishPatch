@@ -1,0 +1,55 @@
+# dependencies
+node_modules/
+
+# webpack build output
+web/.webpack/
+.webpack/
+dist/
+
+# yarn
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.yarn/build-state.yml
+
+# yarn pnp files - not used because this project uses node_modules
+.pnp.*
+.pnp.cjs
+.pnp.loader.mjs
+
+# logs
+*.log
+yarn-error.log
+yarn-debug.log
+npm-debug.log*
+
+# test / coverage
+coverage/
+.nyc_output/
+
+# storybook build
+storybook-static/
+storybook-screenshots/
+
+# temporary files
+.tmp/
+.temp/
+.cache/
+
+# environment files
+.env
+.env.local
+.env.*.local
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# operating system
+.DS_Store
+Thumbs.db
+
+# typescript
+*.tsbuildinfo

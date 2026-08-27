@@ -1,0 +1,244 @@
+name: deploy robot visualiser
+
+on:
+
+  push:
+
+    branches:
+      - main
+      - robot-infrastructure
+
+    paths:
+      - 'robot-visualiser/**'
+      - 'infrastructure/infrastructure-robot-visualiser.yml'
+      - '.github/workflows/deploy-robot-visualiser.yml'
+
+  workflow_dispatch: {}
+
+
+permissions:
+
+  id-token: write
+
+  contents: read
+
+
+env:
+
+  aws_region: ap-southeast-2
+
+  # existing role name keeps its actual casing
+  role_arn: arn:aws:iam::334643191233:role/GitHubActions-DishPatch
+
+  frontend_stack: dishpatch-robot-visualiser
+
+  template_path: infrastructure/infrastructure-robot-visualiser.yml
+
+  site_domain: robot.dish-patch.com
+
+  # cloudfront certificate must be in us-east-1
+  # this certificate must cover robot.dish-patch.com
+  acm_cert_arn: arn:aws:acm:us-east-1:334643191233:certificate/679c241c-a062-44dc-a738-67423a36be1f
+
+  hosted_zone_id: Z07539553FFDS683L3M15
+
+
+jobs:
+
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    concurrency:
+
+      group: dishpatch-robot-visualiser-${{ github.ref }}
+
+      cancel-in-progress: true
+
+
+    steps:
+
+      # checkout repository
+      - name: checkout
+
+        uses: actions/checkout@v4
+
+
+      # authenticate to aws using github oidc
+      - name: configure aws credentials
+
+        uses: aws-actions/configure-aws-credentials@v4
+
+        with:
+
+          role-to-assume: ${{ env.role_arn }}
+
+          aws-region: ${{ env.aws_region }}
+
+
+      # deploy / update cloudformation infrastructure
+      - name: deploy frontend infrastructure
+
+        shell: bash
+
+        run: |
+
+          set -euo pipefail
+
+          aws cloudformation validate-template \
+            --template-body file://$GITHUB_WORKSPACE/${template_path}
+
+          aws cloudformation deploy \
+            --stack-name "${frontend_stack}" \
+            --template-file "$GITHUB_WORKSPACE/${template_path}" \
+            --parameter-overrides \
+              sitedomain="${site_domain}" \
+              acmcertificatearn="${acm_cert_arn}" \
+              hostedzoneid="${hosted_zone_id}"
+
+
+      # read generated bucket / distribution information
+      - name: read stack outputs
+
+        id: outputs
+
+        shell: bash
+
+        run: |
+
+          set -euo pipefail
+
+          bucket=$(
+
+            aws cloudformation describe-stacks \
+              --stack-name "${frontend_stack}" \
+              --query "Stacks[0].Outputs[?OutputKey=='sitebucketname'].OutputValue" \
+              --output text
+
+          )
+
+          dist=$(
+
+            aws cloudformation describe-stacks \
+              --stack-name "${frontend_stack}" \
+              --query "Stacks[0].Outputs[?OutputKey=='distributionid'].OutputValue" \
+              --output text
+
+          )
+
+          url=$(
+
+            aws cloudformation describe-stacks \
+              --stack-name "${frontend_stack}" \
+              --query "Stacks[0].Outputs[?OutputKey=='siteurl'].OutputValue" \
+              --output text
+
+          )
+
+
+          if [[ -z "$bucket" || "$bucket" == "None" ]]; then
+
+            echo "could not resolve sitebucketname"
+
+            exit 1
+
+          fi
+
+
+          if [[ -z "$dist" || "$dist" == "None" ]]; then
+
+            echo "could not resolve distributionid"
+
+            exit 1
+
+          fi
+
+
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
+
+          echo "dist=$dist" >> "$GITHUB_OUTPUT"
+
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+
+          echo "s3 bucket: $bucket"
+
+          echo "cloudfront distribution: $dist"
+
+          echo "site url: $url"
+
+
+      # install node
+      - name: setup node
+
+        uses: actions/setup-node@v4
+
+        with:
+
+          node-version: 20
+
+
+      # foxglove requires yarn 3.6.3
+      - name: setup yarn
+
+        shell: bash
+
+        run: |
+
+          corepack enable
+
+          corepack prepare yarn@3.6.3 --activate
+
+          yarn --version
+
+
+      # install foxglove dependencies
+      - name: install dependencies
+
+        working-directory: robot-visualiser
+
+        run: yarn install --immutable
+
+
+      # build production foxglove frontend
+      - name: build robot visualiser
+
+        working-directory: robot-visualiser
+
+        run: yarn web:build:prod
+
+
+      # upload webpack production output
+      - name: upload to s3
+
+        shell: bash
+
+        run: |
+
+          aws s3 sync \
+            robot-visualiser/web/.webpack/ \
+            "s3://${{ steps.outputs.outputs.bucket }}/" \
+            --delete
+
+
+      # remove stale cloudfront content
+      - name: invalidate cloudfront cache
+
+        shell: bash
+
+        run: |
+
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.outputs.outputs.dist }}" \
+            --paths "/*"
+
+
+      - name: done
+
+        shell: bash
+
+        run: |
+
+          echo "robot visualiser deployed"
+
+          echo "${{ steps.outputs.outputs.url }}"

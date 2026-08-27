@@ -1,0 +1,319 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: dishpatch robot visualiser - private s3 + cloudfront
+
+Parameters:
+
+  # custom domain for the robot visualiser
+  sitedomain:
+    Type: String
+    Default: robot.dish-patch.com
+    Description: public hostname for the robot visualiser
+
+  # cloudfront requires a certificate in us-east-1
+  acmcertificatearn:
+    Type: String
+    Default: ""
+    Description: acm certificate arn in us-east-1 that covers the site domain
+
+  # route53 hosted zone containing dish-patch.com
+  hostedzoneid:
+    Type: String
+    Default: ""
+    Description: optional route53 hosted zone id containing the site domain
+
+  # optional exact bucket name
+  sitebucketname:
+    Type: String
+    Default: ""
+    Description: optional exact s3 bucket name; leave empty to let aws generate one
+
+
+Conditions:
+
+  usecustomdomain: !Not
+    - !Equals
+      - !Ref acmcertificatearn
+      - ""
+
+  creatednsrecord: !And
+    - !Not
+      - !Equals
+        - !Ref hostedzoneid
+        - ""
+    - !Condition usecustomdomain
+
+  useprovidedbucketname: !Not
+    - !Equals
+      - !Ref sitebucketname
+      - ""
+
+
+Resources:
+
+  # logs bucket
+  logsbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "dishpatch-robot-visualiser-logs-${AWS::AccountId}-${AWS::Region}"
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+
+  logsbucketpolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref logsbucket
+
+      PolicyDocument:
+        Version: '2012-10-17'
+
+        Statement:
+          - Sid: allows3serverlogs
+            Effect: Allow
+
+            Principal:
+              Service: logging.s3.amazonaws.com
+
+            Action:
+              - s3:PutObject
+
+            Resource: !Sub '${logsbucket.Arn}/*'
+
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+
+  # private s3 bucket containing the foxglove build
+  sitebucket:
+    Type: AWS::S3::Bucket
+    Properties:
+
+      BucketName: !If
+        - useprovidedbucketname
+        - !Ref sitebucketname
+        - !Ref AWS::NoValue
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      LoggingConfiguration:
+        DestinationBucketName: !Ref logsbucket
+        LogFilePrefix: s3/
+
+
+  # cloudfront origin access control
+  cloudfrontoac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+
+        Name: !Sub 'oac-${AWS::StackName}'
+
+        Description: access control for dishpatch robot visualiser
+
+        OriginAccessControlOriginType: s3
+
+        SigningBehavior: always
+
+        SigningProtocol: sigv4
+
+
+  # cloudfront distribution
+  sitedistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+
+        Enabled: true
+
+        Comment: dishpatch robot visualiser
+
+        DefaultRootObject: index.html
+
+
+        Origins:
+
+          - Id: s3origin
+
+            DomainName: !GetAtt sitebucket.RegionalDomainName
+
+            S3OriginConfig: {}
+
+            OriginAccessControlId: !Ref cloudfrontoac
+
+
+        DefaultCacheBehavior:
+
+          TargetOriginId: s3origin
+
+          ViewerProtocolPolicy: redirect-to-https
+
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+
+          # aws managed caching optimized
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+          # aws managed cors s3 origin
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+
+          # aws managed cors + security headers
+          ResponseHeadersPolicyId: eaab4381-ed33-4a86-88ca-d9558dc6cd63
+
+
+        # spa fallback
+        CustomErrorResponses:
+
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+
+        Logging:
+
+          Bucket: !GetAtt logsbucket.RegionalDomainName
+
+          Prefix: cloudfront/
+
+          IncludeCookies: false
+
+
+        ViewerCertificate: !If
+
+          - usecustomdomain
+
+          - AcmCertificateArn: !Ref acmcertificatearn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+
+          - CloudFrontDefaultCertificate: true
+
+
+        Aliases: !If
+
+          - usecustomdomain
+
+          - - !Ref sitedomain
+
+          - []
+
+
+  # allow only this cloudfront distribution to read from the site bucket
+  sitebucketpolicy:
+    Type: AWS::S3::BucketPolicy
+
+    DependsOn:
+      - sitedistribution
+
+    Properties:
+
+      Bucket: !Ref sitebucket
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Sid: allowcloudfrontaccess
+
+            Effect: Allow
+
+            Principal:
+              Service: cloudfront.amazonaws.com
+
+            Action:
+              - s3:GetObject
+
+            Resource: !Sub '${sitebucket.Arn}/*'
+
+            Condition:
+              StringEquals:
+
+                AWS:SourceArn: !Sub
+                  'arn:aws:cloudfront::${AWS::AccountId}:distribution/${sitedistribution}'
+
+
+  # route53 -> cloudfront
+  sitealiasrecord:
+    Condition: creatednsrecord
+
+    Type: AWS::Route53::RecordSet
+
+    Properties:
+
+      HostedZoneId: !Ref hostedzoneid
+
+      Name: !Ref sitedomain
+
+      Type: A
+
+      AliasTarget:
+
+        # cloudfront global hosted zone id
+        HostedZoneId: Z2FDTNDATAQYW2
+
+        DNSName: !GetAtt sitedistribution.DomainName
+
+
+Outputs:
+
+  sitebucketname:
+    Description: s3 bucket containing the robot visualiser
+    Value: !Ref sitebucket
+
+
+  distributiondomainname:
+    Description: cloudfront distribution domain
+    Value: !GetAtt sitedistribution.DomainName
+
+
+  distributionid:
+    Description: cloudfront distribution id
+    Value: !Ref sitedistribution
+
+
+  siteurl:
+    Description: public robot visualiser url
+
+    Value: !If
+
+      - usecustomdomain
+
+      - !Sub 'https://${sitedomain}'
+
+      - !Sub 'https://${sitedistribution.DomainName}'
