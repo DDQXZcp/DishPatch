@@ -1,3 +1,4 @@
+import math
 import time
 import json
 import random
@@ -29,7 +30,7 @@ def create_robots(count=10):
             status_ind = random.randint(0, 4)
             status = statuses[status_ind]
         speed = 0 if (status == "Maintenance" or status == "Waiting") else random.randint(100, 250)
-        robot = {"id": id, "name": name, "x": x, "y": y, "battery": battery, "status": status, "speed": speed}
+        robot = {"id": id, "name": name, "x": x, "y": y, "yaw": 0.0, "battery": battery, "status": status, "speed": speed}
         robots.append(robot)
 
     return robots
@@ -56,8 +57,12 @@ def move_robot(r):
         return r
 
     # 50% chance to move, equal chance to move positive or negative
-    r["x"] = min(MAX_X, max(0, r["x"] + random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])))
-    r["y"] = min(MAX_Y, max(0, r["y"] + random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])))
+    dx = random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])
+    dy = random.randint(0, 1) * random.choice([r["speed"], -r["speed"]])
+    r["x"] = min(MAX_X, max(0, r["x"] + dx))
+    r["y"] = min(MAX_Y, max(0, r["y"] + dy))
+    if dx != 0 or dy != 0:
+        r["yaw"] = math.atan2(dy, dx)
     return r
 
 def update_robot(r):

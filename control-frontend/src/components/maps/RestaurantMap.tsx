@@ -54,7 +54,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-function getRobotIcon(status: RobotStatus) {
+function getRobotIcon(status: RobotStatus, yaw: number) {
   let borderColor = '';
 
   if (status === 'Serving') borderColor = 'border-green-500';
@@ -62,12 +62,23 @@ function getRobotIcon(status: RobotStatus) {
   else if (status === 'Waiting') borderColor = 'border-purple-500';
   else if (status === 'Maintenance') borderColor = 'border-red-500';
 
-  return new L.Icon({
-    iconUrl: '/images/robot/robot-face-icon.svg',
+  // World yaw is radians counter-clockwise from +x (screen-right); the arrow
+  // graphic points up by default, so convert to a clockwise CSS angle from up.
+  const headingDeg = 90 - (yaw * 180) / Math.PI;
+
+  return L.divIcon({
+    html: `
+      <div class="relative w-[30px] h-[30px]">
+        <img src="/images/robot/robot-face-icon.svg" class="w-full h-full rounded-full border-2 ${borderColor} shadow-lg" />
+        <div class="absolute inset-0" style="transform: rotate(${headingDeg}deg);">
+          <div class="absolute left-1/2 top-[-4px] -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-gray-800"></div>
+        </div>
+      </div>
+    `,
+    className: '',
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     popupAnchor: [0, -15],
-    className: `rounded-full border-2 ${borderColor} shadow-lg`
   });
 }
 
@@ -169,7 +180,7 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
 }
 
 function createRobotMarker(robot: Robot, manifest: MapManifest, orderTableById: Map<string, OrderTableInfo>) {
-  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status) })
+  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status, robot.yaw) })
     .bindPopup(createRobotPopup(robot, orderTableById));
 
   marker.on("mouseover", () => marker.openPopup());
@@ -198,7 +209,7 @@ function updateRobotMarker(
   const deltaLng = targetLatLng.lng - currentLatLng.lng;
   const moveDistance = Math.hypot(deltaLat, deltaLng);
 
-  state.marker.setIcon(getRobotIcon(robot.status));
+  state.marker.setIcon(getRobotIcon(robot.status, robot.yaw));
   state.marker.bindPopup(createRobotPopup(robot, orderTableById));
 
   if (moveDistance <= ROBOT_MARKER_SNAP_DISTANCE) {

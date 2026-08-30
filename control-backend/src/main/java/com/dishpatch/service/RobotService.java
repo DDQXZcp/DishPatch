@@ -57,6 +57,7 @@ public class RobotService {
                         Robot robot = existingRobot.get();
                         robot.setX(incomingRobot.getX());
                         robot.setY(incomingRobot.getY());
+                        robot.setYaw(incomingRobot.getYaw());
                         robot.setStatus(incomingRobot.getStatus());
                         robot.setBattery(incomingRobot.getBattery());
                         robot.setSpeed(incomingRobot.getSpeed());
