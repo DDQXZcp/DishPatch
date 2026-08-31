@@ -225,7 +225,10 @@ function updateRobotMarker(
   const animationStart = performance.now();
 
   const step = (now: number) => {
-    const progress = Math.min((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 1);
+    const progress = Math.min(
+      Math.max((now - animationStart) / ROBOT_MARKER_ANIMATION_DURATION_MS, 0),
+      1,
+    );
 
     const newLatLng = L.latLng(
       startLat + deltaLat * progress,
