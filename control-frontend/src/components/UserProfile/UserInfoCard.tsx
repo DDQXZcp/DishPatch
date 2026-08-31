@@ -21,12 +21,14 @@ export default function UserInfoCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+  
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    fetch(`/api/users/${userId}`)
+    fetch(`${backendUrl}/api/users/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
