@@ -203,9 +203,10 @@ class RobotServiceTest {
     // ── the frontend push ────────────────────────────────────────────────────
 
     @Test
-    void pushesToTheFrontendOnEveryUpdate() {
+    void pushesToTheFrontendOnEachTick() {
         // The map goes blank when these stop, which is how #68 first showed itself.
         service.updateField(1, "status", statusAt(0.0, 0.0));
+        service.broadcastRobots();
 
         Mockito.verify(messagingTemplate)
                 .convertAndSend(Mockito.eq("/topic/robot-locations"), Mockito.<Object>any());
@@ -214,10 +215,29 @@ class RobotServiceTest {
     }
 
     @Test
+    void doesNotPushFromTheTelemetryCallback() {
+        // scale with fleet size, outrunning the map's marker interpolation.
+        service.updateField(1, "status", statusAt(0.0, 0.0));
+        service.setAssignment(1, RobotService.STATUS_SERVING, "T6", "o-1");
+
+        Mockito.verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    void keepsPushingWhenNoTelemetryArrives() {
+        service.broadcastRobots();
+        service.broadcastRobots();
+
+        Mockito.verify(messagingTemplate, Mockito.times(2))
+                .convertAndSend(Mockito.eq("/topic/robot-locations"), Mockito.<Object>any());
+    }
+
+    @Test
     void countsTheFleetByStatusForTheDashboard() {
         service.updateField(1, "status", statusAt(0.0, 0.0));
         service.updateField(2, "status", statusAt(1.0, 1.0));
         service.setAssignment(1, RobotService.STATUS_SERVING, "T6", "o-1");
+        service.broadcastRobots(); // stats are recomputed on the tick, not per message
 
         assertEquals(1L, service.getStats().get("serving"));
         assertEquals(1L, service.getStats().get("waiting"),

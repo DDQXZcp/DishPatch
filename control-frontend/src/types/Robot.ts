@@ -6,6 +6,7 @@ export interface Robot {
   status: RobotStatus;
   x: number;
   y: number;
+  yaw: number;
   speed: number;
   battery: number;
   orderId?: string;
