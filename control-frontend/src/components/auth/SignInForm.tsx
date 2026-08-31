@@ -8,6 +8,10 @@ import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
 import { useAuth } from "../../context/AuthContext";
 
+
+const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+
+
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
@@ -18,7 +22,7 @@ export default function SignInForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const response = await fetch("/api/users/login", {
+    const response = await fetch(`${backendUrl}/api/users/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
