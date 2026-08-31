@@ -7,14 +7,20 @@ export interface UserMetaCardProps {
   githubUrl?: string;
 }
 
+const DEFAULT_GITHUB_URL = "https://github.com/DDQXZcp/DishPatch/";
+
 export default function UserMetaCard({
   name,
   role,
   location,
   linkedinUrl,
   avatarUrl,
-  githubUrl = "https://github.com/DDQXZcp/DishPatch/",
+  githubUrl = DEFAULT_GITHUB_URL,
 }: UserMetaCardProps) {
+  // Contributors without a personal profile fall back to the repository, so
+  // the link has to describe whichever one it actually points at.
+  const isRepoLink = githubUrl === DEFAULT_GITHUB_URL;
+
   return (
     <div className="rounded-2xl border border-brand-border bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md lg:p-6">
       <div className="flex flex-col items-center gap-5 xl:flex-row">
@@ -104,8 +110,12 @@ export default function UserMetaCard({
             href={githubUrl}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Open the DishPatch GitHub repository"
-            title="DishPatch GitHub repository"
+            aria-label={
+              isRepoLink
+                ? "Open the DishPatch GitHub repository"
+                : `Open ${name}'s GitHub profile`
+            }
+            title={isRepoLink ? "DishPatch GitHub repository" : `${name}'s GitHub`}
             className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-border bg-white text-brand shadow-sm transition-all duration-200 hover:border-brand hover:bg-brand-light hover:text-brand-hover focus:outline-none focus:ring-2 focus:ring-brand/20"
           >
             <svg

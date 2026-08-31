@@ -27,6 +27,10 @@ const contributors: Contributor[] = [
     name: "Brian Zhang",
     role: "Contributor",
     email: "u8051120@anu.edu.au",
+    linkedinUrl: "https://www.linkedin.com/in/brian-pengfei-zhang/",
+    // s=160 covers the 80px card at 2x DPI; the unsized default is ~7x larger.
+    avatarUrl: "https://avatars.githubusercontent.com/u/55237095?v=4&s=160",
+    githubUrl: "https://github.com/that1potato",
   },
   {
     name: "Yang Lin",
@@ -78,6 +82,7 @@ export default function Contributors() {
               avatarUrl={
                 contributor.avatarUrl ?? DEFAULT_AVATAR_URL
               }
+              githubUrl={contributor.githubUrl}
             />
           ))}
         </div>
