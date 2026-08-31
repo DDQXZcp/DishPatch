@@ -129,20 +129,24 @@ Set in [`docker-compose.wsl.yml`](./docker-compose.wsl.yml):
 |---|---|---|
 | `ROBOT_NAMESPACE` | `robot3` | Namespace and id. The backend reads the number from it |
 | `ROSBRIDGE_URL` | `ws://15.135.131.146:9090` | Fleet rosbridge to join. Unset runs local-only |
-| `INITIAL_X` / `INITIAL_Y` | `18.128` / `9.241` | Spawn point in map metres — drop point T3 |
+| `INITIAL_X` / `INITIAL_Y` | `39.029` / `14.729` | Spawn point in map metres — drop point `counter` |
 | `INITIAL_THETA` | `0.0` | Spawn heading in radians |
 | `INITIAL_BATTERY` | `100.0` | Starting battery percentage |
 | `ROS_DOMAIN_ID` | `0` | Only has to avoid clashing with other ROS on your machine |
 
 The spawn point must be free space in the staged map. Drop point poses are
-listed in [`map-source/the-hive-drop-points.yaml`](../map-source/the-hive-drop-points.yaml);
-robot1 starts on T1 and robot2 on T2.
+listed in [`map-source/the-hive-drop-points.yaml`](../map-source/the-hive-drop-points.yaml).
+The whole fleet spawns on `counter`, the kitchen counter the dispatcher parks
+idle robots at, so every robot boots already home. Sharing one spot is safe here
+— the Nav2 costmaps run `static_layer` and `inflation_layer` only, with no
+obstacle layer, so robots never appear in each other's plans.
 
 ## Adding robot4, robot5, …
 
-Copy `docker-compose.wsl.yml`, change `ROBOT_NAMESPACE`, `container_name` and
-the spawn point. The id must be unique across the whole fleet — two robots
-publishing `/robot3/status` will overwrite each other in the backend.
+Copy `docker-compose.wsl.yml` and change `ROBOT_NAMESPACE` and `container_name`;
+the spawn point can stay on `counter`. The id must be unique across the whole
+fleet — two robots publishing `/robot3/status` will overwrite each other in the
+backend.
 
 ## Stopping
 

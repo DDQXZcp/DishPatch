@@ -152,8 +152,10 @@ services:
       - ROBOT_NAMESPACE=robot1
       - AUTO_CYCLE=true
       - INITIAL_BATTERY=100.0
-      - INITIAL_X=8.911
-      - INITIAL_Y=9.241
+
+      # Init at the kitchen counter
+      - INITIAL_X=39.029
+      - INITIAL_Y=14.729
       - INITIAL_THETA=0.0
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
@@ -180,8 +182,10 @@ services:
       - ROBOT_NAMESPACE=robot2
       - AUTO_CYCLE=true
       - INITIAL_BATTERY=75.0
-      - INITIAL_X=13.100
-      - INITIAL_Y=9.241
+
+      # Init at the kitchen counter
+      - INITIAL_X=39.029
+      - INITIAL_Y=14.729
       - INITIAL_THETA=0.0
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
@@ -209,6 +213,11 @@ services:
   #     - ROBOT_NAMESPACE=robot3
   #     - AUTO_CYCLE=true
   #     - INITIAL_BATTERY=50.0
+  #
+  #     # drop point "counter", same as robot1.
+  #     - INITIAL_X=39.029
+  #     - INITIAL_Y=14.729
+  #     - INITIAL_THETA=0.0
   #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
   #
   #   depends_on:
