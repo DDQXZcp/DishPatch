@@ -27,7 +27,8 @@ This package is the sole writer; `RobotService.updateField` deliberately leaves
 status alone. `Pickup` and `Maintenance` have no producer yet.
 
 `RobotService.setAssignment` writes status, `destination` and `orderId` together —
-they always change as one — and each write broadcasts to the frontend. `yaw` comes
+they always change as one — and the frontend picks the write up on the next
+`RobotService.broadcastRobots()` tick. `yaw` comes
 from telemetry, not from here.
 
 ## The pipeline

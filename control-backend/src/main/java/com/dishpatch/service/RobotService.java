@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.stereotype.Controller;
 
@@ -43,6 +44,7 @@ public class RobotService {
     private final Gson gson = new Gson();
 
     private static final long EXPIRY_MILLIS = 20_000L; // 20 seconds
+    private static final long BROADCAST_INTERVAL_MS = 100L;
 
     @MessageMapping("/robot-data") // Temporary Placement. Should have a dedicated file for managing mappings
     private void manageIncomingData(@Payload List<Robot> updatedRobots) {
@@ -68,9 +70,6 @@ public class RobotService {
                     robotLastUpdMap.put(incomingRobot.getId(), System.currentTimeMillis());
                 }
             }
-
-            updateStats();
-            broadcast();
         }
 
     // Sort robots by status and filter out expired ones
@@ -129,6 +128,18 @@ public class RobotService {
         messagingTemplate.convertAndSend("/topic/robot-stats", stats);
     }
 
+    /**
+     * Pushes the fleet to the control frontend on a fixed tick.
+     */
+    @Scheduled(fixedDelay = BROADCAST_INTERVAL_MS)
+    public void broadcastRobots() {
+        try {
+            updateStats();
+            broadcast();
+        } catch (RuntimeException exception) {
+            logger.warning("Robot broadcast failed: " + exception);
+        }
+    }
 
     /**
      * Updates a single field of a robot from a rosbridge message.
@@ -173,15 +184,13 @@ public class RobotService {
             }
             robotLastUpdMap.put(id, System.currentTimeMillis());
         }
-
-        updateStats();
-        broadcast();
     }
 
     /**
-     * Records what the dispatcher has given a robot to do, and pushes it to the
-     * control frontend. Set in one call because they always change together — a
-     * robot that starts Serving is by definition carrying something somewhere.
+     * Records what the dispatcher has given a robot to do. Set in one call because
+     * they always change together — a robot that starts Serving is by definition
+     * carrying something somewhere. The write reaches the frontend on the next
+     * {@link #broadcastRobots()} tick rather than immediately.
      * <p>
      * Unknown ids are ignored — a robot that has not reported yet has nothing to set.
      *
@@ -206,9 +215,6 @@ public class RobotService {
                         robot.setOrderId(orderId);
                     });
         }
-
-        updateStats();
-        broadcast();
     }
 
     /**
