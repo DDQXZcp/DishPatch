@@ -14,10 +14,12 @@ export default function SignUpForm() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const response = await fetch("/api/users/signup", {
+    const response = await fetch(`${backendUrl}/api/users/signup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
