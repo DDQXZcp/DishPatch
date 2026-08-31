@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
-import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget";
+import { AlertsSnackbarStack } from "./AlertsNotificationsWidget";
 import {
   DEFAULT_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
@@ -560,25 +560,23 @@ export default function DashboardWidgets() {
   }
 
   return (
-    <AlertsProvider>
-      <div className="flex h-full flex-col gap-4">
-        <AlertsSnackbarStack />
-        {isDesktopWorkspace ? (
-          <div className="min-h-0 flex-1">
-            <DesktopWorkspace
-              onColumnResizeStart={handleColumnResizeStart}
-              onRowResizeStart={handleRowResizeStart}
-              rows={rows}
-            />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleWidgets.map((widget) => (
-              <MobileWidget key={widget.id} widget={widget} />
-            ))}
-          </div>
-        )}
-      </div>
-    </AlertsProvider>
+    <div className="flex h-full flex-col gap-4">
+      <AlertsSnackbarStack />
+      {isDesktopWorkspace ? (
+        <div className="min-h-0 flex-1">
+          <DesktopWorkspace
+            onColumnResizeStart={handleColumnResizeStart}
+            onRowResizeStart={handleRowResizeStart}
+            rows={rows}
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleWidgets.map((widget) => (
+            <MobileWidget key={widget.id} widget={widget} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

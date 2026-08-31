@@ -130,7 +130,7 @@ function useAlerts() {
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
   const { robots, orders: liveOrders } = useRobotContext();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => liveOrders ?? []);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [stuckSinceByRobotId, setStuckSinceByRobotId] = useState<Record<number, number>>({});
   const [arrivedAtByOrderId, setArrivedAtByOrderId] = useState<Record<string, number>>({});
@@ -138,10 +138,13 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const previousOrderStatusById = useRef<Map<string, OrderStatus>>(new Map());
   const seenOrderIds = useRef<Set<string>>(new Set());
-  // True once `orders` has been populated from a real data source (REST or
-  // websocket) at least once — guards against the pre-fetch `orders === []`
-  // render being mistaken for the transition baseline.
-  const hasLoadedOrdersOnce = useRef(false);
+  // True once `orders` holds real data (REST or websocket) — stops the
+  // pre-fetch `orders === []` render being mistaken for the transition
+  // baseline. Seeded from `liveOrders` alongside the state above: if the
+  // socket already has data at mount, the very first render must see it,
+  // otherwise the baseline is taken against `[]` and every existing order
+  // then looks brand new.
+  const hasLoadedOrdersOnce = useRef(liveOrders !== null);
   const hasBaselinedOrders = useRef(false);
 
   useEffect(() => {
