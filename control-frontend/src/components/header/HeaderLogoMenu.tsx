@@ -9,14 +9,10 @@ import {
   ChevronDownIcon,
   DollarLineIcon,
   GridIcon,
-  GroupIcon,
-  UserCircleIcon,
 } from "../../icons";
 
 const NAV_ITEMS = [
   { name: "Robot Control Dashboard", path: "/", icon: <GridIcon /> },
-  { name: "User Profile", path: "/profile", icon: <UserCircleIcon /> },
-  { name: "Contributors", path: "/contributors", icon: <GroupIcon /> },
 ];
 
 const EXTERNAL_LINKS = [
@@ -79,6 +75,9 @@ export default function HeaderLogoMenu() {
               tag="a"
               to={item.path}
               onItemClick={closeDropdown}
+              // Drop the default base classes: their px-4 outranks the px-3
+              // below, which would indent this item past the external links.
+              baseClassName=""
               className={`${navItemClassName} ${
                 isActive
                   ? "bg-brand-light text-brand-hover"
