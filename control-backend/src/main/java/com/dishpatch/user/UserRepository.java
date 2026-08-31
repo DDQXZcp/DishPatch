@@ -34,7 +34,7 @@ public class UserRepository {
 
     public UserRepository(
         DynamoDbClient dynamoDbClient,
-        @Value("${aws.tables.users}")
+        @Value("${aws.tables.control-backend.users}")
         String usersTableName
     ) {
         this.dynamoDbClient = dynamoDbClient;
