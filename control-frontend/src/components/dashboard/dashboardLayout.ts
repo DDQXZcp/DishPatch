@@ -8,10 +8,13 @@ export const DASHBOARD_RESET_VIEW_EVENT = "dashboard:reset-widget-view";
 export const MIN_ROW_HEIGHT = 260;
 export const DEFAULT_ROW_HEIGHT = 420;
 export const MIN_COLUMN_WIDTH = 18;
+export const MIN_STACK_PANE_HEIGHT = 96;
 
 export interface DashboardWidgetColumn {
   widgetIds: WidgetId[];
   width: number;
+  /** Percentages summing to 100, index-aligned with widgetIds. */
+  heights?: number[];
 }
 
 export interface DashboardWidgetRow {
@@ -31,7 +34,7 @@ const DEFAULT_ROWS: DashboardWidgetRow[] = [
     height: 480,
     columns: [
       { widgetIds: ["robot-map"], width: 61.5 },
-      { widgetIds: ["robot-list", "pos-orders"], width: 38.5 },
+      { widgetIds: ["robot-list", "pos-orders"], width: 38.5, heights: [50, 50] },
     ],
   },
 ];
@@ -194,6 +197,32 @@ export function setColumnPairWidths(
   });
 }
 
+export function setStackPairHeights(
+  rows: DashboardWidgetRow[],
+  rowId: string,
+  columnIndex: number,
+  stackIndex: number,
+  topHeight: number,
+  bottomHeight: number,
+) {
+  return rows.map((row) => {
+    const column = row.id === rowId ? row.columns[columnIndex] : undefined;
+
+    if (!column?.heights) {
+      return row;
+    }
+
+    const heights = [...column.heights];
+    heights[stackIndex] = topHeight;
+    heights[stackIndex + 1] = bottomHeight;
+
+    const columns = [...row.columns];
+    columns[columnIndex] = { ...column, heights };
+
+    return { ...row, columns: normalizeColumns(columns) };
+  });
+}
+
 function parseVisibleWidgetIds(value: unknown) {
   if (!Array.isArray(value) || !value.every(isWidgetId)) {
     return null;
@@ -235,7 +264,11 @@ function parseRows(value: unknown) {
         return null;
       }
 
-      const column = columnItem as { widgetIds?: unknown; width?: unknown };
+      const column = columnItem as {
+        widgetIds?: unknown;
+        width?: unknown;
+        heights?: unknown;
+      };
 
       if (
         !Array.isArray(column.widgetIds) ||
@@ -246,9 +279,14 @@ function parseRows(value: unknown) {
         return null;
       }
 
+      // Layouts saved before stack heights existed simply omit the field;
+      // normalizeStackHeights validates the contents from here.
       columns.push({
         widgetIds: column.widgetIds,
         width: column.width,
+        heights: Array.isArray(column.heights)
+          ? (column.heights as number[])
+          : undefined,
       });
     }
 
@@ -304,6 +342,7 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
       Number.isFinite(column.width) && column.width > 0
         ? column.width
         : fallbackWidth,
+    heights: normalizeStackHeights(column.widgetIds.length, column.heights),
   }));
   const totalWidth = rawColumns.reduce((total, column) => total + column.width, 0);
 
@@ -315,6 +354,18 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
     ...column,
     width: (column.width / totalWidth) * 100,
   }));
+}
+
+/** A length mismatch (a widget was hidden, say) self-heals to an even split. */
+function normalizeStackHeights(paneCount: number, heights?: number[]) {
+  const fallback = 100 / paneCount;
+  const raw =
+    heights?.length === paneCount
+      ? heights.map((h) => (Number.isFinite(h) && h > 0 ? h : fallback))
+      : Array.from({ length: paneCount }, () => fallback);
+  const total = raw.reduce((sum, h) => sum + h, 0);
+
+  return total > 0 ? raw.map((h) => (h / total) * 100) : raw.map(() => fallback);
 }
 
 function normalizeRowHeight(height: number) {
@@ -346,6 +397,7 @@ function cloneRows(rows: DashboardWidgetRow[]) {
     columns: row.columns.map((column) => ({
       ...column,
       widgetIds: [...column.widgetIds],
+      heights: column.heights ? [...column.heights] : undefined,
     })),
   }));
 }
