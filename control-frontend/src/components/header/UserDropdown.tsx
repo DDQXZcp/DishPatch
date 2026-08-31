@@ -1,11 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { Link } from "react-router";
-
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
 const ADMIN_NAME = "DishPatch Admin";
 const ADMIN_EMAIL = "admin@dishpatch.com";
+
+interface UserData {
+  userId: string;
+  name: string;
+  email: string;
+}
+
+const { userId } = useAuth();
+const [user, setUser] = useState<UserData | null>(null);
+const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+  
+useEffect(() => {
+  let cancelled = false;
+
+  fetch(`${backendUrl}/api/users/${userId}`)
+    .then((res) => res.json())
+    .then((data) => {
+      if (cancelled) return;
+      if (data.success) setUser(data.data);
+    })
+
+  return () => { cancelled = true; };
+}, [userId]);
 
 function DefaultUserIcon() {
   return (
@@ -164,7 +187,7 @@ export default function UserDropdown() {
       <button
         type="button"
         onClick={toggleDropdown}
-        aria-label={`Open user menu for ${ADMIN_NAME}`}
+        aria-label={`Open user menu for ${user?.name || "Admin"}`}
         aria-expanded={isOpen}
         aria-haspopup="menu"
         className="dropdown-toggle flex items-center rounded-xl px-2 py-1.5 text-gray-700 transition-colors hover:bg-brand-light"
@@ -174,7 +197,7 @@ export default function UserDropdown() {
         </span>
 
         <span className="mr-1 block font-medium text-theme-sm">
-          Admin
+          {user?.name || "Admin"}
         </span>
 
         <svg
@@ -205,11 +228,11 @@ export default function UserDropdown() {
       >
         <div className="rounded-xl bg-brand-light px-3 py-3">
           <span className="block font-semibold text-gray-800 text-theme-sm">
-            {ADMIN_NAME}
+            {user?.name || "Admin"}
           </span>
 
           <span className="mt-0.5 block text-theme-xs text-gray-500">
-            {ADMIN_EMAIL}
+            {user?.email}
           </span>
         </div>
 
