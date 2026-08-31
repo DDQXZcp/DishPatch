@@ -34,7 +34,7 @@ const DEFAULT_ROWS: DashboardWidgetRow[] = [
     height: 480,
     columns: [
       { widgetIds: ["robot-map"], width: 61.5 },
-      { widgetIds: ["robot-list", "pos-orders"], width: 38.5, heights: [50, 50] },
+      { widgetIds: ["robot-list", "pos-orders"], width: 38.5, heights: [35, 65] },
     ],
   },
 ];
