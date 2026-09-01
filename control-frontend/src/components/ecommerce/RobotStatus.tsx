@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
+import WidgetMessage from "../common/WidgetMessage";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import type { Robot, RobotStatus } from "../../types/Robot";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
@@ -356,7 +357,7 @@ interface RobotStatusProps {
 }
 
 export default function RobotStatus({ framed = true }: RobotStatusProps) {
-  const { robots, orders } = useRobotContext();
+  const { robots, orders, connectionState } = useRobotContext();
   const { activeFilters } = useRobotStatusFilters();
   const { selectRobot } = useDashboardSelection();
   const { highlightedRobotId } = useDashboardHighlight();
@@ -385,6 +386,28 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
           </h3>
         </div>
       )}
+
+      {/* Same wording, same component as the POS widget: the two are views of
+          one backend and should report its state identically. */}
+      {connectionState === "disconnected" && (
+        <WidgetMessage>Not connected</WidgetMessage>
+      )}
+
+      {connectionState === "connecting" && robots.length === 0 && (
+        <WidgetMessage>Connecting…</WidgetMessage>
+      )}
+
+      {connectionState === "connected" && robots.length === 0 && (
+        <WidgetMessage>No robots reporting.</WidgetMessage>
+      )}
+
+      {connectionState === "connected" &&
+        robots.length > 0 &&
+        filteredRobots.length === 0 && (
+          <WidgetMessage>No robots match the selected filters.</WidgetMessage>
+        )}
+
+      {connectionState !== "disconnected" && filteredRobots.length > 0 && (
       <div className="max-w-full overflow-x-auto">
         <Table>
           {/* Table Header */}
@@ -472,6 +495,7 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
           </TableBody>
         </Table>
       </div>
+      )}
     </>
   );
 

@@ -18,6 +18,7 @@ import {
 } from "../ui/table";
 
 import Badge from "../ui/badge/Badge";
+import WidgetMessage from "../common/WidgetMessage";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { ArrowUpIcon } from "../../icons";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
@@ -112,15 +113,12 @@ interface OrdersContextValue {
   orders: Order[];
   filteredOrders: Order[];
   isLoading: boolean;
-  isRefreshing: boolean;
-  loadError: string | null;
   actionError: string | null;
   cancellingOrderId: string | null;
   timeRange: TimeRange;
   setTimeRange: (range: TimeRange) => void;
   timeInfoByOrderId: Map<string, OrderTimeInfo>;
   now: number;
-  refresh: () => void;
   cancelOrder: (order: Order) => void;
 }
 
@@ -140,9 +138,6 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const { orders: liveOrders } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -161,12 +156,11 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loadOrders = useCallback(async (initialLoad = false) => {
-    if (initialLoad) {
-      setIsLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
+  // Only ever the initial load now. A failure here needs no retry affordance:
+  // the websocket pushes the full order list and will overwrite this the moment
+  // it delivers, and if it cannot, the connection state says so.
+  const loadOrders = useCallback(async () => {
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${BACKEND_URL}/api/orders`, {
@@ -188,20 +182,16 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       }
 
       setOrders(result.data);
-      setLoadError(null);
       setActionError(null);
     } catch (error) {
-      setLoadError(
-        error instanceof Error ? error.message : "Unable to load orders",
-      );
+      console.warn("Unable to load orders", error);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadOrders(true);
+    void loadOrders();
   }, [loadOrders]);
 
   // Backend pushes the full order list on a timer; keep the table in sync.
@@ -209,7 +199,6 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     if (liveOrders !== null) {
       setOrders(liveOrders);
       setIsLoading(false);
-      setLoadError(null);
     }
   }, [liveOrders]);
 
@@ -302,25 +291,18 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     });
   }, [orders, timeRange, timeInfoByOrderId]);
 
-  const refresh = () => {
-    void loadOrders();
-  };
-
   return (
     <OrdersContext.Provider
       value={{
         orders,
         filteredOrders,
         isLoading,
-        isRefreshing,
-        loadError,
         actionError,
         cancellingOrderId,
         timeRange,
         setTimeRange,
         timeInfoByOrderId,
         now,
-        refresh,
         cancelOrder: (order) => void cancelOrder(order),
       }}
     >
@@ -415,17 +397,15 @@ export default function Orders({ framed = true }: OrdersProps) {
     orders,
     filteredOrders,
     isLoading,
-    isRefreshing,
-    loadError,
     actionError,
     cancellingOrderId,
     timeRange,
     timeInfoByOrderId,
     now,
-    refresh,
     cancelOrder,
   } = useOrders();
 
+  const { connectionState } = useRobotContext();
   const { selectOrder } = useDashboardSelection();
   const { highlightedOrderId } = useDashboardHighlight();
   const highlightedRowRef = useRef<HTMLTableRowElement>(null);
@@ -453,46 +433,35 @@ export default function Orders({ framed = true }: OrdersProps) {
         </div>
       )}
 
-      {isLoading && (
-        <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
-          Loading orders...
-        </div>
+      {/* Checked before loading and before the empty state: an outage must
+          never fall through to "No orders have been created yet". */}
+      {connectionState === "disconnected" && (
+        <WidgetMessage>Not connected</WidgetMessage>
       )}
 
-      {!isLoading && loadError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>{loadError}</span>
-
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={isRefreshing}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <RefreshIcon spinning={isRefreshing} />
-
-              {isRefreshing ? "Retrying..." : "Try again"}
-            </button>
-          </div>
-        </div>
+      {connectionState !== "disconnected" && isLoading && (
+        <WidgetMessage>Loading orders...</WidgetMessage>
       )}
 
-      {!isLoading && !loadError && actionError && (
+      {!isLoading && actionError && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
           {actionError}
         </div>
       )}
 
-      {!isLoading && !loadError && filteredOrders.length === 0 && (
-        <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
-          {orders.length === 0
-            ? "No orders have been created yet."
-            : `No orders ${TIME_RANGE_CONFIG[timeRange].description}.`}
-        </div>
-      )}
+      {connectionState === "connected" &&
+        !isLoading &&
+        filteredOrders.length === 0 && (
+          <WidgetMessage>
+            {orders.length === 0
+              ? "No orders have been created yet."
+              : `No orders ${TIME_RANGE_CONFIG[timeRange].description}.`}
+          </WidgetMessage>
+        )}
 
-      {!isLoading && !loadError && filteredOrders.length > 0 && (
+      {connectionState !== "disconnected" &&
+        !isLoading &&
+        filteredOrders.length > 0 && (
         <div className="max-w-full overflow-x-auto">
           <Table>
             <TableHeader className="border-y border-gray-100 dark:border-gray-800">
@@ -672,41 +641,6 @@ function formatTableNumber(order: OrderWithTable): string {
   }
 
   return String(value);
-}
-
-interface RefreshIconProps {
-  spinning?: boolean;
-  className?: string;
-}
-
-function RefreshIcon({
-  spinning = false,
-  className = "h-5 w-5",
-}: RefreshIconProps) {
-  return (
-    <svg
-      className={`stroke-current ${className} ${
-        spinning ? "animate-spin" : ""
-      }`}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M20 11a8 8 0 1 0-2.34 5.66"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <path
-        d="M20 4v7h-7"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 function LoadingIcon() {
