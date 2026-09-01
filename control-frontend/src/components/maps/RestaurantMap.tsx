@@ -585,6 +585,8 @@ export default function RestaurantMap() {
       zoomDelta: 0.5,
       zoomSnap: 0,
       attributionControl: false,
+      center: L.latLngBounds(bounds).getCenter(),
+      zoom: MAP_MIN_ZOOM,
     });
 
     mapRef.current = map;
