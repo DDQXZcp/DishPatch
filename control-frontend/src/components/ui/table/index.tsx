@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { forwardRef, ReactNode, type HTMLAttributes } from "react";
 
 // Props for Table
 interface TableProps {
@@ -19,7 +19,10 @@ interface TableBodyProps {
 }
 
 // Props for TableRow
-interface TableRowProps {
+// Extends the native <tr> attributes so rows can be made clickable and
+// selectable; every added prop is optional, so existing call sites are
+// unaffected.
+interface TableRowProps extends HTMLAttributes<HTMLTableRowElement> {
   children: ReactNode; // Cells (th or td)
   className?: string; // Optional className for styling
 }
@@ -47,9 +50,18 @@ const TableBody: React.FC<TableBodyProps> = ({ children, className }) => {
 };
 
 // TableRow Component
-const TableRow: React.FC<TableRowProps> = ({ children, className }) => {
-  return <tr className={className}>{children}</tr>;
-};
+// Forwards a ref so a caller can scroll a particular row into view.
+const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(
+  ({ children, className, ...rest }, ref) => {
+    return (
+      <tr ref={ref} className={className} {...rest}>
+        {children}
+      </tr>
+    );
+  },
+);
+
+TableRow.displayName = "TableRow";
 
 // TableCell Component
 const TableCell: React.FC<TableCellProps> = ({
