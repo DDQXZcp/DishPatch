@@ -380,7 +380,12 @@ export function AlertsSnackbarStack() {
 
   useEffect(() => {
     return () => {
+      // Reset both refs as a pair: clearing the timers while leaving their ids
+      // in scheduledInfoIds would make the guard above refuse to ever schedule
+      // them again, so an alert already on screen could never auto-dismiss.
       timeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+      timeoutIdsRef.current = [];
+      scheduledInfoIds.current.clear();
     };
   }, []);
 
