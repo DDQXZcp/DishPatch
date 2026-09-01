@@ -28,7 +28,7 @@ public class UserService {
     }
 
     private static boolean validEmail(String email) {
-        return Pattern.matches("\\S+@\\S+\\.\\S+", email);
+        return email != null && Pattern.matches("\\S+@\\S+\\.\\S+", email);
     }
 
     private Map<String, Object> cleanResponse(Map<String, Object> response) {
@@ -59,8 +59,20 @@ public class UserService {
     }
 
     public Optional<Map<String, Object>> updatePassword(String userId, String password) {
-        String hashedPassword = hashPassword(password);
-        return userRepository.updatePassword(userId, hashedPassword).map(this::cleanResponse);
+        Optional<Map<String, Object>> result = userRepository.findById(userId);
+
+        if (result.isPresent()) {
+            Map<String, Object> user = result.get();
+
+            if (!matches(password, (String) user.get("password"))) {
+                throw new IllegalArgumentException("Invalid password");
+            }
+
+            String hashedPassword = hashPassword(password);
+            return userRepository.updatePassword(userId, hashedPassword).map(this::cleanResponse);
+        }
+        
+        return Optional.empty();
     }
 
     public Optional<Map<String, Object>> getUser(String userId) {

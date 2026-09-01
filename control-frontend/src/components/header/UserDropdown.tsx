@@ -153,10 +153,15 @@ export default function UserDropdown() {
   email: string;
 }
 
-  const { userId } = useAuth();
+  const { userId, logout } = useAuth();
   const [user, setUser] = useState<UserData | null>(null);
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-    
+  
+  const handleSignOut = () => {
+    logout();
+    closeDropdown();
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -281,7 +286,7 @@ export default function UserDropdown() {
 
         <Link
           to="/signin"
-          onClick={closeDropdown}
+          onClick={handleSignOut}
           className="group mt-3 flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-gray-700 text-theme-sm transition-colors hover:bg-brand-light hover:text-brand"
         >
           <span className="text-gray-500 transition-colors group-hover:text-brand">
