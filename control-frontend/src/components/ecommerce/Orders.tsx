@@ -25,7 +25,11 @@ import {
   useDashboardHighlight,
   useDashboardSelection,
 } from "../../context/DashboardSelectionContext";
-import { formatOrderItemLine } from "../../utils/orderTable";
+import {
+  formatOrderAge,
+  formatOrderItemLine,
+  ORDER_OVERDUE_MS,
+} from "../../utils/orderTable";
 
 import type { Order, OrdersApiResponse, OrderStatus } from "../../types/Order";
 
@@ -69,6 +73,20 @@ const TIME_RANGES: TimeRange[] = ["24h", "7d"];
 
 const POS_ORDERS_URL = "https://pos.dish-patch.com/orders";
 
+/**
+ * The age column only resolves to minutes, so this is as often as it needs to
+ * be recomputed. The table already re-renders at the websocket push rate, but
+ * that is incidental and stops the moment the socket drops — exactly when a
+ * stale order matters most — so the clock is made explicit.
+ */
+const AGE_TICK_MS = 30 * 1000;
+
+interface OrderTimeInfo {
+  createdAt: number;
+  /** Pre-formatted so ~1,200 toLocaleString calls stay out of the render path. */
+  absoluteLabel: string;
+}
+
 const STATUS_CONFIG: Record<
   OrderStatus,
   {
@@ -100,6 +118,8 @@ interface OrdersContextValue {
   cancellingOrderId: string | null;
   timeRange: TimeRange;
   setTimeRange: (range: TimeRange) => void;
+  timeInfoByOrderId: Map<string, OrderTimeInfo>;
+  now: number;
   refresh: () => void;
   cancelOrder: (order: Order) => void;
 }
@@ -131,6 +151,15 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   );
 
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), AGE_TICK_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const loadOrders = useCallback(async (initialLoad = false) => {
     if (initialLoad) {
@@ -236,13 +265,42 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Parsed and formatted once per order list rather than per render: the table
+  // is unvirtualised and re-renders at the push rate, so doing this inline
+  // would mean thousands of date parses a second.
+  const timeInfoByOrderId = useMemo(() => {
+    const next = new Map<string, OrderTimeInfo>();
+
+    orders.forEach((order) => {
+      const createdAt = Date.parse(order.orderDate);
+
+      next.set(order.orderId, {
+        createdAt,
+        absoluteLabel: Number.isNaN(createdAt)
+          ? "Unknown time"
+          : new Date(createdAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+      });
+    });
+
+    return next;
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     const cutoff = Date.now() - TIME_RANGE_CONFIG[timeRange].windowMs;
 
-    return orders.filter(
-      (order) => new Date(order.orderDate).getTime() >= cutoff,
-    );
-  }, [orders, timeRange]);
+    return orders.filter((order) => {
+      const createdAt = timeInfoByOrderId.get(order.orderId)?.createdAt;
+
+      // An order whose date will not parse is kept rather than silently
+      // dropped; its age cell renders an em dash.
+      return createdAt === undefined || Number.isNaN(createdAt)
+        ? true
+        : createdAt >= cutoff;
+    });
+  }, [orders, timeRange, timeInfoByOrderId]);
 
   const refresh = () => {
     void loadOrders();
@@ -260,6 +318,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         cancellingOrderId,
         timeRange,
         setTimeRange,
+        timeInfoByOrderId,
+        now,
         refresh,
         cancelOrder: (order) => void cancelOrder(order),
       }}
@@ -360,6 +420,8 @@ export default function Orders({ framed = true }: OrdersProps) {
     actionError,
     cancellingOrderId,
     timeRange,
+    timeInfoByOrderId,
+    now,
     refresh,
     cancelOrder,
   } = useOrders();
@@ -465,6 +527,13 @@ export default function Orders({ framed = true }: OrdersProps) {
 
                 <TableCell
                   isHeader
+                  className="min-w-[60px] py-3 pr-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Age
+                </TableCell>
+
+                <TableCell
+                  isHeader
                   className="min-w-[50px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
                 >
                   Action
@@ -479,6 +548,16 @@ export default function Orders({ framed = true }: OrdersProps) {
                 const isCancelling = cancellingOrderId === order.orderId;
 
                 const isHighlighted = order.orderId === highlightedOrderId;
+
+                const timeInfo = timeInfoByOrderId.get(order.orderId);
+
+                // Only a Preparing order can be late. A Completed one from
+                // yesterday is old, not overdue.
+                const isOverdue =
+                  canCancel &&
+                  timeInfo !== undefined &&
+                  !Number.isNaN(timeInfo.createdAt) &&
+                  now - timeInfo.createdAt > ORDER_OVERDUE_MS;
 
                 return (
                   <TableRow
@@ -521,6 +600,21 @@ export default function Orders({ framed = true }: OrdersProps) {
                       >
                         {order.orderStatus}
                       </Badge>
+                    </TableCell>
+
+                    <TableCell
+                      className={`py-3 pr-3 text-theme-sm tabular-nums ${
+                        isOverdue
+                          ? "font-medium text-orange-500 dark:text-orange-400"
+                          : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      <time
+                        dateTime={order.orderDate}
+                        title={timeInfo?.absoluteLabel ?? "Unknown time"}
+                      >
+                        {formatOrderAge(timeInfo?.createdAt ?? Number.NaN, now)}
+                      </time>
                     </TableCell>
 
                     <TableCell className="py-3 text-end">

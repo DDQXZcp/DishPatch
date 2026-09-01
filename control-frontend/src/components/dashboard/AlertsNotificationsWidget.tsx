@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
+import { ORDER_OVERDUE_MS } from "../../utils/orderTable";
 import type { Order, OrderStatus, OrdersApiResponse } from "../../types/Order";
 import type { Robot } from "../../types/Robot";
 
@@ -51,14 +52,14 @@ function buildAlerts(
 
     const createdTime = Date.parse(order.orderDate);
     
-    return !Number.isNaN(createdTime) && now - createdTime > 15 * 60 * 1000;
+    return !Number.isNaN(createdTime) && now - createdTime > ORDER_OVERDUE_MS;
   });
 
   overdueOrders.forEach((order) => {
     alerts.push({
       id: `overdue-${order.orderId}`,
       title: "Order delayed",
-      detail: `Order ${order.displayId} has been preparing at table ${getTableLabel(order)} for over 15 minutes.`,
+      detail: `Order ${order.displayId} has been preparing at table ${getTableLabel(order)} for over ${ORDER_OVERDUE_MS / 60000} minutes.`,
       severity: "warning",
     });
   });
