@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   Table,
@@ -9,21 +17,25 @@ import {
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import type { Robot, RobotStatus } from '../../types/Robot';
-import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import type { Robot, RobotStatus } from "../../types/Robot";
+import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import {
   useDashboardHighlight,
   useDashboardSelection,
-} from '../../context/DashboardSelectionContext';
-import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
+} from "../../context/DashboardSelectionContext";
+import {
+  buildOrderTableIndex,
+  formatOrderItemLine,
+  type OrderTableInfo,
+} from "../../utils/orderTable";
 
-const ALL_STATUSES: RobotStatus[] = ['Serving', 'Returning', 'Waiting', 'Maintenance'];
+const ALL_STATUSES: RobotStatus[] = ["Serving", "Returning", "Waiting"];
 
 const STATUS_COLORS: Record<RobotStatus, string> = {
-  Serving: 'bg-green-500',
-  Returning: 'bg-blue-500',
-  Waiting: 'bg-purple-500',
-  Maintenance: 'bg-red-500',
+  Serving: "bg-green-500",
+  Returning: "bg-blue-500",
+  Waiting: "bg-purple-500",
+  Maintenance: "bg-red-500",
 };
 
 interface RobotStatusFilterContextValue {
@@ -47,8 +59,14 @@ function useRobotStatusFilters() {
   return context;
 }
 
-export function RobotStatusFilterProvider({ children }: { children: ReactNode }) {
-  const [activeFilters, setActiveFilters] = useState<Set<RobotStatus>>(new Set());
+export function RobotStatusFilterProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [activeFilters, setActiveFilters] = useState<Set<RobotStatus>>(
+    new Set(),
+  );
 
   const toggleFilter = (status: RobotStatus) => {
     setActiveFilters((prev) => {
@@ -147,33 +165,51 @@ export function RobotStatusHeaderActions() {
               onClick={() => toggleFilter(status)}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
             >
-              <div className={`flex h-4 w-4 items-center justify-center rounded border ${
-                activeFilters.has(status)
-                  ? "border-brand-500 bg-brand-500"
-                  : "border-gray-300 dark:border-gray-600"
-              }`}>
+              <div
+                className={`flex h-4 w-4 items-center justify-center rounded border ${
+                  activeFilters.has(status)
+                    ? "border-brand-500 bg-brand-500"
+                    : "border-gray-300 dark:border-gray-600"
+                }`}
+              >
                 {activeFilters.has(status) && (
-                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  <svg
+                    className="h-3 w-3 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={3}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 )}
               </div>
-              <div className={`h-2.5 w-2.5 rounded-full ${STATUS_COLORS[status]}`} />
+              <div
+                className={`h-2.5 w-2.5 rounded-full ${STATUS_COLORS[status]}`}
+              />
               <span>{status}</span>
             </button>
           ))}
+
+          <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+
+          <button
+            type="button"
+            onClick={() => {
+              clearFilters();
+              setFilterOpen(false);
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <span className="flex h-4 w-4 items-center justify-center" />
+            <span>Reset</span>
+          </button>
         </Dropdown>
       </div>
-      <button
-        onClick={clearFilters}
-        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-theme-xs font-medium shadow-theme-xs ${
-          activeFilters.size > 0
-            ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-            : "border-gray-200 bg-gray-50 text-gray-400 cursor-default dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
-        }`}
-      >
-        See all
-      </button>
     </div>
   );
 }
@@ -186,7 +222,10 @@ function CurrentTaskCell({
   orderTable: OrderTableInfo | undefined;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeTimeoutRef = useRef<number | null>(null);
 
@@ -282,7 +321,11 @@ function CurrentTaskCell({
         createPortal(
           <div
             data-current-task-popover
-            style={{ position: "fixed", top: position.top, left: position.left }}
+            style={{
+              position: "fixed",
+              top: position.top,
+              left: position.left,
+            }}
             className="z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-theme-lg dark:border-gray-800 dark:bg-gray-900"
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
@@ -321,9 +364,10 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
 
   const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
 
-  const filteredRobots = activeFilters.size === 0
-    ? robots
-    : robots.filter((r) => activeFilters.has(r.status));
+  const filteredRobots =
+    activeFilters.size === 0
+      ? robots
+      : robots.filter((r) => activeFilters.has(r.status));
 
   // One ref for whichever row is currently lit, rather than one per row: the
   // list is short, but this keeps the pattern identical to the POS table where
@@ -380,49 +424,49 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
               const isHighlighted = robot.id === highlightedRobotId;
 
               return (
-              <TableRow
-                key={robot.id}
-                ref={isHighlighted ? highlightedRowRef : undefined}
-                onClick={() => selectRobot(robot.id)}
-                aria-selected={isHighlighted}
-                className={`h-[52px] cursor-pointer transition-colors ${
-                  isHighlighted
-                    ? "bg-brand-50 dark:bg-brand-500/10"
-                    : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                }`}
-              >
-                <TableCell className="py-3">
-                  <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                    {robot.name}
-                  </p>
-                </TableCell>
-                <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  {robot.speed.toFixed(2)} kph
-                </TableCell>
-                <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
-                  <Badge
-                    size="sm"
-                    color={
-                      robot.status === "Serving"
-                        ? "success"
-                        : robot.status === "Returning"
-                        ? "info"
-                        : robot.status === "Waiting"
-                        ? "purple"
-                        : "error"  // Maintenance
+                <TableRow
+                  key={robot.id}
+                  ref={isHighlighted ? highlightedRowRef : undefined}
+                  onClick={() => selectRobot(robot.id)}
+                  aria-selected={isHighlighted}
+                  className={`h-[52px] cursor-pointer transition-colors ${
+                    isHighlighted
+                      ? "bg-brand-50 dark:bg-brand-500/10"
+                      : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                  }`}
+                >
+                  <TableCell className="py-3">
+                    <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                      {robot.name}
+                    </p>
+                  </TableCell>
+                  <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                    {robot.speed.toFixed(2)} kph
+                  </TableCell>
+                  <TableCell className="py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                    <Badge
+                      size="sm"
+                      color={
+                        robot.status === "Serving"
+                          ? "success"
+                          : robot.status === "Returning"
+                            ? "info"
+                            : robot.status === "Waiting"
+                              ? "purple"
+                              : "error" // Maintenance
+                      }
+                    >
+                      {robot.status}
+                    </Badge>
+                  </TableCell>
+                  <CurrentTaskCell
+                    orderTable={
+                      robot.status === "Serving" && robot.orderId
+                        ? orderTableById.get(robot.orderId)
+                        : undefined
                     }
-                  >
-                    {robot.status}
-                  </Badge>
-                </TableCell>
-                <CurrentTaskCell
-                  orderTable={
-                    robot.status === "Serving" && robot.orderId
-                      ? orderTableById.get(robot.orderId)
-                      : undefined
-                  }
-                />
-              </TableRow>
+                  />
+                </TableRow>
               );
             })}
           </TableBody>

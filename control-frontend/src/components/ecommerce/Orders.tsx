@@ -19,6 +19,7 @@ import {
 
 import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
+import { ArrowUpIcon } from "../../icons";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import {
   useDashboardHighlight,
@@ -26,11 +27,7 @@ import {
 } from "../../context/DashboardSelectionContext";
 import { formatOrderItemLine } from "../../utils/orderTable";
 
-import type {
-  Order,
-  OrdersApiResponse,
-  OrderStatus,
-} from "../../types/Order";
+import type { Order, OrdersApiResponse, OrderStatus } from "../../types/Order";
 
 type OrderWithTable = Order & {
   tableNo?: string | number;
@@ -48,15 +45,29 @@ interface UpdateOrderApiResponse {
   data: OrderWithTable | null;
 }
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:8080";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
 
-const ALL_STATUSES: OrderStatus[] = [
-  "Preparing",
-  "Completed",
-  "Cancelled",
-];
+type TimeRange = "24h" | "7d";
+
+const TIME_RANGE_CONFIG: Record<
+  TimeRange,
+  { label: string; description: string; windowMs: number }
+> = {
+  "24h": {
+    label: "Last 24 hours",
+    description: "in the last 24 hours",
+    windowMs: 24 * 60 * 60 * 1000,
+  },
+  "7d": {
+    label: "Last 7 days",
+    description: "in the last 7 days",
+    windowMs: 7 * 24 * 60 * 60 * 1000,
+  },
+};
+
+const TIME_RANGES: TimeRange[] = ["24h", "7d"];
+
+const POS_ORDERS_URL = "https://pos.dish-patch.com/orders";
 
 const STATUS_CONFIG: Record<
   OrderStatus,
@@ -87,107 +98,78 @@ interface OrdersContextValue {
   loadError: string | null;
   actionError: string | null;
   cancellingOrderId: string | null;
-  activeFilters: Set<OrderStatus>;
-  toggleFilter: (status: OrderStatus) => void;
-  clearFilters: () => void;
+  timeRange: TimeRange;
+  setTimeRange: (range: TimeRange) => void;
   refresh: () => void;
   cancelOrder: (order: Order) => void;
 }
 
-const OrdersContext = createContext<OrdersContextValue | null>(
-  null,
-);
+const OrdersContext = createContext<OrdersContextValue | null>(null);
 
 function useOrders() {
   const context = useContext(OrdersContext);
 
   if (!context) {
-    throw new Error(
-      "useOrders must be used within an OrdersProvider",
-    );
+    throw new Error("useOrders must be used within an OrdersProvider");
   }
 
   return context;
 }
 
-export function OrdersProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function OrdersProvider({ children }: { children: ReactNode }) {
   const { orders: liveOrders } = useRobotContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] =
-    useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const [loadError, setLoadError] = useState<
-    string | null
-  >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [actionError, setActionError] = useState<
-    string | null
-  >(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const [cancellingOrderId, setCancellingOrderId] =
-    useState<string | null>(null);
-
-  const [activeFilters, setActiveFilters] =
-    useState<Set<OrderStatus>>(new Set());
-
-  const loadOrders = useCallback(
-    async (initialLoad = false) => {
-      if (initialLoad) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
-
-      try {
-        const response = await fetch(
-          `${BACKEND_URL}/api/orders`,
-          {
-            cache: "no-store",
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            `Unable to load orders: HTTP ${response.status}`,
-          );
-        }
-
-        const result =
-          (await response.json()) as OrdersApiResponse;
-
-        if (!result.success) {
-          throw new Error(
-            result.message || "Unable to load orders",
-          );
-        }
-
-        if (!Array.isArray(result.data)) {
-          throw new Error(
-            "The orders API returned an invalid response",
-          );
-        }
-
-        setOrders(result.data);
-        setLoadError(null);
-        setActionError(null);
-      } catch (error) {
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load orders",
-        );
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [],
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(
+    null,
   );
+
+  const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+
+  const loadOrders = useCallback(async (initialLoad = false) => {
+    if (initialLoad) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/orders`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unable to load orders: HTTP ${response.status}`);
+      }
+
+      const result = (await response.json()) as OrdersApiResponse;
+
+      if (!result.success) {
+        throw new Error(result.message || "Unable to load orders");
+      }
+
+      if (!Array.isArray(result.data)) {
+        throw new Error("The orders API returned an invalid response");
+      }
+
+      setOrders(result.data);
+      setLoadError(null);
+      setActionError(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Unable to load orders",
+      );
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadOrders(true);
@@ -203,10 +185,7 @@ export function OrdersProvider({
   }, [liveOrders]);
 
   const cancelOrder = async (order: Order) => {
-    if (
-      order.orderStatus !== "Preparing" ||
-      cancellingOrderId !== null
-    ) {
+    if (order.orderStatus !== "Preparing" || cancellingOrderId !== null) {
       return;
     }
 
@@ -215,9 +194,7 @@ export function OrdersProvider({
 
     try {
       const response = await fetch(
-        `${BACKEND_URL}/api/orders/${encodeURIComponent(
-          order.orderId,
-        )}`,
+        `${BACKEND_URL}/api/orders/${encodeURIComponent(order.orderId)}`,
         {
           method: "PUT",
           headers: {
@@ -231,18 +208,11 @@ export function OrdersProvider({
 
       const result = (await response
         .json()
-        .catch(() => null)) as
-        | UpdateOrderApiResponse
-        | null;
+        .catch(() => null)) as UpdateOrderApiResponse | null;
 
-      if (
-        !response.ok ||
-        !result?.success ||
-        !result.data
-      ) {
+      if (!response.ok || !result?.success || !result.data) {
         throw new Error(
-          result?.message ||
-            `Unable to cancel order: HTTP ${response.status}`,
+          result?.message || `Unable to cancel order: HTTP ${response.status}`,
         );
       }
 
@@ -259,44 +229,20 @@ export function OrdersProvider({
       );
     } catch (error) {
       setActionError(
-        error instanceof Error
-          ? error.message
-          : "Unable to cancel the order",
+        error instanceof Error ? error.message : "Unable to cancel the order",
       );
     } finally {
       setCancellingOrderId(null);
     }
   };
 
-  const toggleFilter = (status: OrderStatus) => {
-    setActiveFilters((previousFilters) => {
-      const updatedFilters = new Set(
-        previousFilters,
-      );
-
-      if (updatedFilters.has(status)) {
-        updatedFilters.delete(status);
-      } else {
-        updatedFilters.add(status);
-      }
-
-      return updatedFilters;
-    });
-  };
-
-  const clearFilters = () => {
-    setActiveFilters(new Set());
-  };
-
   const filteredOrders = useMemo(() => {
-    if (activeFilters.size === 0) {
-      return orders;
-    }
+    const cutoff = Date.now() - TIME_RANGE_CONFIG[timeRange].windowMs;
 
-    return orders.filter((order) =>
-      activeFilters.has(order.orderStatus),
+    return orders.filter(
+      (order) => new Date(order.orderDate).getTime() >= cutoff,
     );
-  }, [orders, activeFilters]);
+  }, [orders, timeRange]);
 
   const refresh = () => {
     void loadOrders();
@@ -312,9 +258,8 @@ export function OrdersProvider({
         loadError,
         actionError,
         cancellingOrderId,
-        activeFilters,
-        toggleFilter,
-        clearFilters,
+        timeRange,
+        setTimeRange,
         refresh,
         cancelOrder: (order) => void cancelOrder(order),
       }}
@@ -325,14 +270,7 @@ export function OrdersProvider({
 }
 
 export function OrdersHeaderActions() {
-  const {
-    isLoading,
-    isRefreshing,
-    refresh,
-    activeFilters,
-    toggleFilter,
-    clearFilters,
-  } = useOrders();
+  const { timeRange, setTimeRange } = useOrders();
   const [filterOpen, setFilterOpen] = useState(false);
 
   return (
@@ -341,70 +279,39 @@ export function OrdersHeaderActions() {
       onMouseDown={(event) => event.stopPropagation()}
       onDragStart={(event) => event.preventDefault()}
     >
-      <button
-        type="button"
-        onClick={refresh}
-        disabled={isLoading || isRefreshing}
-        aria-label={
-          isRefreshing
-            ? "Refreshing orders"
-            : "Refresh orders"
-        }
-        title={
-          isRefreshing
-            ? "Refreshing orders"
-            : "Refresh orders"
-        }
-        className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-      >
-        <RefreshIcon
-          spinning={isRefreshing}
-          className="h-4 w-4"
-        />
-      </button>
-
       <div className="relative">
         <button
           type="button"
-          onClick={() =>
-            setFilterOpen((open) => !open)
-          }
-          className={`dropdown-toggle inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-theme-xs font-medium shadow-theme-xs ${
-            activeFilters.size > 0
-              ? "border-brand-500 bg-brand-50 text-brand-600 dark:border-brand-400 dark:bg-brand-900/20 dark:text-brand-400"
-              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-          }`}
+          onClick={() => setFilterOpen((open) => !open)}
+          className="dropdown-toggle inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
           aria-expanded={filterOpen}
-          aria-label="Filter orders by status"
+          aria-label="Filter orders by time range"
         >
           <FilterIcon />
 
           <span>Filter</span>
-
-          {activeFilters.size > 0 && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-xs text-white">
-              {activeFilters.size}
-            </span>
-          )}
         </button>
 
         <Dropdown
           isOpen={filterOpen}
           onClose={() => setFilterOpen(false)}
-          className="w-52 p-2"
+          className="w-44 p-2"
         >
-          {ALL_STATUSES.map((status) => {
-            const isSelected = activeFilters.has(status);
+          {TIME_RANGES.map((range) => {
+            const isSelected = timeRange === range;
 
             return (
               <button
                 type="button"
-                key={status}
-                onClick={() => toggleFilter(status)}
+                key={range}
+                onClick={() => {
+                  setTimeRange(range);
+                  setFilterOpen(false);
+                }}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
               >
                 <span
-                  className={`flex h-4 w-4 items-center justify-center rounded border ${
+                  className={`flex h-4 w-4 items-center justify-center rounded-full border ${
                     isSelected
                       ? "border-brand-500 bg-brand-500"
                       : "border-gray-300 dark:border-gray-600"
@@ -413,31 +320,28 @@ export function OrdersHeaderActions() {
                   {isSelected && <CheckIcon />}
                 </span>
 
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    STATUS_CONFIG[status].dotClassName
-                  }`}
-                />
-
-                <span>{status}</span>
+                <span>{TIME_RANGE_CONFIG[range].label}</span>
               </button>
             );
           })}
+
+          <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+
+          <a
+            href={POS_ORDERS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setFilterOpen(false)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <span className="flex h-4 w-4 items-center justify-center" />
+
+            <span>See all</span>
+
+            <ArrowUpIcon className="ml-auto h-3.5 w-3.5 rotate-45 text-gray-400" />
+          </a>
         </Dropdown>
       </div>
-
-      <button
-        type="button"
-        onClick={clearFilters}
-        disabled={activeFilters.size === 0}
-        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-theme-xs font-medium shadow-theme-xs ${
-          activeFilters.size > 0
-            ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
-            : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
-        }`}
-      >
-        See all
-      </button>
     </div>
   );
 }
@@ -446,9 +350,7 @@ interface OrdersProps {
   framed?: boolean;
 }
 
-export default function Orders({
-  framed = true,
-}: OrdersProps) {
+export default function Orders({ framed = true }: OrdersProps) {
   const {
     orders,
     filteredOrders,
@@ -457,6 +359,7 @@ export default function Orders({
     loadError,
     actionError,
     cancellingOrderId,
+    timeRange,
     refresh,
     cancelOrder,
   } = useOrders();
@@ -481,8 +384,9 @@ export default function Orders({
           </h3>
 
           <p className="text-theme-sm text-gray-500 dark:text-gray-400">
-            {orders.length}{" "}
-            {orders.length === 1 ? "order" : "orders"}
+            {filteredOrders.length}{" "}
+            {filteredOrders.length === 1 ? "order" : "orders"}{" "}
+            {TIME_RANGE_CONFIG[timeRange].description}
           </p>
         </div>
       )}
@@ -504,185 +408,152 @@ export default function Orders({
               disabled={isRefreshing}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
             >
-              <RefreshIcon
-                spinning={isRefreshing}
-              />
+              <RefreshIcon spinning={isRefreshing} />
 
-              {isRefreshing
-                ? "Retrying..."
-                : "Try again"}
+              {isRefreshing ? "Retrying..." : "Try again"}
             </button>
           </div>
         </div>
       )}
 
-      {!isLoading &&
-        !loadError &&
-        actionError && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
-            {actionError}
-          </div>
-        )}
+      {!isLoading && !loadError && actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
+          {actionError}
+        </div>
+      )}
 
-      {!isLoading &&
-        !loadError &&
-        filteredOrders.length === 0 && (
-          <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
-            {orders.length === 0
-              ? "No orders have been created yet."
-              : "No orders match the selected filters."}
-          </div>
-        )}
+      {!isLoading && !loadError && filteredOrders.length === 0 && (
+        <div className="py-10 text-center text-theme-sm text-gray-500 dark:text-gray-400">
+          {orders.length === 0
+            ? "No orders have been created yet."
+            : `No orders ${TIME_RANGE_CONFIG[timeRange].description}.`}
+        </div>
+      )}
 
-      {!isLoading &&
-        !loadError &&
-        filteredOrders.length > 0 && (
-          <div className="max-w-full overflow-x-auto">
-            <Table>
-              <TableHeader className="border-y border-gray-100 dark:border-gray-800">
-                <TableRow>
-                  <TableCell
-                    isHeader
-                    className="min-w-[65px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+      {!isLoading && !loadError && filteredOrders.length > 0 && (
+        <div className="max-w-full overflow-x-auto">
+          <Table>
+            <TableHeader className="border-y border-gray-100 dark:border-gray-800">
+              <TableRow>
+                <TableCell
+                  isHeader
+                  className="min-w-[65px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Order ID
+                </TableCell>
+
+                <TableCell
+                  isHeader
+                  className="min-w-[190px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Items
+                </TableCell>
+
+                <TableCell
+                  isHeader
+                  className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Table
+                </TableCell>
+
+                <TableCell
+                  isHeader
+                  className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Status
+                </TableCell>
+
+                <TableCell
+                  isHeader
+                  className="min-w-[50px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Action
+                </TableCell>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
+              {filteredOrders.map((order) => {
+                const canCancel = order.orderStatus === "Preparing";
+
+                const isCancelling = cancellingOrderId === order.orderId;
+
+                const isHighlighted = order.orderId === highlightedOrderId;
+
+                return (
+                  <TableRow
+                    key={order.orderId}
+                    ref={isHighlighted ? highlightedRowRef : undefined}
+                    onClick={() => selectOrder(order.orderId)}
+                    aria-selected={isHighlighted}
+                    className={`cursor-pointer transition-colors ${
+                      isHighlighted
+                        ? "bg-brand-50 dark:bg-brand-500/10"
+                        : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                    }`}
                   >
-                    Order ID
-                  </TableCell>
+                    <TableCell className="py-3">
+                      <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                        #{order.displayId}
+                      </p>
+                    </TableCell>
 
-                  <TableCell
-                    isHeader
-                    className="min-w-[190px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Items
-                  </TableCell>
+                    <TableCell className="py-3 text-theme-xs text-gray-500 dark:text-gray-400">
+                      {order.items && order.items.length > 0 ? (
+                        <ul className="list-disc space-y-0.5 pl-4">
+                          {order.items.map((item, index) => (
+                            <li key={index}>{formatOrderItemLine(item)}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "No items"
+                      )}
+                    </TableCell>
 
-                  <TableCell
-                    isHeader
-                    className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Table
-                  </TableCell>
+                    <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {formatTableNumber(order as OrderWithTable)}
+                    </TableCell>
 
-                  <TableCell
-                    isHeader
-                    className="min-w-[50px] py-3 text-start text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Status
-                  </TableCell>
+                    <TableCell className="py-3">
+                      <Badge
+                        size="sm"
+                        color={STATUS_CONFIG[order.orderStatus].badgeColor}
+                      >
+                        {order.orderStatus}
+                      </Badge>
+                    </TableCell>
 
-                  <TableCell
-                    isHeader
-                    className="min-w-[50px] py-3 text-end text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Action
-                  </TableCell>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {filteredOrders.map((order) => {
-                  const canCancel =
-                    order.orderStatus === "Preparing";
-
-                  const isCancelling =
-                    cancellingOrderId ===
-                    order.orderId;
-
-                  const isHighlighted =
-                    order.orderId === highlightedOrderId;
-
-                  return (
-                    <TableRow
-                      key={order.orderId}
-                      ref={
-                        isHighlighted
-                          ? highlightedRowRef
-                          : undefined
-                      }
-                      onClick={() =>
-                        selectOrder(order.orderId)
-                      }
-                      aria-selected={isHighlighted}
-                      className={`cursor-pointer transition-colors ${
-                        isHighlighted
-                          ? "bg-brand-50 dark:bg-brand-500/10"
-                          : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                      }`}
-                    >
-                      <TableCell className="py-3">
-                        <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
-                          #{order.displayId}
-                        </p>
-                      </TableCell>
-
-                      <TableCell className="py-3 text-theme-xs text-gray-500 dark:text-gray-400">
-                        {order.items && order.items.length > 0 ? (
-                          <ul className="list-disc space-y-0.5 pl-4">
-                            {order.items.map((item, index) => (
-                              <li key={index}>{formatOrderItemLine(item)}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          "No items"
-                        )}
-                      </TableCell>
-
-                      <TableCell className="py-3 text-theme-sm text-gray-500 dark:text-gray-400">
-                        {formatTableNumber(
-                          order as OrderWithTable,
-                        )}
-                      </TableCell>
-
-                      <TableCell className="py-3">
-                        <Badge
-                          size="sm"
-                          color={
-                            STATUS_CONFIG[
-                              order.orderStatus
-                            ].badgeColor
-                          }
-                        >
-                          {order.orderStatus}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell className="py-3 text-end">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            // Cancelling is not a way of selecting the row.
-                            event.stopPropagation();
-                            void cancelOrder(order);
-                          }}
-                          disabled={
-                            !canCancel ||
-                            cancellingOrderId !== null
-                          }
-                          aria-label={`Cancel order ${order.displayId}`}
-                          title={
-                            canCancel
-                              ? "Cancel order"
-                              : `Order is already ${order.orderStatus.toLowerCase()}`
-                          }
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
-                            canCancel
-                              ? "border-red-300 bg-white text-red-600 hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
-                              : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
-                          }`}
-                        >
-                          {isCancelling ? (
-                            <LoadingIcon />
-                          ) : (
-                            <CancelIcon />
-                          )}
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                    <TableCell className="py-3 text-end">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          // Cancelling is not a way of selecting the row.
+                          event.stopPropagation();
+                          void cancelOrder(order);
+                        }}
+                        disabled={!canCancel || cancellingOrderId !== null}
+                        aria-label={`Cancel order ${order.displayId}`}
+                        title={
+                          canCancel
+                            ? "Cancel order"
+                            : `Order is already ${order.orderStatus.toLowerCase()}`
+                        }
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+                          canCancel
+                            ? "border-red-300 bg-white text-red-600 hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-900/20"
+                            : "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500"
+                        }`}
+                      >
+                        {isCancelling ? <LoadingIcon /> : <CancelIcon />}
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </>
   );
 
@@ -697,20 +568,12 @@ export default function Orders({
   );
 }
 
-function formatTableNumber(
-  order: OrderWithTable,
-): string {
+function formatTableNumber(order: OrderWithTable): string {
   const value =
     order.tableNo ??
-    (typeof order.table === "object"
-      ? order.table?.tableNo
-      : order.table);
+    (typeof order.table === "object" ? order.table?.tableNo : order.table);
 
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
+  if (value === undefined || value === null || value === "") {
     return "—";
   }
 
@@ -790,15 +653,9 @@ function CancelIcon() {
       strokeWidth="1.8"
       aria-hidden="true"
     >
-      <path
-        d="M6 6L18 18"
-        strokeLinecap="round"
-      />
+      <path d="M6 6L18 18" strokeLinecap="round" />
 
-      <path
-        d="M18 6L6 18"
-        strokeLinecap="round"
-      />
+      <path d="M18 6L6 18" strokeLinecap="round" />
     </svg>
   );
 }
@@ -813,11 +670,7 @@ function CheckIcon() {
       strokeWidth={3}
       aria-hidden="true"
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M5 13l4 4L19 7"
-      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
     </svg>
   );
 }
@@ -825,27 +678,42 @@ function CheckIcon() {
 function FilterIcon() {
   return (
     <svg
-      className="h-5 w-5 stroke-current"
-      viewBox="0 0 24 24"
+      className="stroke-current fill-white dark:fill-gray-800"
+      width="18"
+      height="18"
+      viewBox="0 0 20 20"
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
       <path
-        d="M4 6H20"
+        d="M2.29004 5.90393H17.7067"
+        stroke=""
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
 
       <path
-        d="M7 12H17"
+        d="M17.7075 14.0961H2.29085"
+        stroke=""
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
 
       <path
-        d="M10 18H14"
+        d="M12.0826 3.33331C13.5024 3.33331 14.6534 4.48431 14.6534 5.90414C14.6534 7.32398 13.5024 8.47498 12.0826 8.47498C10.6627 8.47498 9.51172 7.32398 9.51172 5.90415C9.51172 4.48432 10.6627 3.33331 12.0826 3.33331Z"
+        fill=""
+        stroke=""
         strokeWidth="1.5"
-        strokeLinecap="round"
+      />
+
+      <path
+        d="M7.91745 11.525C6.49762 11.525 5.34662 12.676 5.34662 14.0959C5.34661 15.5157 6.49762 16.6667 7.91745 16.6667C9.33728 16.6667 10.4883 15.5157 10.4883 14.0959C10.4883 12.676 9.33728 11.525 7.91745 11.525Z"
+        fill=""
+        stroke=""
+        strokeWidth="1.5"
       />
     </svg>
   );
