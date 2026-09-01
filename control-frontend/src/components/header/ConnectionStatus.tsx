@@ -1,5 +1,6 @@
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import type { ConnectionState } from "../../hooks/useWebSocketRobots";
+import { HEADER_DOT_SIZE, HEADER_TEXT_SIZE } from "./headerTypography";
 
 const STATE_CONFIG: Record<
   ConnectionState,
@@ -47,8 +48,12 @@ export default function ConnectionStatus() {
       role="status"
       aria-live="polite"
     >
-      <span className={`h-2 w-2 shrink-0 rounded-full ${dotClassName}`} />
-      <span className={`whitespace-nowrap text-theme-sm font-medium ${textClassName}`}>
+      <span
+        className={`${HEADER_DOT_SIZE} shrink-0 rounded-full ${dotClassName}`}
+      />
+      <span
+        className={`whitespace-nowrap ${HEADER_TEXT_SIZE} font-medium ${textClassName}`}
+      >
         {label}
       </span>
     </div>

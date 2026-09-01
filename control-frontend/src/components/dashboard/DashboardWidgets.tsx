@@ -74,7 +74,7 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
 function WidgetHeader({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
-      <h3 className="min-w-0 truncate text-theme-xl font-semibold text-gray-900 dark:text-white">
+      <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
         {widget.title}
       </h3>
       <div className="flex shrink-0 items-center gap-2">

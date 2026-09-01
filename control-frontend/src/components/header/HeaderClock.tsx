@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { HEADER_TEXT_SIZE } from "./headerTypography";
+
 /**
  * Wall clock for the header.
  *
@@ -19,7 +21,9 @@ export default function HeaderClock() {
   }, []);
 
   return (
-    <span className="text-theme-sm font-medium tabular-nums text-slate-600">
+    <span
+      className={`${HEADER_TEXT_SIZE} font-medium tabular-nums text-slate-600`}
+    >
       {now.toLocaleTimeString(undefined, {
         hour12: false,
         hour: "2-digit",

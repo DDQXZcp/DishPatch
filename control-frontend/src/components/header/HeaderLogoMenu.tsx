@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
+import { HEADER_TEXT_SIZE } from "./headerTypography";
 import {
   ArrowUpIcon,
   BoxCubeIcon,
@@ -51,7 +52,9 @@ export default function HeaderLogoMenu() {
           height={36}
           className="h-9 w-9 shrink-0 object-contain"
         />
-        <span className="min-w-0 truncate text-left text-theme-sm font-semibold tracking-[0.02em] text-slate-800 sm:text-base lg:text-lg xl:text-xl">
+        <span
+          className={`min-w-0 truncate text-left ${HEADER_TEXT_SIZE} font-semibold tracking-[0.02em] text-slate-800`}
+        >
           DishPatch <span className="text-brand">Control System</span>
         </span>
         <ChevronDownIcon
