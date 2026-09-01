@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -20,7 +19,7 @@ import {
   type DashboardWidgetRow,
 } from "./dashboardLayout";
 import { WIDGET_BY_ID } from "./widgetRegistry";
-import type { DashboardWidgetDefinition, WidgetId } from "./types";
+import type { DashboardWidgetDefinition } from "./types";
 
 interface RowResizeState {
   rowId: string;
