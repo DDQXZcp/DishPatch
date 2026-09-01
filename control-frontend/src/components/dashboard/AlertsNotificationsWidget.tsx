@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
+import { ORDER_OVERDUE_MS } from "../../utils/orderTable";
 import type { Order, OrderStatus, OrdersApiResponse } from "../../types/Order";
 import type { Robot } from "../../types/Robot";
 
@@ -51,14 +52,14 @@ function buildAlerts(
 
     const createdTime = Date.parse(order.orderDate);
     
-    return !Number.isNaN(createdTime) && now - createdTime > 15 * 60 * 1000;
+    return !Number.isNaN(createdTime) && now - createdTime > ORDER_OVERDUE_MS;
   });
 
   overdueOrders.forEach((order) => {
     alerts.push({
       id: `overdue-${order.orderId}`,
       title: "Order delayed",
-      detail: `Order ${order.displayId} has been preparing at table ${getTableLabel(order)} for over 15 minutes.`,
+      detail: `Order ${order.displayId} has been preparing at table ${getTableLabel(order)} for over ${ORDER_OVERDUE_MS / 60000} minutes.`,
       severity: "warning",
     });
   });
@@ -130,7 +131,7 @@ function useAlerts() {
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
   const { robots, orders: liveOrders } = useRobotContext();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => liveOrders ?? []);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [stuckSinceByRobotId, setStuckSinceByRobotId] = useState<Record<number, number>>({});
   const [arrivedAtByOrderId, setArrivedAtByOrderId] = useState<Record<string, number>>({});
@@ -138,10 +139,13 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const previousOrderStatusById = useRef<Map<string, OrderStatus>>(new Map());
   const seenOrderIds = useRef<Set<string>>(new Set());
-  // True once `orders` has been populated from a real data source (REST or
-  // websocket) at least once — guards against the pre-fetch `orders === []`
-  // render being mistaken for the transition baseline.
-  const hasLoadedOrdersOnce = useRef(false);
+  // True once `orders` holds real data (REST or websocket) — stops the
+  // pre-fetch `orders === []` render being mistaken for the transition
+  // baseline. Seeded from `liveOrders` alongside the state above: if the
+  // socket already has data at mount, the very first render must see it,
+  // otherwise the baseline is taken against `[]` and every existing order
+  // then looks brand new.
+  const hasLoadedOrdersOnce = useRef(liveOrders !== null);
   const hasBaselinedOrders = useRef(false);
 
   useEffect(() => {
@@ -377,7 +381,12 @@ export function AlertsSnackbarStack() {
 
   useEffect(() => {
     return () => {
+      // Reset both refs as a pair: clearing the timers while leaving their ids
+      // in scheduledInfoIds would make the guard above refuse to ever schedule
+      // them again, so an alert already on screen could never auto-dismiss.
       timeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+      timeoutIdsRef.current = [];
+      scheduledInfoIds.current.clear();
     };
   }, []);
 

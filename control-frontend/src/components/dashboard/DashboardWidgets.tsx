@@ -1,22 +1,25 @@
 import {
   useEffect,
-  useMemo,
+  useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 
 import { useDashboardWidgets } from "../../context/DashboardWidgetsContext";
-import { AlertsProvider, AlertsSnackbarStack } from "./AlertsNotificationsWidget";
+import { AlertsSnackbarStack } from "./AlertsNotificationsWidget";
 import {
   DEFAULT_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
+  MIN_STACK_PANE_HEIGHT,
   setColumnPairWidths,
   setRowHeight,
+  setStackPairHeights,
+  type DashboardWidgetColumn,
   type DashboardWidgetRow,
 } from "./dashboardLayout";
 import { WIDGET_BY_ID } from "./widgetRegistry";
-import type { DashboardWidgetDefinition, WidgetId } from "./types";
+import type { DashboardWidgetDefinition } from "./types";
 
 interface RowResizeState {
   rowId: string;
@@ -34,6 +37,9 @@ interface ColumnResizeState {
 }
 
 const DESKTOP_WIDGET_MEDIA_QUERY = "(min-width: 1024px)";
+
+/** Matches the gap-3 utility between stacked widgets. */
+const STACK_GAP_PX = 12;
 
 function getMediaQueryMatches(query: string) {
   return typeof window !== "undefined" && window.matchMedia(query).matches;
@@ -57,24 +63,15 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
-  return (
-    <div className="min-w-0">
-      <p className="truncate text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-        {widget.title}
-      </p>
-      {widget.description && (
-        <p className="truncate text-theme-xs text-gray-500 dark:text-gray-400">
-          {widget.description}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
+    <div
+      className={
+        widget.bleed
+          ? "min-h-0 flex-1 overflow-hidden"
+          : "min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5"
+      }
+    >
       {widget.render()}
     </div>
   );
@@ -82,9 +79,29 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
 
 function WidgetHeader({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5">
-      <ToolbarTitle widget={widget} />
-      <div className="flex items-center gap-2">
+    <div
+      className={`flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5 ${
+        widget.bleed
+          ? "pointer-events-none absolute inset-x-0 top-0 z-[1000]" : ""
+      }`}
+    >
+      {widget.bleed ? (
+        <div className="pointer-events-auto flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-theme-md dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+            {widget.title}
+          </h3>
+          {widget.renderHeaderDetail?.()}
+        </div>
+      ) : (
+        <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+          {widget.title}
+        </h3>
+      )}
+      <div
+        className={`flex shrink-0 items-center gap-2 ${
+          widget.bleed ? "pointer-events-auto" : ""
+        }`}
+      >
         {widget.renderHeaderActions?.()}
       </div>
     </div>
@@ -123,7 +140,7 @@ function MobileWidget({ widget }: { widget: DashboardWidgetDefinition }) {
 
   return (
     <div
-      className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+      className="relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
       style={{ height: DEFAULT_ROW_HEIGHT }}
     >
       {widget.wrap ? widget.wrap(content) : content}
@@ -137,16 +154,18 @@ function WidgetTile({ widget }: { widget: DashboardWidgetDefinition }) {
 
 function RowResizeHandle({
   onResizeStart,
+  label = "Resize row",
 }: {
   onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  label?: string;
 }) {
   return (
     <button
       type="button"
       className="group absolute inset-x-5 -bottom-2 z-30 flex h-4 cursor-row-resize touch-none items-center justify-center rounded-full focus:outline-none"
       onPointerDown={onResizeStart}
-      aria-label="Resize widget row"
-      title="Resize row"
+      aria-label={label}
+      title={label}
     >
       <span className="h-px w-24 rounded-full bg-gray-200 transition group-hover:h-1 group-hover:bg-brand-400 dark:bg-gray-700 dark:group-hover:bg-brand-400" />
     </button>
@@ -168,6 +187,116 @@ function ColumnResizeHandle({
     >
       <span className="h-12 w-px rounded-full bg-gray-200 transition group-hover:bg-brand-400 dark:bg-gray-700 dark:group-hover:bg-brand-400" />
     </button>
+  );
+}
+
+function WidgetStack({
+  column,
+  columnIndex,
+  rowId,
+}: {
+  column: DashboardWidgetColumn;
+  columnIndex: number;
+  rowId: string;
+}) {
+  const { setWidgetState } = useDashboardWidgets();
+  const stackRef = useRef<HTMLDivElement>(null);
+
+  const fallbackHeight = 100 / column.widgetIds.length;
+  const panes = column.widgetIds.flatMap((widgetId, index) => {
+    const widget = WIDGET_BY_ID.get(widgetId);
+    const height = column.heights?.[index] ?? fallbackHeight;
+
+    return widget ? [{ widget, height }] : [];
+  });
+
+  if (panes.length === 0) {
+    return null;
+  }
+
+  function handleResizeStart(
+    stackIndex: number,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Gaps are fixed, so only the space the panes flex into scales the drag.
+    const stackHeight = stackRef.current?.getBoundingClientRect().height ?? 0;
+    const flexSpace = stackHeight - (panes.length - 1) * STACK_GAP_PX;
+
+    if (flexSpace <= 0) {
+      return;
+    }
+
+    const startY = event.clientY;
+    const startHeight = panes[stackIndex].height;
+    const pairTotal = startHeight + panes[stackIndex + 1].height;
+    const pairMin = Math.min(
+      (MIN_STACK_PANE_HEIGHT / flexSpace) * 100,
+      pairTotal / 2,
+    );
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      const deltaPercent = ((moveEvent.clientY - startY) / flexSpace) * 100;
+      const topHeight = Math.min(
+        Math.max(startHeight + deltaPercent, pairMin),
+        pairTotal - pairMin,
+      );
+
+      setWidgetState((currentState) => ({
+        ...currentState,
+        rows: setStackPairHeights(
+          currentState.rows,
+          rowId,
+          columnIndex,
+          stackIndex,
+          topHeight,
+          pairTotal - topHeight,
+        ),
+      }));
+    }
+
+    function finishResize() {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+      window.removeEventListener("blur", finishResize);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
+    window.addEventListener("blur", finishResize);
+  }
+
+  return (
+    <div ref={stackRef} className="flex h-full flex-col gap-3">
+      {panes.map((pane, stackIndex) => (
+        <div
+          key={pane.widget.id}
+          className="relative min-h-0"
+          style={{ flexGrow: pane.height, flexBasis: 0 }}
+        >
+          <WidgetTile widget={pane.widget} />
+          {stackIndex < panes.length - 1 && (
+            <RowResizeHandle
+              label="Resize widgets"
+              onResizeStart={(handleEvent) =>
+                handleResizeStart(stackIndex, handleEvent)
+              }
+            />
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -204,43 +333,25 @@ function DashboardRow({
             .join(" "),
         }}
       >
-        {row.columns.map((column, columnIndex) => {
-          const widgets = column.widgetIds
-            .map((widgetId) => WIDGET_BY_ID.get(widgetId))
-            .filter((widget): widget is DashboardWidgetDefinition =>
-              Boolean(widget),
-            );
-
-          if (widgets.length === 0) {
-            return null;
-          }
-
-          return (
-            <div
-              key={column.widgetIds.join("-")}
-              className="relative min-h-0 min-w-0"
-            >
-              {widgets.length === 1 ? (
-                <WidgetTile widget={widgets[0]} />
-              ) : (
-                <div className="flex h-full flex-col gap-3">
-                  {widgets.map((widget) => (
-                    <div key={widget.id} className="min-h-0 flex-1">
-                      <WidgetTile widget={widget} />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {columnIndex < row.columns.length - 1 && (
-                <ColumnResizeHandle
-                  onResizeStart={(event) =>
-                    onColumnResizeStart(row, columnIndex, event)
-                  }
-                />
-              )}
-            </div>
-          );
-        })}
+        {row.columns.map((column, columnIndex) => (
+          <div
+            key={column.widgetIds.join("-")}
+            className="relative min-h-0 min-w-0"
+          >
+            <WidgetStack
+              column={column}
+              columnIndex={columnIndex}
+              rowId={row.id}
+            />
+            {columnIndex < row.columns.length - 1 && (
+              <ColumnResizeHandle
+                onResizeStart={(event) =>
+                  onColumnResizeStart(row, columnIndex, event)
+                }
+              />
+            )}
+          </div>
+        ))}
       </div>
       <RowResizeHandle onResizeStart={(event) => onRowResizeStart(row, event)} />
     </div>
@@ -459,25 +570,23 @@ export default function DashboardWidgets() {
   }
 
   return (
-    <AlertsProvider>
-      <div className="flex h-full flex-col gap-4">
-        <AlertsSnackbarStack />
-        {isDesktopWorkspace ? (
-          <div className="min-h-0 flex-1">
-            <DesktopWorkspace
-              onColumnResizeStart={handleColumnResizeStart}
-              onRowResizeStart={handleRowResizeStart}
-              rows={rows}
-            />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleWidgets.map((widget) => (
-              <MobileWidget key={widget.id} widget={widget} />
-            ))}
-          </div>
-        )}
-      </div>
-    </AlertsProvider>
+    <div className="flex h-full flex-col gap-3">
+      <AlertsSnackbarStack />
+      {isDesktopWorkspace ? (
+        <div className="min-h-0 flex-1">
+          <DesktopWorkspace
+            onColumnResizeStart={handleColumnResizeStart}
+            onRowResizeStart={handleRowResizeStart}
+            rows={rows}
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleWidgets.map((widget) => (
+            <MobileWidget key={widget.id} widget={widget} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -4,6 +4,8 @@ import { useLocation } from "react-router";
 // import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import UserDropdown from "../components/header/UserDropdown";
 import HeaderLogoMenu from "../components/header/HeaderLogoMenu";
+import HeaderClock from "../components/header/HeaderClock";
+import ConnectionStatus from "../components/header/ConnectionStatus";
 import DashboardWidgetsToolbar from "../components/dashboard/DashboardWidgetsToolbar";
 
 const AppHeader: React.FC = () => {
@@ -17,7 +19,7 @@ const AppHeader: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-[99999] w-full border-b border-brand-border bg-white shadow-sm">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between lg:px-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between lg:px-3">
         {/* Left area */}
         <div className="flex w-full items-center justify-between gap-3 px-3 py-3 lg:w-auto lg:px-0 lg:py-4">
           <HeaderLogoMenu />
@@ -49,14 +51,35 @@ const AppHeader: React.FC = () => {
         <div
           className={`${
             isApplicationMenuOpen ? "flex" : "hidden"
-          } w-full items-center justify-between gap-4 border-t border-brand-border bg-white px-5 py-4 lg:flex lg:w-auto lg:justify-end lg:border-t-0 lg:px-0 lg:py-0`}
+          } w-full items-center justify-between gap-4 border-t border-brand-border bg-white px-3 py-4 lg:flex lg:w-auto lg:justify-end lg:border-t-0 lg:px-0 lg:py-0`}
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* Dark mode button disabled for now */}
             {/* <ThemeToggleButton /> */}
           </div>
 
-          {isDashboardRoute && <DashboardWidgetsToolbar />}
+          {/* Outside the route conditional below: a connection indicator that
+              vanishes on some routes is worse than none. */}
+          <div className="flex items-center gap-4">
+            <ConnectionStatus />
+            <HeaderClock />
+          </div>
+
+          {/* Divider is tied to the same condition as the toolbar it separates,
+              so it never dangles on the routes where there is no button after
+              it. Hidden below lg, where the row is justify-between and a rule
+              floating between spread-out items reads as noise rather than
+              grouping. */}
+          {isDashboardRoute && (
+            <>
+              <span
+                aria-hidden="true"
+                className="hidden h-6 w-px shrink-0 bg-brand-border lg:block"
+              />
+
+              <DashboardWidgetsToolbar />
+            </>
+          )}
 
           <UserDropdown />
         </div>

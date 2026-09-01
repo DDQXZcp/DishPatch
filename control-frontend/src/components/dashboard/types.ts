@@ -14,5 +14,7 @@ export interface DashboardWidgetDefinition {
   description?: string;
   render: () => ReactNode;
   renderHeaderActions?: () => ReactNode;
+  renderHeaderDetail?: () => ReactNode;
   wrap?: (children: ReactNode) => ReactNode;
+  bleed?: boolean;
 }

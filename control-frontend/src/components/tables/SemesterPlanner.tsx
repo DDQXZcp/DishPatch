@@ -42,13 +42,6 @@ const SemesterPlanner: React.FC = () => {
 
   const { isOpen, openModal, closeModal } = useModal();
 
-  const calendarsEvents = {
-    Danger: "danger",
-    Success: "success",
-    Primary: "primary",
-    Warning: "warning",
-  };
-
   useEffect(() => {
     const api = import.meta.env.VITE_API_URL;
     fetch(`${api}/api/course`)

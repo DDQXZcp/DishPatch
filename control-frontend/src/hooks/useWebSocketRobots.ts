@@ -14,6 +14,13 @@ interface RobotStatsMessage {
   timestamp?: string;
 }
 
+/**
+ * `connecting` is only ever the state before the first successful connect.
+ * Afterwards a dropped socket is `disconnected`, which STOMP resolves by itself
+ * on its `reconnectDelay` — the UI only has to report it.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
+
 const ROBOT_LOCATIONS_TOPIC = '/topic/robot-locations';
 const ROBOT_STATS_TOPIC = '/topic/robot-stats';
 const ORDERS_TOPIC = '/topic/orders';
@@ -37,6 +44,10 @@ export const useWebSocketRobots = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
+  // Distinguishes "has not connected yet" from "was connected and dropped", so
+  // the UI can say Connecting on a fresh load instead of flashing Not connected
+  // for the second it takes the socket to come up.
+  const hasConnectedOnce = useRef(false);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; //Default Spring Boot backend URL
 
@@ -58,6 +69,7 @@ export const useWebSocketRobots = () => {
           onConnect: (frame) => {
             if (!active) return
             console.log('Connected to WebSocket:', frame);
+            hasConnectedOnce.current = true;
             setIsConnected(true);
             setError(null);
 
@@ -88,6 +100,18 @@ export const useWebSocketRobots = () => {
             console.error('WebSocket error:', error);
             setIsConnected(false);
             setError('WebSocket connection error');
+          },
+          // A socket that closes cleanly — a backend restart, an nginx reload,
+          // a sleeping laptop — raises no error at all. Without these two the
+          // connection flag stays true against a dead backend and the whole
+          // dashboard silently serves stale data.
+          onWebSocketClose: () => {
+            if (!active) return
+            setIsConnected(false);
+          },
+          onDisconnect: () => {
+            if (!active) return
+            setIsConnected(false);
           }
         });
 
@@ -108,5 +132,11 @@ export const useWebSocketRobots = () => {
     };
   }, []);
 
-  return { robots, stats, orders, isConnected, error };
+  const connectionState: ConnectionState = isConnected
+    ? 'connected'
+    : hasConnectedOnce.current
+      ? 'disconnected'
+      : 'connecting';
+
+  return { robots, stats, orders, connectionState, error };
 };

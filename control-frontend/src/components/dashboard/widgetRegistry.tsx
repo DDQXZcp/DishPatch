@@ -1,4 +1,5 @@
 import DemographicCard from "../ecommerce/DemographicCard";
+import { MapControls, MapLegend, MapViewProvider } from "../maps/RestaurantMap";
 import RobotStatus, {
   RobotStatusFilterProvider,
   RobotStatusHeaderActions,
@@ -15,10 +16,14 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     title: "Robot Operational Map",
     description: "Robot operational status in the restaurant",
     render: () => <DemographicCard framed={false} />,
+    renderHeaderDetail: () => <MapLegend />,
+    renderHeaderActions: () => <MapControls />,
+    wrap: (children) => <MapViewProvider>{children}</MapViewProvider>,
+    bleed: true,
   },
   {
     id: "robot-list",
-    title: "Robot",
+    title: "Robot Fleet",
     description: "Live robot fleet status",
     render: () => <RobotStatus framed={false} />,
     renderHeaderActions: () => <RobotStatusHeaderActions />,
