@@ -2,6 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import {
+  useDashboardHighlight,
+  useDashboardSelection,
+} from '../../context/DashboardSelectionContext';
 import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
 import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
 import type { Robot, RobotStatus } from '../../types/Robot';
@@ -34,6 +38,9 @@ interface RobotMarkerState {
   trailDots: TrailDot[];
   lastTrailPoint: L.LatLng | null;
   lastTrailSpawnAt: number | null;
+  /** Last popup content this marker was given; see getPopupContentKey. */
+  popupContentKey: string;
+  isHighlighted: boolean;
 }
 
 const ROBOT_MARKER_ANIMATION_DURATION_MS = 120;
@@ -54,7 +61,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-function getRobotIcon(status: RobotStatus, yaw: number) {
+function getRobotIcon(status: RobotStatus, yaw: number, isHighlighted: boolean) {
   let borderColor = '';
 
   if (status === 'Serving') borderColor = 'border-green-500';
@@ -66,10 +73,18 @@ function getRobotIcon(status: RobotStatus, yaw: number) {
   // graphic points up by default, so convert to a clockwise CSS angle from up.
   const headingDeg = 90 - (yaw * 180) / Math.PI;
 
+  // The selection halo is deliberately static. This whole element is rebuilt on
+  // every telemetry tick to move the heading arrow, so a CSS animation here
+  // would restart ten times a second and read as a flicker rather than a pulse.
+  const halo = isHighlighted
+    ? '<span class="absolute -inset-2 rounded-full border-2 border-brand-500 bg-brand-500/20"></span>'
+    : '';
+
   return L.divIcon({
     html: `
       <div class="relative w-[30px] h-[30px]">
-        <img src="/images/robot/robot-face-icon.svg" class="w-full h-full rounded-full border-2 ${borderColor} shadow-lg" />
+        ${halo}
+        <img src="/images/robot/robot-face-icon.svg" class="relative w-full h-full rounded-full border-2 ${borderColor} shadow-lg" />
         <div class="absolute inset-0" style="transform: rotate(${headingDeg}deg);">
           <div class="absolute left-1/2 top-[-4px] -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-gray-800"></div>
         </div>
@@ -179,12 +194,47 @@ function robotPoseToFloorplanPoint(robot: Robot, manifest: MapManifest): [number
   return [floorplanY, floorplanX];
 }
 
-function createRobotMarker(robot: Robot, manifest: MapManifest, orderTableById: Map<string, OrderTableInfo>) {
-  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), { icon: getRobotIcon(robot.status, robot.yaw) })
-    .bindPopup(createRobotPopup(robot, orderTableById));
+/**
+ * Everything the popup actually renders, flattened. Pose is deliberately absent:
+ * the popup content is rebuilt only when this key changes, so a robot driving
+ * across the room does not rebuild its popup DOM on every telemetry tick.
+ */
+function getPopupContentKey(robot: Robot, orderTableById: Map<string, OrderTableInfo>) {
+  const orderTable = robot.orderId ? orderTableById.get(robot.orderId) : undefined;
 
-  marker.on("mouseover", () => marker.openPopup());
-  marker.on("mouseout", () => marker.closePopup());
+  return [
+    robot.name,
+    robot.status,
+    robot.orderId ?? '',
+    orderTable?.displayId ?? '',
+    orderTable?.tableNo ?? '',
+    orderTable?.items.length ?? 0,
+  ].join('|');
+}
+
+function createRobotMarker(
+  robot: Robot,
+  manifest: MapManifest,
+  orderTableById: Map<string, OrderTableInfo>,
+  isHighlighted: boolean,
+  onSelect: (robotId: number) => void,
+) {
+  const marker = L.marker(robotPoseToFloorplanPoint(robot, manifest), {
+    icon: getRobotIcon(robot.status, robot.yaw, isHighlighted),
+    // No close button: this popup is a view of the selection, not something
+    // that can be dismissed on its own. Deselect via the marker, bare
+    // floorplan, or Escape.
+  }).bindPopup(createRobotPopup(robot, orderTableById), { closeButton: false });
+
+  // The popup is no longer a hover artifact — it belongs to whichever robot is
+  // selected, so a click here is what opens it, and clicking again closes it.
+  marker.on("click", (event) => {
+    // Leaflet does not forward a click on an interactive layer to the map, but
+    // stopping it explicitly keeps this independent of that detail: the map's
+    // own click handler clears the selection this click is making.
+    L.DomEvent.stop(event);
+    onSelect(robot.id);
+  });
 
   return marker;
 }
@@ -196,12 +246,34 @@ function cancelRobotMarkerAnimation(state: RobotMarkerState) {
   }
 }
 
+/**
+ * Opens the popup for the selected robot and closes everyone else's.
+ *
+ * Asserted from the selection on every sync rather than only on transitions.
+ * Leaflet binds its own click-to-toggle handler inside `bindPopup`, so the
+ * popup can be flipped without the selection knowing; a transition guard would
+ * then see "already highlighted" and refuse to put it back. Re-asserting makes
+ * the selection the single source of truth and costs two booleans per tick.
+ */
+function applyMarkerHighlight(state: RobotMarkerState, isHighlighted: boolean) {
+  state.isHighlighted = isHighlighted;
+
+  const isPopupOpen = state.marker.isPopupOpen();
+
+  if (isHighlighted && !isPopupOpen) {
+    state.marker.openPopup();
+  } else if (!isHighlighted && isPopupOpen) {
+    state.marker.closePopup();
+  }
+}
+
 function updateRobotMarker(
   state: RobotMarkerState,
   robot: Robot,
   manifest: MapManifest,
   orderTableById: Map<string, OrderTableInfo>,
   markerGroup: L.LayerGroup,
+  isHighlighted: boolean,
 ) {
   const targetLatLng = L.latLng(robotPoseToFloorplanPoint(robot, manifest));
   const currentLatLng = state.marker.getLatLng();
@@ -209,8 +281,20 @@ function updateRobotMarker(
   const deltaLng = targetLatLng.lng - currentLatLng.lng;
   const moveDistance = Math.hypot(deltaLat, deltaLng);
 
-  state.marker.setIcon(getRobotIcon(robot.status, robot.yaw));
-  state.marker.bindPopup(createRobotPopup(robot, orderTableById));
+  state.marker.setIcon(getRobotIcon(robot.status, robot.yaw, isHighlighted));
+
+  // Rebuild the popup only when what it says has changed. This used to run on
+  // every tick, which was tolerable while popups only existed for as long as a
+  // cursor hovered; now that a selected robot's popup stays open, replacing its
+  // DOM ten times a second is visible.
+  const popupContentKey = getPopupContentKey(robot, orderTableById);
+
+  if (popupContentKey !== state.popupContentKey) {
+    state.popupContentKey = popupContentKey;
+    state.marker.setPopupContent(createRobotPopup(robot, orderTableById));
+  }
+
+  applyMarkerHighlight(state, isHighlighted);
 
   if (moveDistance <= ROBOT_MARKER_SNAP_DISTANCE) {
     cancelRobotMarkerAnimation(state);
@@ -262,29 +346,52 @@ function syncRobotMarkers(
   robots: Robot[],
   manifest: MapManifest,
   orderTableById: Map<string, OrderTableInfo>,
+  highlightedRobotId: number | null,
+  onSelect: (robotId: number) => void,
 ) {
   const nextRobotIds = new Set<number>();
 
   robots.forEach((robot: Robot) => {
     nextRobotIds.add(robot.id);
 
+    const isHighlighted = robot.id === highlightedRobotId;
     const existingState = markerStates.current.get(robot.id);
 
     if (!existingState) {
-      const marker = createRobotMarker(robot, manifest, orderTableById).addTo(markerGroup);
+      const marker = createRobotMarker(
+        robot,
+        manifest,
+        orderTableById,
+        isHighlighted,
+        onSelect,
+      ).addTo(markerGroup);
 
-      markerStates.current.set(robot.id, {
+      const state: RobotMarkerState = {
         marker,
         animationFrameId: null,
         trailDots: [],
         lastTrailPoint: null,
         lastTrailSpawnAt: null,
-      });
+        popupContentKey: getPopupContentKey(robot, orderTableById),
+        isHighlighted: false,
+      };
+
+      markerStates.current.set(robot.id, state);
+      // Goes through the same path as an update so a robot that reappears
+      // while it is the selected one comes back with its popup already open.
+      applyMarkerHighlight(state, isHighlighted);
 
       return;
     }
 
-    updateRobotMarker(existingState, robot, manifest, orderTableById, markerGroup);
+    updateRobotMarker(
+      existingState,
+      robot,
+      manifest,
+      orderTableById,
+      markerGroup,
+      isHighlighted,
+    );
   });
 
   markerStates.current.forEach((state, robotId) => {
@@ -397,6 +504,13 @@ function RecenterButton({ onClick }: { onClick: () => void }) {
 
 export default function RestaurantMap() {
   const { robots, orders } = useRobotContext();
+  const { selectRobot, clearSelection } = useDashboardSelection();
+  const { highlightedRobotId } = useDashboardHighlight();
+  // Markers and the map's own click handler are wired up once and then only
+  // mutated, so they must not capture a callback from the render that created
+  // them. Reading through a ref keeps them on the current one.
+  const selectRobotRef = useRef(selectRobot);
+  const clearSelectionRef = useRef(clearSelection);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
@@ -405,6 +519,11 @@ export default function RestaurantMap() {
   const [loadedMap, setLoadedMap] = useState<LoadedMap | null>(null);
 
   const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
+
+  useEffect(() => {
+    selectRobotRef.current = selectRobot;
+    clearSelectionRef.current = clearSelection;
+  }, [selectRobot, clearSelection]);
 
   useEffect(() => {
     let active = true;
@@ -472,7 +591,15 @@ export default function RestaurantMap() {
     L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, manifest, orderTableById);
+    syncRobotMarkers(
+      markerGroup,
+      markerStatesRef,
+      robots,
+      manifest,
+      orderTableById,
+      highlightedRobotId,
+      (robotId) => selectRobotRef.current(robotId),
+    );
 
     const refreshMapSize = () => {
       if (frameRef.current !== null) {
@@ -499,11 +626,17 @@ export default function RestaurantMap() {
 
     map.on("zoomend", recenterAtMinZoom);
 
+    // Clicking bare floorplan is how you let go of the current selection.
+    // Marker clicks stop before they reach here.
+    const handleMapClick = () => clearSelectionRef.current();
+    map.on("click", handleMapClick);
+
     const handleResetView = () => applyFitView(map, bounds);
     window.addEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
 
     return () => {
       window.removeEventListener(DASHBOARD_RESET_VIEW_EVENT, handleResetView);
+      map.off("click", handleMapClick);
       map.off("zoomend", recenterAtMinZoom);
       resizeObserver.disconnect();
 
@@ -533,8 +666,16 @@ export default function RestaurantMap() {
       return;
     }
 
-    syncRobotMarkers(markerGroup, markerStatesRef, robots, loadedMap.manifest, orderTableById);
-  }, [robots, loadedMap, orderTableById]);
+    syncRobotMarkers(
+      markerGroup,
+      markerStatesRef,
+      robots,
+      loadedMap.manifest,
+      orderTableById,
+      highlightedRobotId,
+      (robotId) => selectRobotRef.current(robotId),
+    );
+  }, [robots, loadedMap, orderTableById, highlightedRobotId]);
 
   if (!loadedMap) {
     return <div className="h-full w-full rounded-lg" style={{ backgroundColor: '#ffffff' }} />;
