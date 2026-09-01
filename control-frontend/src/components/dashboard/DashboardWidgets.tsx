@@ -64,21 +64,6 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function ToolbarTitle({ widget }: { widget: DashboardWidgetDefinition }) {
-  return (
-    <div className="min-w-0">
-      <p className="truncate text-theme-sm font-semibold text-gray-800 dark:text-white/90">
-        {widget.title}
-      </p>
-      {widget.description && (
-        <p className="truncate text-theme-xs text-gray-500 dark:text-gray-400">
-          {widget.description}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
@@ -89,9 +74,11 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
 
 function WidgetHeader({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="flex min-h-[64px] items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-800 sm:px-5">
-      <ToolbarTitle widget={widget} />
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
+      <h3 className="min-w-0 truncate text-theme-xl font-semibold text-gray-900 dark:text-white">
+        {widget.title}
+      </h3>
+      <div className="flex shrink-0 items-center gap-2">
         {widget.renderHeaderActions?.()}
       </div>
     </div>
