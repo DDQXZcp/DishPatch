@@ -36,6 +36,9 @@ const contributors: Contributor[] = [
     name: "Yang Lin",
     role: "Contributor",
     email: "u7418662@anu.edu.au",
+    linkedinUrl: "www.linkedin.com/in/yang-lin-989994269",
+    avatarUrl: "https://avatars.githubusercontent.com/u/160571405?v=4&s=160",  
+    githubUrl: "https://github.com/leahylin",
   },
   {
     name: "Hadis Amin",
