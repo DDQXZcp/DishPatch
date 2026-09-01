@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
@@ -485,6 +485,30 @@ function applyFitView(map: L.Map, bounds: FloorplanBounds) {
   map.setView(center, zoom, { animate: false });
 }
 
+interface MapViewHandle {
+  mapRef: React.MutableRefObject<L.Map | null>;
+  boundsRef: React.MutableRefObject<FloorplanBounds | null>;
+}
+
+const MapViewContext = createContext<MapViewHandle | null>(null);
+
+/**
+ * Shares the Leaflet instance between the map and the widget header.
+ *
+ * The controls belong in the header rather than floated over the map: as a real
+ * flex item they align with the title card automatically and force it to
+ * truncate instead of sliding underneath them. But the header is a sibling of
+ * the map, not a parent, so the handle has to come from a provider wrapping
+ * both — which is what a widget's `wrap` does.
+ */
+export function MapViewProvider({ children }: { children: ReactNode }) {
+  const mapRef = useRef<L.Map | null>(null);
+  const boundsRef = useRef<FloorplanBounds | null>(null);
+  const value = useMemo(() => ({ mapRef, boundsRef }), []);
+
+  return <MapViewContext.Provider value={value}>{children}</MapViewContext.Provider>;
+}
+
 const MAP_CONTROL_GROUP_CLASS =
   "flex items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-lg dark:border-gray-700 dark:bg-gray-800";
 
@@ -498,17 +522,27 @@ const MAP_CONTROL_BUTTON_CLASS =
  * buttons share one style — the default control cannot be matched without
  * global CSS overrides, and this app has none.
  */
-function MapControls({
-  onZoomIn,
-  onZoomOut,
-  onRecenter,
-}: {
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onRecenter: () => void;
-}) {
+export function MapControls() {
+  const view = useContext(MapViewContext);
+
+  const withMap = (run: (map: L.Map) => void) => () => {
+    const map = view?.mapRef.current;
+
+    if (map) {
+      run(map);
+    }
+  };
+
+  const onZoomIn = withMap((map) => map.zoomIn());
+  const onZoomOut = withMap((map) => map.zoomOut());
+  const onRecenter = withMap((map) => {
+    if (view?.boundsRef.current) {
+      applyFitView(map, view.boundsRef.current);
+    }
+  });
+
   return (
-    <div className="pointer-events-auto absolute right-4 top-4 z-[1000] flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {/* Zoom is one paired control — the two halves are opposites of each
           other, so they share a container. */}
       <div className={MAP_CONTROL_GROUP_CLASS}>
@@ -579,7 +613,11 @@ export default function RestaurantMap() {
   const selectRobotRef = useRef(selectRobot);
   const clearSelectionRef = useRef(clearSelection);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
+  const view = useContext(MapViewContext);
+  const fallbackMapRef = useRef<L.Map | null>(null);
+  // Falls back to a private ref so the map still works unwrapped (the framed
+  // DemographicCard path renders it without the provider).
+  const mapRef = view?.mapRef ?? fallbackMapRef;
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const markerStatesRef = useRef<Map<number, RobotMarkerState>>(new Map());
   const frameRef = useRef<number | null>(null);
@@ -660,6 +698,10 @@ export default function RestaurantMap() {
     });
 
     mapRef.current = map;
+
+    if (view) {
+      view.boundsRef.current = bounds;
+    }
     L.imageOverlay(manifest.imageUrl, bounds).addTo(map);
     const markerGroup = L.layerGroup().addTo(map);
     markerGroupRef.current = markerGroup;
@@ -758,11 +800,6 @@ export default function RestaurantMap() {
       {/* Leaflet's own stylesheet sets .leaflet-container background to #ddd;
           an inline style is needed to win over that rule. */}
       <div ref={containerRef} className="h-full w-full" style={{ backgroundColor: '#ffffff' }} />
-      <MapControls
-        onZoomIn={() => mapRef.current?.zoomIn()}
-        onZoomOut={() => mapRef.current?.zoomOut()}
-        onRecenter={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)}
-      />
     </div>
   );
 }
