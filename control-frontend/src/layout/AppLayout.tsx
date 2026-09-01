@@ -18,7 +18,11 @@ const AppLayout: React.FC = () => {
         <DashboardSelectionProvider>
           <div className="flex h-screen flex-col">
             <AppHeader />
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 w-full md:p-6">
+            {/* p-3 matches the gap-3 between and within dashboard rows, so the
+              space around the widgets is the same as the space between them.
+              Keep these in step: DashboardWidgets' STACK_GAP_PX is the same
+              12px. */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 w-full">
               <Outlet />
             </div>
           </div>

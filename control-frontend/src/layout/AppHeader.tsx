@@ -19,7 +19,7 @@ const AppHeader: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-[99999] w-full border-b border-brand-border bg-white shadow-sm">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between lg:px-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between lg:px-3">
         {/* Left area */}
         <div className="flex w-full items-center justify-between gap-3 px-3 py-3 lg:w-auto lg:px-0 lg:py-4">
           <HeaderLogoMenu />
@@ -51,7 +51,7 @@ const AppHeader: React.FC = () => {
         <div
           className={`${
             isApplicationMenuOpen ? "flex" : "hidden"
-          } w-full items-center justify-between gap-4 border-t border-brand-border bg-white px-5 py-4 lg:flex lg:w-auto lg:justify-end lg:border-t-0 lg:px-0 lg:py-0`}
+          } w-full items-center justify-between gap-4 border-t border-brand-border bg-white px-3 py-4 lg:flex lg:w-auto lg:justify-end lg:border-t-0 lg:px-0 lg:py-0`}
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* Dark mode button disabled for now */}

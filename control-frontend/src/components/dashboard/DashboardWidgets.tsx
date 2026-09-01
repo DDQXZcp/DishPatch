@@ -546,7 +546,7 @@ export default function DashboardWidgets() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className="flex h-full flex-col gap-3">
       <AlertsSnackbarStack />
       {isDesktopWorkspace ? (
         <div className="min-h-0 flex-1">
