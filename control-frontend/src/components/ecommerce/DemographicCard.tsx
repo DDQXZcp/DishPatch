@@ -5,19 +5,15 @@ interface DemographicCardProps {
 }
 
 export default function DemographicCard({ framed = true }: DemographicCardProps) {
-  const content = (
-    <>
-      <div className={`${framed ? "my-6" : "h-full"} overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800`}>
-        <div id="mapOne" className={`mapOne map-btn w-full ${framed ? "h-[500px]" : "h-full"}`}>
-          <RestaurantMap />
-        </div>
-      </div>
-    </>
-  );
-
   if (!framed) {
-    return content;
+    return <RestaurantMap />;
   }
+
+  const content = (
+    <div className="my-6 h-[500px] overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-800">
+      <RestaurantMap />
+    </div>
+  );
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">

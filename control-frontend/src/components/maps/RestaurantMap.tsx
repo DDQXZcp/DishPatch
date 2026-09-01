@@ -8,7 +8,7 @@ import {
 } from '../../context/DashboardSelectionContext';
 import { DASHBOARD_RESET_VIEW_EVENT } from '../dashboard/dashboardLayout';
 import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
-import type { Robot, RobotStatus } from '../../types/Robot';
+import { DISPLAYED_ROBOT_STATUSES, type Robot, type RobotStatus } from '../../types/Robot';
 
 
 const MAP_MANIFEST_URL = "/maps/map-manifest.json";
@@ -485,19 +485,86 @@ function applyFitView(map: L.Map, bounds: FloorplanBounds) {
   map.setView(center, zoom, { animate: false });
 }
 
-function RecenterButton({ onClick }: { onClick: () => void }) {
+const MAP_CONTROL_GROUP_CLASS =
+  "flex items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-theme-lg dark:border-gray-700 dark:bg-gray-800";
+
+const MAP_CONTROL_BUTTON_CLASS =
+  "flex h-9 w-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white";
+
+/**
+ * Zoom and recenter in one group.
+ *
+ * Leaflet's built-in zoom control is disabled in favour of this so all three
+ * buttons share one style — the default control cannot be matched without
+ * global CSS overrides, and this app has none.
+ */
+function MapControls({
+  onZoomIn,
+  onZoomOut,
+  onRecenter,
+}: {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onRecenter: () => void;
+}) {
   return (
-    <div className="absolute top-4 right-4 z-[1000]">
-      <button
-        onClick={onClick}
-        className="flex items-center justify-center w-10 h-10 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg shadow-lg dark:bg-gray-800 dark:hover:bg-gray-700 dark:border-gray-600"
-        title="Recenter"
-      >
-        <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </button>
+    <div className="pointer-events-auto absolute right-4 top-4 z-[1000] flex items-center gap-2">
+      {/* Zoom is one paired control — the two halves are opposites of each
+          other, so they share a container. */}
+      <div className={MAP_CONTROL_GROUP_CLASS}>
+        <button type="button" onClick={onZoomIn} className={MAP_CONTROL_BUTTON_CLASS} title="Zoom in" aria-label="Zoom in">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+
+        <div className="w-px self-stretch bg-gray-200 dark:bg-gray-700" />
+
+        <button type="button" onClick={onZoomOut} className={MAP_CONTROL_BUTTON_CLASS} title="Zoom out" aria-label="Zoom out">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" d="M5 12h14" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Kept apart: this resets the whole view rather than nudging it, so it
+          should not read as a third step on the zoom scale. */}
+      <div className={MAP_CONTROL_GROUP_CLASS}>
+        <button type="button" onClick={onRecenter} className={MAP_CONTROL_BUTTON_CLASS} title="Recenter" aria-label="Recenter">
+          {/* Crosshair — the conventional "centre the view here" mark. Corner
+              brackets read as fullscreen, and a pin reads as "where am I". */}
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="7" />
+            <circle cx="12" cy="12" r="1.75" fill="currentColor" stroke="none" />
+            <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rendered into the widget header's overlay card (see `renderHeaderDetail` in
+ * widgetRegistry.tsx) rather than floated onto the map separately — sharing the
+ * title's opaque panel is what keeps it readable over the floorplan's walls.
+ */
+export function MapLegend() {
+  return (
+    // shrink-0 so a narrow widget truncates the title rather than crushing the
+    // keys — the legend is fixed-length, the title is not.
+    <div className="flex shrink-0 items-center gap-x-3">
+      {DISPLAYED_ROBOT_STATUSES.map((status) => (
+        <span key={status} className="flex items-center gap-1.5 text-theme-xs font-medium text-gray-600 dark:text-gray-300">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            // Same source as the marker borders and trail dots, so a swatch
+            // always matches the robot it explains.
+            style={{ backgroundColor: getRobotStatusColor(status) }}
+          />
+          {status}
+        </span>
+      ))}
     </div>
   );
 }
@@ -585,6 +652,9 @@ export default function RestaurantMap() {
       zoomDelta: 0.5,
       zoomSnap: 0,
       attributionControl: false,
+      // Replaced by MapControls so the three buttons share one style, and to
+      // free the top-left corner for the legend.
+      zoomControl: false,
       center: L.latLngBounds(bounds).getCenter(),
       zoom: MAP_MIN_ZOOM,
     });
@@ -680,15 +750,19 @@ export default function RestaurantMap() {
   }, [robots, loadedMap, orderTableById, highlightedRobotId]);
 
   if (!loadedMap) {
-    return <div className="h-full w-full rounded-lg" style={{ backgroundColor: '#ffffff' }} />;
+    return <div className="h-full w-full" style={{ backgroundColor: '#ffffff' }} />;
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg">
+    <div className="relative h-full w-full overflow-hidden">
       {/* Leaflet's own stylesheet sets .leaflet-container background to #ddd;
           an inline style is needed to win over that rule. */}
-      <div ref={containerRef} className="h-full w-full rounded-lg" style={{ backgroundColor: '#ffffff' }} />
-      <RecenterButton onClick={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)} />
+      <div ref={containerRef} className="h-full w-full" style={{ backgroundColor: '#ffffff' }} />
+      <MapControls
+        onZoomIn={() => mapRef.current?.zoomIn()}
+        onZoomOut={() => mapRef.current?.zoomOut()}
+        onRecenter={() => mapRef.current && applyFitView(mapRef.current, loadedMap.bounds)}
+      />
     </div>
   );
 }

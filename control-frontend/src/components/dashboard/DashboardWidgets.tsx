@@ -65,7 +65,13 @@ function useMediaQuery(query: string) {
 
 function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5">
+    <div
+      className={
+        widget.bleed
+          ? "min-h-0 flex-1 overflow-hidden"
+          : "min-h-0 flex-1 overflow-auto px-4 pb-4 pt-1 sm:px-5 sm:pb-5 sm:pt-1.5"
+      }
+    >
       {widget.render()}
     </div>
   );
@@ -73,11 +79,29 @@ function WidgetBody({ widget }: { widget: DashboardWidgetDefinition }) {
 
 function WidgetHeader({ widget }: { widget: DashboardWidgetDefinition }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
-      <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
-        {widget.title}
-      </h3>
-      <div className="flex shrink-0 items-center gap-2">
+    <div
+      className={`flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5 ${
+        widget.bleed
+          ? "pointer-events-none absolute inset-x-0 top-0 z-[1000]" : ""
+      }`}
+    >
+      {widget.bleed ? (
+        <div className="pointer-events-auto flex min-w-0 items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-theme-md dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+            {widget.title}
+          </h3>
+          {widget.renderHeaderDetail?.()}
+        </div>
+      ) : (
+        <h3 className="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-white">
+          {widget.title}
+        </h3>
+      )}
+      <div
+        className={`flex shrink-0 items-center gap-2 ${
+          widget.bleed ? "pointer-events-auto" : ""
+        }`}
+      >
         {widget.renderHeaderActions?.()}
       </div>
     </div>
@@ -116,7 +140,7 @@ function MobileWidget({ widget }: { widget: DashboardWidgetDefinition }) {
 
   return (
     <div
-      className="flex flex-col rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+      className="relative flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
       style={{ height: DEFAULT_ROW_HEIGHT }}
     >
       {widget.wrap ? widget.wrap(content) : content}

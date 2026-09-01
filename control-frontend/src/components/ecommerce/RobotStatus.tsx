@@ -18,7 +18,11 @@ import {
 import Badge from "../ui/badge/Badge";
 import WidgetMessage from "../common/WidgetMessage";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import type { Robot, RobotStatus } from "../../types/Robot";
+import {
+  DISPLAYED_ROBOT_STATUSES,
+  type Robot,
+  type RobotStatus,
+} from "../../types/Robot";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
 import {
   useDashboardHighlight,
@@ -30,7 +34,7 @@ import {
   type OrderTableInfo,
 } from "../../utils/orderTable";
 
-const ALL_STATUSES: RobotStatus[] = ["Serving", "Returning", "Waiting"];
+
 
 const STATUS_COLORS: Record<RobotStatus, string> = {
   Serving: "bg-green-500",
@@ -160,7 +164,7 @@ export function RobotStatusHeaderActions() {
           onClose={() => setFilterOpen(false)}
           className="w-48 p-2"
         >
-          {ALL_STATUSES.map((status) => (
+          {DISPLAYED_ROBOT_STATUSES.map((status) => (
             <button
               key={status}
               onClick={() => toggleFilter(status)}
