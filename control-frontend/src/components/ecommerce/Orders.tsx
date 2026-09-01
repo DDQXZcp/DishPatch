@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,6 +20,10 @@ import {
 import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useRobotContext } from "../../context/RobotWebSocketProvider";
+import {
+  useDashboardHighlight,
+  useDashboardSelection,
+} from "../../context/DashboardSelectionContext";
 import { formatOrderItemLine } from "../../utils/orderTable";
 
 import type {
@@ -456,6 +461,17 @@ export default function Orders({
     cancelOrder,
   } = useOrders();
 
+  const { selectOrder } = useDashboardSelection();
+  const { highlightedOrderId } = useDashboardHighlight();
+  const highlightedRowRef = useRef<HTMLTableRowElement>(null);
+
+  // The table is unvirtualised and routinely holds four figures of orders, so
+  // the partner row of a selected robot is almost always off-screen. One ref
+  // attached to whichever row is lit beats an effect per row.
+  useEffect(() => {
+    highlightedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [highlightedOrderId]);
+
   const content = (
     <>
       {framed && (
@@ -571,10 +587,26 @@ export default function Orders({
                     cancellingOrderId ===
                     order.orderId;
 
+                  const isHighlighted =
+                    order.orderId === highlightedOrderId;
+
                   return (
                     <TableRow
                       key={order.orderId}
-                      className="transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                      ref={
+                        isHighlighted
+                          ? highlightedRowRef
+                          : undefined
+                      }
+                      onClick={() =>
+                        selectOrder(order.orderId)
+                      }
+                      aria-selected={isHighlighted}
+                      className={`cursor-pointer transition-colors ${
+                        isHighlighted
+                          ? "bg-brand-50 dark:bg-brand-500/10"
+                          : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                      }`}
                     >
                       <TableCell className="py-3">
                         <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
@@ -616,9 +648,11 @@ export default function Orders({
                       <TableCell className="py-3 text-end">
                         <button
                           type="button"
-                          onClick={() =>
-                            void cancelOrder(order)
-                          }
+                          onClick={(event) => {
+                            // Cancelling is not a way of selecting the row.
+                            event.stopPropagation();
+                            void cancelOrder(order);
+                          }}
                           disabled={
                             !canCancel ||
                             cancellingOrderId !== null

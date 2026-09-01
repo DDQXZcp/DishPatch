@@ -11,6 +11,10 @@ import Badge from "../ui/badge/Badge";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import type { Robot, RobotStatus } from '../../types/Robot';
 import { useRobotContext } from '../../context/RobotWebSocketProvider';
+import {
+  useDashboardHighlight,
+  useDashboardSelection,
+} from '../../context/DashboardSelectionContext';
 import { buildOrderTableIndex, formatOrderItemLine, type OrderTableInfo } from '../../utils/orderTable';
 
 const ALL_STATUSES: RobotStatus[] = ['Serving', 'Returning', 'Waiting', 'Maintenance'];
@@ -262,7 +266,12 @@ function CurrentTaskCell({
         type="button"
         onMouseEnter={openPopover}
         onMouseLeave={scheduleClose}
-        onClick={openPopover}
+        // Peeking at the task detail must not also change the dashboard
+        // selection — the row underneath this button is clickable.
+        onClick={(event) => {
+          event.stopPropagation();
+          openPopover();
+        }}
         className="block max-w-full truncate text-left underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-brand-600 hover:decoration-brand-400 dark:decoration-gray-600"
       >
         {summary}
@@ -306,12 +315,22 @@ interface RobotStatusProps {
 export default function RobotStatus({ framed = true }: RobotStatusProps) {
   const { robots, orders } = useRobotContext();
   const { activeFilters } = useRobotStatusFilters();
+  const { selectRobot } = useDashboardSelection();
+  const { highlightedRobotId } = useDashboardHighlight();
+  const highlightedRowRef = useRef<HTMLTableRowElement>(null);
 
   const orderTableById = useMemo(() => buildOrderTableIndex(orders), [orders]);
 
   const filteredRobots = activeFilters.size === 0
     ? robots
     : robots.filter((r) => activeFilters.has(r.status));
+
+  // One ref for whichever row is currently lit, rather than one per row: the
+  // list is short, but this keeps the pattern identical to the POS table where
+  // the row count makes per-row effects wasteful.
+  useEffect(() => {
+    highlightedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [highlightedRobotId]);
 
   const content = (
     <>
@@ -357,8 +376,21 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
           {/* Table Body */}
 
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredRobots.map((robot: Robot) => (
-              <TableRow key={robot.id} className="h-[52px]">
+            {filteredRobots.map((robot: Robot) => {
+              const isHighlighted = robot.id === highlightedRobotId;
+
+              return (
+              <TableRow
+                key={robot.id}
+                ref={isHighlighted ? highlightedRowRef : undefined}
+                onClick={() => selectRobot(robot.id)}
+                aria-selected={isHighlighted}
+                className={`h-[52px] cursor-pointer transition-colors ${
+                  isHighlighted
+                    ? "bg-brand-50 dark:bg-brand-500/10"
+                    : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                }`}
+              >
                 <TableCell className="py-3">
                   <p className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
                     {robot.name}
@@ -391,7 +423,8 @@ export default function RobotStatus({ framed = true }: RobotStatusProps) {
                   }
                 />
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>
