@@ -18,7 +18,7 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
   },
   {
     id: "robot-list",
-    title: "Robot",
+    title: "Robot Fleet",
     description: "Live robot fleet status",
     render: () => <RobotStatus framed={false} />,
     renderHeaderActions: () => <RobotStatusHeaderActions />,
