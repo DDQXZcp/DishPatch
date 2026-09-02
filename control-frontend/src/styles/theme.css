@@ -41,4 +41,10 @@
 
   --color-app-border: #e2e8f0;
   --color-app-border-strong: #cbd5e1;
+
+  /*
+   * Elevation
+   */
+
+  --shadow-card: 0 8px 30px rgba(15, 23, 42, 0.06);
 }

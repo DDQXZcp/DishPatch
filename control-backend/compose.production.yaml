@@ -14,6 +14,7 @@ services:
     environment:
       SERVER_PORT: "8081"
       SERVER_ADDRESS: "0.0.0.0"
+      CONTROL_BACKEND_USERS_TABLE: "Users"
 
     expose:
       - "8081"
