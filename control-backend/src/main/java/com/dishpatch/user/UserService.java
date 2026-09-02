@@ -52,6 +52,10 @@ public class UserService {
     }
 
     public Optional<Map<String, Object>> login(String email, String password) {
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Email and password are required");
+        }
+
         return userRepository.findByEmail(email).filter(user -> matches(password, (String) user.get("password"))).map(this::cleanResponse);
     }
 

@@ -31,9 +31,13 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginRequest request) {
-        return userService.login(request.email(), request.password())
-                .map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
-                .orElseGet(() -> ResponseEntity.status(401).body(new ApiResponse<>(false, "Invalid email or password", null)));
+        try {
+            return userService.login(request.email(), request.password())
+                    .map(user -> ResponseEntity.ok(new ApiResponse<>(true, null, user)))
+                    .orElseGet(() -> ResponseEntity.status(401).body(new ApiResponse<>(false, "Invalid email or password", null)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
+        }
     }
 
     @PostMapping("/signup")
