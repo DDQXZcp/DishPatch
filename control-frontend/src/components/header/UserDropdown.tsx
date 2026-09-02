@@ -5,8 +5,15 @@ import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { GroupIcon } from "../../icons";
 
-const ADMIN_NAME = "DishPatch Admin";
-const ADMIN_EMAIL = "admin@dishpatch.com";
+// Shown until the profile resolves, and if it never does. Deliberately makes no
+// claim about who is signed in — a wrong identity is worse than no identity.
+const UNKNOWN_NAME = "Account";
+
+interface UserData {
+  userId: string;
+  name: string;
+  email: string;
+}
 
 function DefaultUserIcon() {
   return (
@@ -96,16 +103,11 @@ function SignOutIcon() {
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  interface UserData {
-  userId: string;
-  name: string;
-  email: string;
-}
-
   const { userId, logout } = useAuth();
   const [user, setUser] = useState<UserData | null>(null);
+  const [failed, setFailed] = useState(false);
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-  
+
   const handleSignOut = () => {
     logout();
     closeDropdown();
@@ -113,13 +115,18 @@ export default function UserDropdown() {
 
   useEffect(() => {
     let cancelled = false;
+    setFailed(false);
 
     fetch(`${backendUrl}/api/users/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
         if (data.success) setUser(data.data);
+        else setFailed(true);
       })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
 
     return () => { cancelled = true; };
   }, [userId]);
@@ -140,7 +147,7 @@ export default function UserDropdown() {
       <button
         type="button"
         onClick={toggleDropdown}
-        aria-label={`Open user menu for ${user?.name || ADMIN_NAME}`}
+        aria-label={`Open user menu for ${user?.name ?? UNKNOWN_NAME}`}
         aria-expanded={isOpen}
         aria-haspopup="menu"
         className="dropdown-toggle flex items-center rounded-xl px-2 py-1.5 text-gray-700 transition-colors hover:bg-brand-light"
@@ -150,7 +157,7 @@ export default function UserDropdown() {
         </span>
 
         <span className="mr-1 block font-medium text-theme-sm">
-          {user?.name || ADMIN_NAME}
+          {user?.name ?? UNKNOWN_NAME}
         </span>
 
         <svg
@@ -181,12 +188,18 @@ export default function UserDropdown() {
       >
         <div className="rounded-xl bg-brand-light px-3 py-3">
           <span className="block font-semibold text-gray-800 text-theme-sm">
-            {user?.name || ADMIN_NAME}
+            {user?.name ?? UNKNOWN_NAME}
           </span>
 
-          <span className="mt-0.5 block text-theme-xs text-gray-500">
-            {user?.email || ADMIN_EMAIL}
-          </span>
+          {user ? (
+            <span className="mt-0.5 block text-theme-xs text-gray-500">
+              {user.email}
+            </span>
+          ) : failed ? (
+            <span className="mt-0.5 block text-theme-xs text-gray-500">
+              Couldn&apos;t load profile
+            </span>
+          ) : null}
         </div>
 
         <ul className="flex flex-col gap-1 border-b border-brand-border pb-3 pt-3">
