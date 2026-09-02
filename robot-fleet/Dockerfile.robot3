@@ -46,6 +46,7 @@ COPY src/robot_navigation ./src/robot_navigation
 COPY src/robot_status ./src/robot_status
 COPY src/nav2_launcher ./src/nav2_launcher
 COPY src/rosbridge_relay ./src/rosbridge_relay
+COPY src/costmap_viz ./src/costmap_viz
 COPY config ./config
 COPY scripts/robot3_entrypoint.sh ./scripts/robot3_entrypoint.sh
 RUN chmod +x /ros2_ws/scripts/robot3_entrypoint.sh

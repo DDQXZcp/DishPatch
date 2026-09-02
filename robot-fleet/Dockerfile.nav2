@@ -30,14 +30,15 @@ RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then rosdep init
 # ── Copy only what Nav2 needs ──────────────────────────────────────────────────
 COPY src/shared_msgs ./src/shared_msgs
 COPY src/nav2_launcher ./src/nav2_launcher
+COPY src/costmap_viz ./src/costmap_viz
 COPY config ./config
 COPY scripts/nav2_entrypoint.sh ./scripts/nav2_entrypoint.sh
 RUN chmod +x /ros2_ws/scripts/nav2_entrypoint.sh
 
-# ── Build shared_msgs + nav2_launcher ─────────────────────────────────────────
+# ── Build shared_msgs + nav2_launcher + costmap_viz ───────────────────────────
 RUN rosdep update && \
     rosdep install --from-paths src --ignore-src -r -y && \
     source /opt/ros/jazzy/setup.bash && \
-    colcon build --symlink-install --packages-select shared_msgs nav2_launcher
+    colcon build --symlink-install --packages-select shared_msgs nav2_launcher costmap_viz
 
 CMD ["/ros2_ws/scripts/nav2_entrypoint.sh"]

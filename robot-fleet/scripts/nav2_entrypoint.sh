@@ -32,6 +32,10 @@ fi
 # Example: ROBOT_NAMESPACES=robot1,robot2,robot3
 NAMESPACES=${ROBOT_NAMESPACES:-robot1}
 
+# Metres to lift the republished local costmap by, so it does not z-fight the
+# map in Foxglove's 3D panel. See the costmap_viz package.
+COSTMAP_Z_OFFSET=${COSTMAP_Z_OFFSET:-0.10}
+
 # Generate per-namespace nav2 params from the template
 for NS in $(echo $NAMESPACES | tr ',' ' '); do
     echo "[nav2_entrypoint] Generating params for namespace: ${NS}"
@@ -42,4 +46,5 @@ done
 
 echo "[nav2_entrypoint] Launching Nav2 for namespaces: ${NAMESPACES}"
 exec ros2 launch nav2_launcher multi_nav2_launch.py \
-    namespaces:=${NAMESPACES}
+    namespaces:=${NAMESPACES} \
+    costmap_z_offset:=${COSTMAP_Z_OFFSET}

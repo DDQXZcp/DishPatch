@@ -130,6 +130,10 @@ services:
       - ROBOT_NAMESPACES=robot1,robot2
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
+      # metres to lift the republished local costmap by, so it does not z-fight
+      # /{ns}/map in foxglove's 3d panel. see src/costmap_viz.
+      - COSTMAP_Z_OFFSET=0.10
+
     depends_on:
       - rosbridge
 

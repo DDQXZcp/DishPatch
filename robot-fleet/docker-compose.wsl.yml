@@ -35,6 +35,10 @@ services:
       #   ROSBRIDGE_URL=ws://<ec2-ip>:9090 docker compose -f docker-compose.wsl.yml up
       - ROSBRIDGE_URL=${ROSBRIDGE_URL:-ws://15.135.131.146:9090}
 
+      # Metres to lift the republished local costmap by, so it does not
+      # z-fight /robot3/map in Foxglove's 3D panel. See src/costmap_viz.
+      - COSTMAP_Z_OFFSET=0.10
+
       - INITIAL_BATTERY=100.0
 
       # Init at the kitchen counter

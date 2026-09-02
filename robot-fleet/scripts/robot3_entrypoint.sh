@@ -9,6 +9,7 @@
 #
 #   ROBOT_NAMESPACE   namespace for this robot, e.g. robot3
 #   ROSBRIDGE_URL     ws://<host>:9090 to join; unset runs local-only
+#   COSTMAP_Z_OFFSET  metres to lift the republished local costmap by (see costmap_viz)
 # ──────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -56,7 +57,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "[robot3_entrypoint] Launching Nav2 for ${NS}"
-ros2 launch nav2_launcher multi_nav2_launch.py namespaces:=${NS} &
+ros2 launch nav2_launcher multi_nav2_launch.py \
+    namespaces:=${NS} \
+    costmap_z_offset:=${COSTMAP_Z_OFFSET:-0.10} &
 PIDS+=($!)
 
 echo "[robot3_entrypoint] Launching robot nodes for ${NS}"

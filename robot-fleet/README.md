@@ -127,6 +127,7 @@ docker exec nav2 bash -lc "source /opt/ros/jazzy/setup.bash && ros2 topic info /
 | `/{ns}/controller_server` | `nav2_controller` | Produces `cmd_vel` (RPP, 20 Hz) |
 | `/{ns}/bt_navigator` | `nav2_bt_navigator` | Behavior Tree orchestration; owns the `goal_pose` subscription |
 | `/{ns}/lifecycle_manager` | `nav2_lifecycle_manager` | Brings the four above up on startup |
+| `/{ns}/costmap_z_offset_node` | `costmap_viz` | Republishes the local costmap lifted clear of `/{ns}/map` for the 3D view |
 
 Launched by `nav2_launcher/multi_nav2_launch.py`, which takes a comma-separated
 namespace list so one container serves the fleet.
@@ -154,7 +155,8 @@ the topic list and follows every `/robot{id}/status` it finds — see
 | `/{ns}/sensor` | `std_msgs/Bool` | `hardware_node` to `status_node` |
 | `/{ns}/odom` | `nav_msgs/Odometry` | `nav_node` to `status_node`, `controller_server` |
 | `/{ns}/cmd_vel` | `geometry_msgs/Twist` | `controller_server` to `nav_node` |
-| `/map` | `nav_msgs/OccupancyGrid` | `map_server` to costmaps |
+| `/{ns}/map` | `nav_msgs/OccupancyGrid` | `map_server` to costmaps |
+| `/{ns}/local_costmap/costmap_viz` | `nav_msgs/OccupancyGrid` | `costmap_z_offset_node` to Foxglove |
 
 ## RobotStatus
 
@@ -208,6 +210,12 @@ floorplan's resolution that was 16.8 million cells and ~385 ms per plan.
   follow path.
 - **Battery** — drains at 0.05%/s, auto-charges at 20% or below, stops at 95% or
   above.
+- **Costmaps in a 3D view** — point Foxglove at
+  `/{ns}/local_costmap/costmap_viz`, not `/{ns}/local_costmap/costmap`. Nav2
+  publishes every grid at z = 0 and offers no parameter to change that, so the
+  local costmap and `/{ns}/map` land on the same plane and z-fight. The `_viz`
+  copy is the same grid lifted by `COSTMAP_Z_OFFSET` (0.10 m); Nav2's own topic
+  is left alone because Nav2 owns it. See `src/costmap_viz`.
 - **Goals sent too early are lost** — a goal published before `bt_navigator` has
   finished coming up is not queued, it is simply not received. Wait a few
   seconds after startup.
