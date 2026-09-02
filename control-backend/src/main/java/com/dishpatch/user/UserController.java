@@ -53,6 +53,11 @@ public class UserController {
         }
     }
 
+    /**
+     * FIXME (broken, currently unreachable): always returns 409 — the condition
+     * expression in {@link UserRepository#updateEmail} is unsatisfiable. See the note
+     * there. Also note the path says "username" but this updates the email.
+     */
     @PatchMapping("/update/username/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateEmail(@PathVariable String id, @RequestBody UpdateEmailRequest request) {
         try {
@@ -66,6 +71,11 @@ public class UserController {
         }
     }
 
+    /**
+     * FIXME (broken, currently unreachable): cannot change a password — the request
+     * carries only one password field, which is used both to verify and to store. See
+     * the note on {@link UserService#updatePassword}; the fix needs a second field here.
+     */
     @PatchMapping("/update/password/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updatePassword(@PathVariable String id, @RequestBody UpdatePasswordRequest request) {
         try {

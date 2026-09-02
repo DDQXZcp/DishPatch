@@ -58,6 +58,24 @@ public class UserService {
         return userRepository.updateEmail(userId, email).map(this::cleanResponse);
     }
 
+    /**
+     * FIXME (broken, currently unreachable): this cannot change a password.
+     *
+     * <p>Only one password is passed in, and it is used for both roles — it is
+     * compared against the stored hash, and then re-hashed and written back. So a
+     * genuinely new password fails the check and throws ("Invalid password" → 400),
+     * and the only input that succeeds is the password already on the account, which
+     * is then stored again under a fresh salt. Net effect: a no-op.
+     *
+     * <p>Fix: take {@code currentPassword} and {@code newPassword} separately —
+     * {@code matches(currentPassword, stored)} then {@code hashPassword(newPassword)}.
+     * {@code UpdatePasswordRequest} needs the second field.
+     *
+     * <p>Deferred because nothing calls PATCH /api/users/update/password/{id} — the
+     * frontend has no edit-profile UI. This becomes blocking as soon as one is built.
+     * Note the endpoint is still publicly reachable and, in this state, reports
+     * whether a guessed password is correct (200 vs 400) for any known userId.
+     */
     public Optional<Map<String, Object>> updatePassword(String userId, String password) {
         Optional<Map<String, Object>> result = userRepository.findById(userId);
 

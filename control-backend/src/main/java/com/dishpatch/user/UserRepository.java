@@ -111,6 +111,28 @@ public class UserRepository {
         }
     }
 
+    /**
+     * FIXME (broken, currently unreachable): this can never succeed.
+     *
+     * <p>The condition below is {@code attribute_exists(#userId) AND
+     * attribute_not_exists(#email)}, which is unsatisfiable in both directions:
+     * {@code addUser} writes an {@code email} attribute on every item, so for a real
+     * user the second clause is false; and for a missing user the first clause is
+     * false. The update therefore always throws ConditionalCheckFailedException and
+     * the caller always returns 409 "Email already exists" — a misleading message,
+     * since the new email has nothing to do with the failure.
+     *
+     * <p>The intent was presumably to enforce email uniqueness, but a condition
+     * expression is scoped to the single item at the key being written and cannot
+     * express a cross-row rule. {@code addUser} has the same misunderstanding, though
+     * it fails the other way: there the condition is vacuously true, so duplicate
+     * emails are accepted. That one is a live bug, tracked separately.
+     *
+     * <p>Fix: drop {@code attribute_not_exists(#email)} so the condition only guards
+     * that the user exists, and enforce uniqueness in the service layer.
+     *
+     * <p>Deferred because nothing calls PATCH /api/users/update/username/{id}.
+     */
     public Optional<Map<String, Object>> updateEmail(String userId, String email) {
         String updatedTime = Instant.now().toString();
         try {
