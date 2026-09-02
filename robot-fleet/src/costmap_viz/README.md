@@ -33,7 +33,7 @@ point the 3D panel at `costmap_viz` instead.
 |---|---|---|
 | `input_topic` | `"local_costmap/costmap"` | Costmap to read, relative to the node's namespace |
 | `output_topic` | `"local_costmap/costmap_viz"` | Where to republish it, relative likewise |
-| `z_offset` | `0.10` | Metres to lift the grid by |
+| `z_offset` | `1.0` | Metres to lift the grid by |
 
 Both topics are relative, so the node handles any costmap under its namespace —
 point `input_topic` at `global_costmap/costmap` for a second instance if the
@@ -65,7 +65,7 @@ float.
 ```bash
 ros2 run costmap_viz costmap_z_offset_node --ros-args \
     -r __ns:=/robot1 \
-    -p z_offset:=0.10
+    -p z_offset:=1.0
 ```
 
 Normally started for you, once per namespace, by

@@ -59,7 +59,7 @@ class CostmapZOffsetNode(Node):
 
         self.declare_parameter("input_topic", "local_costmap/costmap")
         self.declare_parameter("output_topic", "local_costmap/costmap_viz")
-        self.declare_parameter("z_offset", 0.10)
+        self.declare_parameter("z_offset", 1.0)
 
         input_topic = self.get_parameter("input_topic").value
         output_topic = self.get_parameter("output_topic").value

@@ -132,7 +132,7 @@ services:
 
       # metres to lift the republished local costmap by, so it does not z-fight
       # /{ns}/map in foxglove's 3d panel. see src/costmap_viz.
-      - COSTMAP_Z_OFFSET=0.10
+      - COSTMAP_Z_OFFSET=1.0
 
     depends_on:
       - rosbridge

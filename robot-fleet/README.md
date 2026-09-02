@@ -214,7 +214,7 @@ floorplan's resolution that was 16.8 million cells and ~385 ms per plan.
   `/{ns}/local_costmap/costmap_viz`, not `/{ns}/local_costmap/costmap`. Nav2
   publishes every grid at z = 0 and offers no parameter to change that, so the
   local costmap and `/{ns}/map` land on the same plane and z-fight. The `_viz`
-  copy is the same grid lifted by `COSTMAP_Z_OFFSET` (0.10 m); Nav2's own topic
+  copy is the same grid lifted by `COSTMAP_Z_OFFSET` (1.0 m); Nav2's own topic
   is left alone because Nav2 owns it. See `src/costmap_viz`.
 - **Goals sent too early are lost** — a goal published before `bt_navigator` has
   finished coming up is not queued, it is simply not received. Wait a few

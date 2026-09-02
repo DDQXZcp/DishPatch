@@ -59,7 +59,7 @@ trap cleanup EXIT INT TERM
 echo "[robot3_entrypoint] Launching Nav2 for ${NS}"
 ros2 launch nav2_launcher multi_nav2_launch.py \
     namespaces:=${NS} \
-    costmap_z_offset:=${COSTMAP_Z_OFFSET:-0.10} &
+    costmap_z_offset:=${COSTMAP_Z_OFFSET:-1.0} &
 PIDS+=($!)
 
 echo "[robot3_entrypoint] Launching robot nodes for ${NS}"

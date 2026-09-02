@@ -123,7 +123,7 @@ def generate_launch_description():
 
     costmap_z_offset_arg = DeclareLaunchArgument(
         "costmap_z_offset",
-        default_value="0.10",
+        default_value="1.0",
         description="Metres to lift the republished local costmap by, so it does "
                     "not z-fight the map in a 3D view",
     )

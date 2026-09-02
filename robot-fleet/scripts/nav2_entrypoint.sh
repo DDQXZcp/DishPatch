@@ -34,7 +34,7 @@ NAMESPACES=${ROBOT_NAMESPACES:-robot1}
 
 # Metres to lift the republished local costmap by, so it does not z-fight the
 # map in Foxglove's 3D panel. See the costmap_viz package.
-COSTMAP_Z_OFFSET=${COSTMAP_Z_OFFSET:-0.10}
+COSTMAP_Z_OFFSET=${COSTMAP_Z_OFFSET:-1.0}
 
 # Generate per-namespace nav2 params from the template
 for NS in $(echo $NAMESPACES | tr ',' ' '); do
