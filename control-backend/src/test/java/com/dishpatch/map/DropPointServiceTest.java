@@ -80,7 +80,7 @@ class DropPointServiceTest {
 
         // Matches T4 in the staged drop-points.json.
         assertEquals(23.226, point.x());
-        assertEquals(9.241, point.y());
+        assertEquals(9.571, point.y());
         assertEquals(0.0, point.yaw());
     }
 

@@ -69,8 +69,8 @@ packages it into the JAR, where the backend reads it as
   "resolution": 0.011802,
   "origin": [0.0, 0.0, 0.0],
   "dropPoints": [
-    { "id": "T1", "x": 8.911, "y": 9.241, "yaw": 0.0 },
-    { "id": "R7", "x": 41.154, "y": 14.729, "yaw": 0.0 }
+    { "id": "T1", "x": 8.911, "y": 9.583, "yaw": 0.0 },
+    { "id": "R7", "x": 40.717, "y": 14.729, "yaw": 0.0 }
   ]
 }
 ```
