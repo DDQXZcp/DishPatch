@@ -28,7 +28,7 @@ import java.time.Instant;
 
 @Repository
 public class UserRepository {
-    
+
     private final DynamoDbClient dynamoDbClient;
     private final String usersTableName;
 
@@ -69,9 +69,9 @@ public class UserRepository {
                 ":email", AttributeValue.builder().s(email).build()
             ))
             .build();
-        
+
         QueryResponse response = dynamoDbClient.query(request);
-        
+
         if (response.items().isEmpty()) {
             return Optional.empty();
         }
@@ -101,8 +101,8 @@ public class UserRepository {
             dynamoDbClient.putItem(
                 PutItemRequest.builder().tableName(usersTableName)
                     .item(item)
-                    .conditionExpression("attribute_not_exists(#userId) AND attribute_not_exists(#email)")
-                    .expressionAttributeNames(Map.of("#userId", "userId", "#email", "email"))
+                    .conditionExpression("attribute_not_exists(#userId)")
+                    .expressionAttributeNames(Map.of("#userId", "userId"))
                     .build()
             );
             return Optional.of(DynamoDbValueMapper.toJavaMap(item));
@@ -136,7 +136,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> updateEmail(String userId, String email) {
         String updatedTime = Instant.now().toString();
         try {
-            UpdateItemResponse response = 
+            UpdateItemResponse response =
             dynamoDbClient.updateItem(
                 UpdateItemRequest.builder().tableName(usersTableName)
                 .key(Map.of(
@@ -160,7 +160,7 @@ public class UserRepository {
                 ))
                 .returnValues(ReturnValue.ALL_NEW).build()
             );
-        
+
             return Optional.of(
                 DynamoDbValueMapper.toJavaMap(
                     response.attributes()
@@ -174,7 +174,7 @@ public class UserRepository {
     public Optional<Map<String, Object>> updatePassword(String userId, String password) {
         String updateTime = Instant.now().toString();
         try {
-            UpdateItemResponse response = 
+            UpdateItemResponse response =
             dynamoDbClient.updateItem(
                 UpdateItemRequest.builder().tableName(usersTableName)
                 .key(Map.of(
@@ -198,7 +198,7 @@ public class UserRepository {
                 ))
                 .returnValues(ReturnValue.ALL_NEW).build()
             );
-        
+
             return Optional.of(DynamoDbValueMapper.toJavaMap(response.attributes()));
 
         } catch (ConditionalCheckFailedException exception) {

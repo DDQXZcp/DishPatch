@@ -42,6 +42,11 @@ public class UserService {
             throw new IllegalArgumentException("Invalid email: " + email);
         }
 
+        // Email uniqueness is enforced here, not in the DynamoDB write
+        if (userRepository.findByEmail(email).isPresent()) {
+            return Optional.empty();
+        }
+
         String hashedPassword = hashPassword(password);
         return userRepository.addUser(userId, email, hashedPassword, name, phone, role).map(this::cleanResponse);
     }
@@ -89,13 +94,13 @@ public class UserService {
             String hashedPassword = hashPassword(password);
             return userRepository.updatePassword(userId, hashedPassword).map(this::cleanResponse);
         }
-        
+
         return Optional.empty();
     }
 
     public Optional<Map<String, Object>> getUser(String userId) {
         return userRepository.findById(userId).map(this::cleanResponse);
     }
-    
+
 
 }
