@@ -1,0 +1,43 @@
+# ── DishPatch — one robot, away from the fleet ────────────────────────────────
+#
+# Runs robot3 (robot nodes + its own Nav2 + the rosbridge relay) on a machine
+# that is not part of the EC2 ROS graph, such as WSL. Nothing here joins the
+# fleet's DDS domain: the relay makes one outbound WebSocket connection to the
+# EC2 rosbridge and carries three topics over it.
+#
+#   docker compose -f docker-compose.wsl.yml up --build
+#
+# The backend discovers /robot3/status by itself, within about 10 seconds of it
+# appearing on the EC2 graph — nothing to redeploy, nothing to configure there.
+#
+# Stage the map before building:  bash map-source/stage-map-assets.sh
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  robot3:
+    build:
+      context: .
+      dockerfile: Dockerfile.robot3
+    container_name: robot3
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+      # This container is a ROS graph of one, so the domain id only has to not
+      # clash with anything else on the local machine.
+      - ROS_DOMAIN_ID=0
+
+      - ROBOT_NAMESPACE=robot3
+
+      # The fleet's rosbridge. Override per machine:
+      #   ROSBRIDGE_URL=ws://<ec2-ip>:9090 docker compose -f docker-compose.wsl.yml up
+      - ROSBRIDGE_URL=${ROSBRIDGE_URL:-ws://15.135.131.146:9090}
+
+      - INITIAL_BATTERY=100.0
+
+      # Init at the kitchen counter
+      - INITIAL_X=39.029
+      - INITIAL_Y=14.729
+      - INITIAL_THETA=0.0

@@ -1,5 +1,7 @@
 package com.dishpatch.order;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -7,14 +9,36 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Logger;
 
 @Service
 public class OrderService {
 
-    private final OrderRepository orderRepository;
+    private static final String ORDERS_TOPIC = "/topic/orders";
+    private static final long BROADCAST_INTERVAL_MS = 4_000L;
 
-    public OrderService(OrderRepository orderRepository) {
+    private static final Logger logger =
+            Logger.getLogger(OrderService.class.getName());
+
+    private final OrderRepository orderRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+
+    public OrderService(
+            OrderRepository orderRepository,
+            SimpMessagingTemplate messagingTemplate
+    ) {
         this.orderRepository = orderRepository;
+        this.messagingTemplate = messagingTemplate;
+    }
+
+    // Keeps the control frontend's order list live without a manual page refresh.
+    @Scheduled(fixedDelay = BROADCAST_INTERVAL_MS)
+    public void broadcastOrders() {
+        try {
+            messagingTemplate.convertAndSend(ORDERS_TOPIC, getOrders());
+        } catch (RuntimeException exception) {
+            logger.warning("Order broadcast failed: " + exception);
+        }
     }
 
     public List<Map<String, Object>> getOrders() {

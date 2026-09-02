@@ -75,11 +75,15 @@ jobs:
       - name: Validate staged map assets
         run: bash map-source/stage-map-assets.sh --check
 
-      - name: Build backend with Maven
+      # Tests run here as well as in test-control-backend.yml. That workflow is
+      # the fast PR signal; this one is the gate that a direct push to main or a
+      # workflow_dispatch cannot route around. `package` runs the suite by
+      # default, so a red test fails the build well before the first EC2 step.
+      - name: Build and test backend with Maven
         working-directory: control-backend
         run: |
           set -Eeuo pipefail
-          mvn --batch-mode --no-transfer-progress clean package -DskipTests
+          mvn --batch-mode --no-transfer-progress clean package
 
       - name: Find built JAR
         id: find-jar

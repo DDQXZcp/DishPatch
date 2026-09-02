@@ -25,4 +25,5 @@ on a single hardcoded topic with no namespace support.
 - Topic name `/robot/location` is hardcoded — cannot support multiple robots
 - Uses `PoseStamped` instead of the richer `Odometry` message
 - No `cmd_vel` subscription — robot cannot be controlled
-- No integration with `robot_core` state machine or `robot_status`
+- No integration with `robot_status`, so nothing it published ever reached the
+  backend

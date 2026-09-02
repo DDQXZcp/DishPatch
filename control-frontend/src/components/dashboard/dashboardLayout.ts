@@ -1,17 +1,20 @@
 import { WIDGET_IDS, type WidgetId } from "./types";
 
 export const DASHBOARD_WIDGET_STORAGE_KEY =
-  "dishpatch.control.dashboard.widgets.v2";
+  "dishpatch.control.dashboard.widgets.v5";
+
+export const DASHBOARD_RESET_VIEW_EVENT = "dashboard:reset-widget-view";
 
 export const MIN_ROW_HEIGHT = 260;
 export const DEFAULT_ROW_HEIGHT = 420;
 export const MIN_COLUMN_WIDTH = 18;
-
-export type DropPosition = "top" | "right" | "bottom" | "left";
+export const MIN_STACK_PANE_HEIGHT = 96;
 
 export interface DashboardWidgetColumn {
-  widgetId: WidgetId;
+  widgetIds: WidgetId[];
   width: number;
+  /** Percentages summing to 100, index-aligned with widgetIds. */
+  heights?: number[];
 }
 
 export interface DashboardWidgetRow {
@@ -28,18 +31,10 @@ export interface DashboardWidgetState {
 const DEFAULT_ROWS: DashboardWidgetRow[] = [
   {
     id: "row-main",
-    height: 620,
+    height: 480,
     columns: [
-      { widgetId: "robot-map", width: 66 },
-      { widgetId: "robot-list", width: 34 },
-    ],
-  },
-  {
-    id: "row-secondary",
-    height: 360,
-    columns: [
-      { widgetId: "pos-orders", width: 50 },
-      { widgetId: "table-status", width: 50 },
+      { widgetIds: ["robot-map"], width: 61.5 },
+      { widgetIds: ["robot-list", "pos-orders"], width: 38.5, heights: [35, 65] },
     ],
   },
 ];
@@ -111,17 +106,20 @@ export function sanitizeWidgetState(
   const rows: DashboardWidgetRow[] = [];
 
   for (const row of state.rows) {
-    const columns = row.columns.filter((column) => {
-      if (
-        !visibleIdSet.has(column.widgetId) ||
-        seenWidgetIds.has(column.widgetId)
-      ) {
-        return false;
-      }
+    const columns = row.columns
+      .map((column) => {
+        const widgetIds = column.widgetIds.filter((widgetId) => {
+          if (!visibleIdSet.has(widgetId) || seenWidgetIds.has(widgetId)) {
+            return false;
+          }
 
-      seenWidgetIds.add(column.widgetId);
-      return true;
-    });
+          seenWidgetIds.add(widgetId);
+          return true;
+        });
+
+        return { ...column, widgetIds };
+      })
+      .filter((column) => column.widgetIds.length > 0);
 
     if (columns.length > 0) {
       rows.push({
@@ -166,74 +164,6 @@ export function showWidgetInState(
   });
 }
 
-export function moveWidgetToBottom(
-  rows: DashboardWidgetRow[],
-  widgetId: WidgetId,
-) {
-  return appendWidgetAsRow(removeWidgetFromRows(rows, widgetId), widgetId);
-}
-
-export function moveWidgetNearTarget(
-  rows: DashboardWidgetRow[],
-  widgetId: WidgetId,
-  targetWidgetId: WidgetId,
-  position: DropPosition,
-) {
-  if (widgetId === targetWidgetId) {
-    return rows;
-  }
-
-  const rowsWithoutWidget = removeWidgetFromRows(rows, widgetId);
-  const targetRowIndex = rowsWithoutWidget.findIndex((row) =>
-    row.columns.some((column) => column.widgetId === targetWidgetId),
-  );
-
-  if (targetRowIndex === -1) {
-    return rows;
-  }
-
-  if (position === "top" || position === "bottom") {
-    const targetRow = rowsWithoutWidget[targetRowIndex];
-    const insertIndex = position === "top" ? targetRowIndex : targetRowIndex + 1;
-    const nextRows = [...rowsWithoutWidget];
-
-    nextRows.splice(
-      insertIndex,
-      0,
-      createSingleWidgetRow(widgetId, targetRow.height),
-    );
-
-    return nextRows;
-  }
-
-  return rowsWithoutWidget.map((row, rowIndex) => {
-    if (rowIndex !== targetRowIndex) {
-      return row;
-    }
-
-    const targetColumnIndex = row.columns.findIndex(
-      (column) => column.widgetId === targetWidgetId,
-    );
-
-    if (targetColumnIndex === -1) {
-      return row;
-    }
-
-    const insertIndex =
-      position === "left" ? targetColumnIndex : targetColumnIndex + 1;
-    const insertedWidth = 100 / (row.columns.length + 1);
-    const retainedWidthScale = (100 - insertedWidth) / 100;
-    const columns = row.columns.map((column) => ({
-      ...column,
-      width: column.width * retainedWidthScale,
-    }));
-
-    columns.splice(insertIndex, 0, { widgetId, width: insertedWidth });
-
-    return { ...row, columns: normalizeColumns(columns) };
-  });
-}
-
 export function setRowHeight(
   rows: DashboardWidgetRow[],
   rowId: string,
@@ -262,6 +192,32 @@ export function setColumnPairWidths(
       ...columns[columnIndex + 1],
       width: rightWidth,
     };
+
+    return { ...row, columns: normalizeColumns(columns) };
+  });
+}
+
+export function setStackPairHeights(
+  rows: DashboardWidgetRow[],
+  rowId: string,
+  columnIndex: number,
+  stackIndex: number,
+  topHeight: number,
+  bottomHeight: number,
+) {
+  return rows.map((row) => {
+    const column = row.id === rowId ? row.columns[columnIndex] : undefined;
+
+    if (!column?.heights) {
+      return row;
+    }
+
+    const heights = [...column.heights];
+    heights[stackIndex] = topHeight;
+    heights[stackIndex + 1] = bottomHeight;
+
+    const columns = [...row.columns];
+    columns[columnIndex] = { ...column, heights };
 
     return { ...row, columns: normalizeColumns(columns) };
   });
@@ -308,15 +264,29 @@ function parseRows(value: unknown) {
         return null;
       }
 
-      const column = columnItem as { widgetId?: unknown; width?: unknown };
+      const column = columnItem as {
+        widgetIds?: unknown;
+        width?: unknown;
+        heights?: unknown;
+      };
 
-      if (!isWidgetId(column.widgetId) || typeof column.width !== "number") {
+      if (
+        !Array.isArray(column.widgetIds) ||
+        column.widgetIds.length === 0 ||
+        !column.widgetIds.every(isWidgetId) ||
+        typeof column.width !== "number"
+      ) {
         return null;
       }
 
+      // Layouts saved before stack heights existed simply omit the field;
+      // normalizeStackHeights validates the contents from here.
       columns.push({
-        widgetId: column.widgetId,
+        widgetIds: column.widgetIds,
         width: column.width,
+        heights: Array.isArray(column.heights)
+          ? (column.heights as number[])
+          : undefined,
       });
     }
 
@@ -341,7 +311,7 @@ function createSingleWidgetRow(
   return {
     id: createDashboardRowId(),
     height,
-    columns: [{ widgetId, width: 100 }],
+    columns: [{ widgetIds: [widgetId], width: 100 }],
   };
 }
 
@@ -349,7 +319,12 @@ function removeWidgetFromRows(rows: DashboardWidgetRow[], widgetId: WidgetId) {
   return rows
     .map((row) => ({
       ...row,
-      columns: row.columns.filter((column) => column.widgetId !== widgetId),
+      columns: row.columns
+        .map((column) => ({
+          ...column,
+          widgetIds: column.widgetIds.filter((id) => id !== widgetId),
+        }))
+        .filter((column) => column.widgetIds.length > 0),
     }))
     .filter((row) => row.columns.length > 0)
     .map((row) => ({ ...row, columns: normalizeColumns(row.columns) }));
@@ -362,11 +337,12 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
 
   const fallbackWidth = 100 / columns.length;
   const rawColumns = columns.map((column) => ({
-    widgetId: column.widgetId,
+    widgetIds: column.widgetIds,
     width:
       Number.isFinite(column.width) && column.width > 0
         ? column.width
         : fallbackWidth,
+    heights: normalizeStackHeights(column.widgetIds.length, column.heights),
   }));
   const totalWidth = rawColumns.reduce((total, column) => total + column.width, 0);
 
@@ -378,6 +354,18 @@ function normalizeColumns(columns: DashboardWidgetColumn[]) {
     ...column,
     width: (column.width / totalWidth) * 100,
   }));
+}
+
+/** A length mismatch (a widget was hidden, say) self-heals to an even split. */
+function normalizeStackHeights(paneCount: number, heights?: number[]) {
+  const fallback = 100 / paneCount;
+  const raw =
+    heights?.length === paneCount
+      ? heights.map((h) => (Number.isFinite(h) && h > 0 ? h : fallback))
+      : Array.from({ length: paneCount }, () => fallback);
+  const total = raw.reduce((sum, h) => sum + h, 0);
+
+  return total > 0 ? raw.map((h) => (h / total) * 100) : raw.map(() => fallback);
 }
 
 function normalizeRowHeight(height: number) {
@@ -406,6 +394,10 @@ function uniqueWidgetIds(widgetIds: WidgetId[]) {
 function cloneRows(rows: DashboardWidgetRow[]) {
   return rows.map((row) => ({
     ...row,
-    columns: row.columns.map((column) => ({ ...column })),
+    columns: row.columns.map((column) => ({
+      ...column,
+      widgetIds: [...column.widgetIds],
+      heights: column.heights ? [...column.heights] : undefined,
+    })),
   }));
 }

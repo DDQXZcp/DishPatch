@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import { useModal } from "../../hooks/useModal";
 import { useAuth } from "../../context/AuthContext";
-import { Modal } from "../ui/modal";
-import Button from "../ui/button/Button";
-import Input from "../form/input/InputField";
-import Label from "../form/Label";
 
 interface UserData {
   userId: string;
@@ -15,14 +10,13 @@ interface UserData {
 }
 
 export default function UserInfoCard() {
-  const { isOpen, openModal, closeModal } = useModal();
   const { userId } = useAuth();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-  
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -41,14 +35,8 @@ export default function UserInfoCard() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  const handleSave = () => {
-    // Handle save logic here
-    console.log("Saving changes...");
-    closeModal();
-  };
-
   const [firstName, ...rest] = (user?.name ?? "").split(" ");
-  const lastName = rest.join(" ")
+  const lastName = rest.join(" ");
   return (
     <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800 lg:p-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">

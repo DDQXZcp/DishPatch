@@ -32,6 +32,16 @@
     <properties>
         <java.version>17</java.version>
         <aws.sdk.version>2.21.29</aws.sdk.version>
+
+        <!--
+            Test-quality tooling. Neither is managed by the Spring Boot parent,
+            so both are pinned here. pitest-maven and pitest-junit5-plugin must
+            be a matched pair — a mismatched junit5 plugin reports zero tests
+            found rather than failing outright.
+        -->
+        <jacoco.version>0.8.11</jacoco.version>
+        <pitest.version>1.15.3</pitest.version>
+        <pitest.junit5.version>1.2.1</pitest.junit5.version>
     </properties>
 
     <!--
@@ -149,6 +159,93 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+                Coverage. Runs as part of `mvn test`, so CI produces a report on
+                every run. Report branch coverage rather than line coverage: line
+                coverage counts a line as covered when a test merely executed it,
+                which is the weaker of the two claims and not the one worth making.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Mutation testing. Deliberately bound to no lifecycle phase — PIT
+                re-runs the covering tests once per mutant, so it is run on demand:
+                    mvn test-compile org.pitest:pitest-maven:mutationCoverage
+                Report lands in target/pit-reports/.
+            -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>${pitest.junit5.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>com.dishpatch.dispatch.*</param>
+                        <param>com.dishpatch.service.*</param>
+                        <param>com.dishpatch.order.*</param>
+                        <param>com.dishpatch.map.*</param>
+                    </targetClasses>
+
+                    <!--
+                        Every excluded class boots a Spring context or slice, and
+                        PIT would pay that cost once per mutant. The consequence is
+                        that the mutation score covers the service and domain layer
+                        only, not the controllers — which the report states rather
+                        than presenting the number as whole-suite.
+                    -->
+                    <excludedTestClasses>
+                        <param>com.dishpatch.ApplicationContextTest</param>
+                        <param>com.dishpatch.controller.*</param>
+                        <param>com.dishpatch.dispatch.DispatchControllerTest</param>
+                        <param>com.dishpatch.order.OrderControllerTest</param>
+                    </excludedTestClasses>
+
+                    <!--
+                        The controllers must be excluded here too, not just above.
+                        Leaving them in targetClasses while their tests are excluded
+                        reports them at 0% — not because they are untested, but
+                        because the only tests that reach them were removed from the
+                        run. That would understate the suite rather than measure it.
+                        Their coverage is the @WebMvcTest classes, reported separately.
+                    -->
+                    <excludedClasses>
+                        <param>com.dishpatch.dispatch.DispatchController</param>
+                        <param>com.dishpatch.order.OrderController</param>
+                    </excludedClasses>
+
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                </configuration>
             </plugin>
         </plugins>
     </build>

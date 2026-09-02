@@ -1,7 +1,13 @@
 import DemographicCard from "../ecommerce/DemographicCard";
-import RobotStatus from "../ecommerce/RobotStatus";
-import Orders from "../ecommerce/Orders";
-import PlaceholderWidget from "./PlaceholderWidget";
+import { MapControls, MapLegend, MapViewProvider } from "../maps/RestaurantMap";
+import RobotStatus, {
+  RobotStatusFilterProvider,
+  RobotStatusHeaderActions,
+} from "../ecommerce/RobotStatus";
+import Orders, {
+  OrdersProvider,
+  OrdersHeaderActions,
+} from "../ecommerce/Orders";
 import type { DashboardWidgetDefinition, WidgetId } from "./types";
 
 export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
@@ -10,12 +16,20 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
     title: "Robot Operational Map",
     description: "Robot operational status in the restaurant",
     render: () => <DemographicCard framed={false} />,
+    renderHeaderDetail: () => <MapLegend />,
+    renderHeaderActions: () => <MapControls />,
+    wrap: (children) => <MapViewProvider>{children}</MapViewProvider>,
+    bleed: true,
   },
   {
     id: "robot-list",
-    title: "Robot",
+    title: "Robot Fleet",
     description: "Live robot fleet status",
     render: () => <RobotStatus framed={false} />,
+    renderHeaderActions: () => <RobotStatusHeaderActions />,
+    wrap: (children) => (
+      <RobotStatusFilterProvider>{children}</RobotStatusFilterProvider>
+    ),
   },
   {
     id: "pos-orders",
@@ -28,16 +42,9 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDefinition[] = [
       // />
       <Orders framed={false} />
     ),
-  },
-  {
-    id: "table-status",
-    title: "Table Status",
-    description: "Placeholder for table state",
-    render: () => (
-      <PlaceholderWidget
-        label="Table status widget"
-        description="Future seated, ordered, served, and cleared states can be shown here."
-      />
+    renderHeaderActions: () => <OrdersHeaderActions />,
+    wrap: (children) => (
+      <OrdersProvider>{children}</OrdersProvider>
     ),
   },
 ];

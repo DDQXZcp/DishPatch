@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import SockJS from 'sockjs-client';
 import { Client, IMessage } from '@stomp/stompjs';
 import type { Robot, RobotStats } from '../types/Robot';
+import type { Order } from '../types/Order';
 
 interface RobotStatsMessage {
   serving?: number;
@@ -13,8 +14,16 @@ interface RobotStatsMessage {
   timestamp?: string;
 }
 
-const ROBOT_LOCATIONS_TOPIC = '/topic/scooter-locations';
-const ROBOT_STATS_TOPIC = '/topic/scooter-stats';
+/**
+ * `connecting` is only ever the state before the first successful connect.
+ * Afterwards a dropped socket is `disconnected`, which STOMP resolves by itself
+ * on its `reconnectDelay` — the UI only has to report it.
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
+
+const ROBOT_LOCATIONS_TOPIC = '/topic/robot-locations';
+const ROBOT_STATS_TOPIC = '/topic/robot-stats';
+const ORDERS_TOPIC = '/topic/orders';
 
 function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
   return {
@@ -31,9 +40,14 @@ function normalizeRobotStats(message: RobotStatsMessage): RobotStats {
 export const useWebSocketRobots = () => {
   const [robots, setRobots] = useState<Robot[]>([]);
   const [stats, setStats] = useState<RobotStats | null>(null);
+  const [orders, setOrders] = useState<Order[] | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stompClient = useRef<Client | null>(null);
+  // Distinguishes "has not connected yet" from "was connected and dropped", so
+  // the UI can say Connecting on a fresh load instead of flashing Not connected
+  // for the second it takes the socket to come up.
+  const hasConnectedOnce = useRef(false);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'; //Default Spring Boot backend URL
 
@@ -55,6 +69,7 @@ export const useWebSocketRobots = () => {
           onConnect: (frame) => {
             if (!active) return
             console.log('Connected to WebSocket:', frame);
+            hasConnectedOnce.current = true;
             setIsConnected(true);
             setError(null);
 
@@ -69,6 +84,12 @@ export const useWebSocketRobots = () => {
               const statsData: RobotStatsMessage = JSON.parse(message.body);
               setStats(normalizeRobotStats(statsData));
             });
+
+            // Keeps the POS order list live without a manual page refresh.
+            stompClient.current?.subscribe(ORDERS_TOPIC, (message: IMessage) => {
+              const incomingOrders: Order[] = JSON.parse(message.body);
+              setOrders(incomingOrders);
+            });
           },
           onStompError: (frame) => {
             console.error('STOMP error:', frame);
@@ -79,6 +100,18 @@ export const useWebSocketRobots = () => {
             console.error('WebSocket error:', error);
             setIsConnected(false);
             setError('WebSocket connection error');
+          },
+          // A socket that closes cleanly — a backend restart, an nginx reload,
+          // a sleeping laptop — raises no error at all. Without these two the
+          // connection flag stays true against a dead backend and the whole
+          // dashboard silently serves stale data.
+          onWebSocketClose: () => {
+            if (!active) return
+            setIsConnected(false);
+          },
+          onDisconnect: () => {
+            if (!active) return
+            setIsConnected(false);
           }
         });
 
@@ -99,5 +132,11 @@ export const useWebSocketRobots = () => {
     };
   }, []);
 
-  return { robots, stats, isConnected, error };
+  const connectionState: ConnectionState = isConnected
+    ? 'connected'
+    : hasConnectedOnce.current
+      ? 'disconnected'
+      : 'connecting';
+
+  return { robots, stats, orders, connectionState, error };
 };

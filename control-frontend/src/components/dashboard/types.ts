@@ -4,7 +4,6 @@ export const WIDGET_IDS = [
   "robot-map",
   "robot-list",
   "pos-orders",
-  "table-status",
 ] as const;
 
 export type WidgetId = (typeof WIDGET_IDS)[number];
@@ -14,4 +13,8 @@ export interface DashboardWidgetDefinition {
   title: string;
   description?: string;
   render: () => ReactNode;
+  renderHeaderActions?: () => ReactNode;
+  renderHeaderDetail?: () => ReactNode;
+  wrap?: (children: ReactNode) => ReactNode;
+  bleed?: boolean;
 }
