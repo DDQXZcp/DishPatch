@@ -18,12 +18,14 @@
 DishPatch is an open-source, AWS cloud-based restaurant service-robot platform that integrates ordering, dispatch/control, and robotics fleet execution.
 <p align="center">
   <strong>POS System</strong> 
-  <a href="https://pos.dish-patch.com/">Live Demo</a> |
+  <a href="https://pos.dish-patch.com/">pos.dish-patch.com</a> |
   <strong>Control System</strong> 
-  <a href="https://control.dish-patch.com/">Live Demo</a>
+  <a href="https://control.dish-patch.com/">control.dish-patch.com</a> |
+  <strong>Robot Visualiser</strong> 
+  <a href="https://robot.dish-patch.com/">robot.dish-patch.com</a>
 </p>
 
-<img alt="DishPatch Architecture" src="./img/DishPatch_v2.png" />
+<img alt="DishPatch Architecture" src="./img/DishPatch_v3.png" />
 
 ## Overview
 
@@ -86,11 +88,9 @@ The POS frontend is a React web application hosted on **Amazon S3** and delivere
 
 The POS backend exposes APIs for menu/table queries and order submission. It uses **API Gateway + AWS Lambda** for request handling and **DynamoDB** for persistent storage.
 
-<!-- > Note: If this module is currently hosted in a different repo (e.g., CampusRide), replace the link above to keep naming consistent. -->
-
 ---
 
-### (2) Control System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
+### (2) Control System ![Status](https://img.shields.io/badge/status-done-brightgreen)
 
 <p align="center">
   <strong>Control System</strong> 
@@ -106,9 +106,9 @@ The control system coordinates orders and fleet operations. It is intended to in
 
 - **Monitoring Dashboard** — real-time robot telemetry (location, heading, speed, battery)
 
-<img alt="Control System Frontend" src="./img/CampusRide-Frontend.png" />
+<img alt="Control System Frontend" src="./img/Control System Frontend.png" />
 <p align="center">
-  CampusRide Frontend
+  Control System Frontend
 </p>
 
 **Control Backend (Dispatch & Orchestration)**
@@ -144,7 +144,7 @@ The control system coordinates orders and fleet operations. It is intended to in
 
 ---
 
-### (3) Robotics System ![Status](https://img.shields.io/badge/status-planning-blue?labelColor=555555)
+### (3) Robotics System ![Status](https://img.shields.io/badge/status-done-brightgreen)
 
 The robotics layer is responsible for executing delivery tasks and publishing robot state.
 
@@ -159,6 +159,18 @@ Initial development will focus on a virtual/simulated environment to validate en
 
 - **Virtual Robot** — Each service robot runs in a Docker container with ROS 2 and simulation tooling (e.g., Gazebo, RViz2, Nav2). Robots subscribe to assigned jobs and autonomously navigate to perform dish delivery.
 - **ROS Bridge** — A bridge component that converts ROS topics into WebSocket messages for communication with the control backend, enabling real-time telemetry streaming and command dispatch.
+
+**Robot Visualiser**
+![React](https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=black)
+![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
+![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
+
+<img alt="Robot Visualiser" src="./img/Robot Visualiser Frontend.png" />
+<p align="center">
+  Robot Visualiser Frontend
+</p>
+
+- **Foxglove Robot Visualiser** — The foxglove app will connect to the ROS Bridge via secure WebSocket (wss) and visualise topics related to robot movements and navigation.
 
 ## Deployment & CI/CD
 
