@@ -211,6 +211,7 @@
                         <param>com.dishpatch.service.*</param>
                         <param>com.dishpatch.order.*</param>
                         <param>com.dishpatch.map.*</param>
+                        <param>com.dishpatch.user.*</param>
                     </targetClasses>
 
                     <!--
@@ -238,6 +239,7 @@
                     <excludedClasses>
                         <param>com.dishpatch.dispatch.DispatchController</param>
                         <param>com.dishpatch.order.OrderController</param>
+                        <param>com.dishpatch.user.UserController</param>
                     </excludedClasses>
 
                     <outputFormats>
