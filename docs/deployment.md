@@ -22,8 +22,8 @@ DishPatch is deployed as a layered system:
 - **Control Backend (Compute-based)**
   - Spring Boot application on **Amazon EC2**
   - Reverse proxied by **Nginx**
-  - Job/event decoupling via **Amazon SQS**
-  - Real-time updates via **WebSocket** (implementation-dependent)
+  - Order intake by polling the shared **DynamoDB** Orders table
+  - Real-time updates to the dashboard via **WebSocket** (STOMP over SockJS)
 
 - **Robotics Layer**
   - Initially deployed in simulation / containerised runtime (e.g., Docker + ROS 2)
@@ -39,7 +39,7 @@ A typical setup uses multiple environments:
 - `staging` — pre-production validation
 - `prod` — production deployment
 
-Each environment should have isolated AWS resources (separate buckets, tables, queues, etc.).
+Each environment should have isolated AWS resources (separate buckets, tables, etc.).
 
 ---
 
@@ -48,7 +48,7 @@ Each environment should have isolated AWS resources (separate buckets, tables, q
 ### 3.1 AWS
 - An AWS account and permission to create:
   - S3, CloudFront, API Gateway, Lambda, DynamoDB
-  - EC2, IAM, SQS
+  - EC2, IAM
   - (optional) Route 53, ACM certificates, CloudWatch alarms
 
 ### 3.2 GitHub
@@ -116,7 +116,7 @@ Expose REST endpoints via API Gateway:
 
 ---
 
-## 6. Control Backend Deployment (EC2 + Nginx + SQS + WebSocket)
+## 6. Control Backend Deployment (EC2 + Nginx + WebSocket)
 
 ### 6.1 EC2 instance
 Provision an EC2 instance for the control backend (per environment).
@@ -136,19 +136,17 @@ Typical pattern:
 - `https://<domain>/api` → Spring Boot
 - `https://<domain>/ws` → WebSocket endpoint (if applicable)
 
-### 6.3 SQS queue
-Create an SQS queue for order/task dispatch decoupling, for example:
-- `dishpatch-orders-queue-prod`
-
-Rationale:
-- buffers traffic spikes
-- supports retry semantics
-- isolates POS ordering from dispatch orchestration
+### 6.3 Order intake
+There is no queue service between the POS and the control backend. The two components
+share one DynamoDB table: the POS writes orders with the status `Preparing`, and the
+control backend scans that table once a second for them. Grant the EC2 instance role
+read and write access to the Orders table, and set `ORDERS_TABLE` identically in both
+components.
 
 ### 6.4 WebSocket (real-time updates)
-Real-time robot status can be delivered via:
-- Spring Boot WebSocket endpoint behind Nginx, or
-- a managed approach (future), depending on your roadmap
+Robot telemetry and order updates are delivered from the Spring Boot WebSocket endpoint
+(`/ws`, STOMP over SockJS) behind Nginx. Nginx must pass the `Upgrade` and `Connection`
+headers through for this to work.
 
 ---
 
@@ -223,7 +221,7 @@ Examples:
 At minimum:
 - CloudWatch Logs for Lambda and EC2 services
 - CloudWatch metrics and alarms for:
-  - SQS queue depth / age of oldest message
+  - DynamoDB read/write throttling on the Orders table
   - API Gateway error rate / latency
   - Lambda errors / throttles
   - EC2 health and service availability
@@ -247,7 +245,7 @@ Common issues:
 - **CloudFront not updating**: invalidate cache or ensure correct cache-control headers
 - **CORS errors**: confirm API Gateway CORS and allowed origins
 - **OIDC role assumption fails**: check trust policy conditions (repo/branch) and workflow permissions
-- **SQS delays**: check consumer scaling and visibility timeout settings
+- **Orders not dispatched**: confirm `ORDERS_TABLE` matches between the POS and control backends, that the order's status is exactly `Preparing`, and that `dispatch.enabled` is `true`
 
 ---
 
