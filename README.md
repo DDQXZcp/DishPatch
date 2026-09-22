@@ -8,7 +8,6 @@
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Spring%20Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?logo=springboot&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
-![SQS](https://img.shields.io/badge/AWS%20SQS-FF4F8B?logo=amazonsqs&logoColor=white)
 ![WebSocket](https://img.shields.io/badge/WebSocket-000000?logo=socketdotio&logoColor=white)
 
 <!-- ![React](https://img.shields.io/badge/react-frontend-61DAFB?logo=react&logoColor=white&labelColor=000000) -->
@@ -49,10 +48,13 @@ This diagram summarises the end-to-end workflow across ordering, dispatch/contro
 </p>
 
 **Step 1 — Order Placement**  
-A customer places an order via the Ordering System. The order details are recorded and enqueued as a delivery job.
+A customer places an order via the Ordering System. The order is written to a DynamoDB
+Orders table with the status `Preparing`.
 
 **Step 2 — Dispatch & Monitoring**  
-The Control System consumes jobs from the queue, schedules delivery tasks for the robotics fleet, and provides a monitoring dashboard showing real-time robot status (e.g., location and battery).
+The Control System shares that table — it is the queue. Once a second it scans for
+`Preparing` orders, assigns the oldest one to a free robot waiting at the counter, and
+provides a monitoring dashboard showing real-time robot status (e.g., location and battery).
 
 **Step 3 — Fleet Execution**  
 Robots receive high-level commands from the Control System and autonomously navigate to deliver dishes to the customer, then proceed to the next assigned task.
@@ -102,7 +104,7 @@ The POS backend exposes APIs for menu/table queries and order submission. It use
 ![CloudFront](https://img.shields.io/badge/AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)
 ![S3](https://img.shields.io/badge/AWS%20S3-569A31?logo=amazons3&logoColor=white)
 
-The control system coordinates orders and fleet operations. It is intended to include:
+The control system coordinates orders and fleet operations. It provides:
 
 - **Monitoring Dashboard** — real-time robot telemetry (location, heading, speed, battery)
 
@@ -115,24 +117,27 @@ The control system coordinates orders and fleet operations. It is intended to in
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
 ![Spring%20Boot](https://img.shields.io/badge/Spring%20Boot-6DB33F?logo=springboot&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white)
-![SQS](https://img.shields.io/badge/AWS%20SQS-FF4F8B?logo=amazonsqs&logoColor=white)
+![DynamoDB](https://img.shields.io/badge/AWS%20DynamoDB-4053D6?logo=amazondynamodb&logoColor=white)
 ![WebSocket](https://img.shields.io/badge/WebSocket-000000?logo=socketdotio&logoColor=white)
 
 - **Job Scheduler** — transforms orders into tasks and assigns delivery jobs
 - **Fleet Manager** — manages high-level robot coordination and task execution
 
-**Planned deliverables**
+**Delivered**
 
-- REST APIs for orders, tasks, and fleet management
-- real-time status streaming via WebSocket/MQTT
-- scheduling strategies (FIFO, priority-based, zone-aware, load balancing)
+- REST APIs for orders, users, and dispatch state
+- real-time status streaming to the dashboard over WebSocket (STOMP on SockJS)
+- scheduling: oldest pending order first, assigned to any free robot parked at the
+  counter. Priority, zone-aware and load-balancing strategies are not implemented.
 
 **Order States**
 
-- created
-- paid
-- cancelled
-- completed
+- Preparing
+- Completed
+- Cancelled
+
+Set by the POS on creation (`Preparing`), and by the control backend when a delivery
+finishes (`Completed`). These three values are the contract between the two systems.
 
 <!-- For each order, it will have multiple items. For each item, it has its own states
 - pending
@@ -148,7 +153,7 @@ The control system coordinates orders and fleet operations. It is intended to in
 
 The robotics layer is responsible for executing delivery tasks and publishing robot state.
 
-Initial development will focus on a virtual/simulated environment to validate end-to-end behaviour. Support for physical robots will be introduced once the platform interfaces and workflows stabilise.
+The deployed fleet is simulated: robots run Nav2 against a real floor plan in Docker containers rather than on physical hardware. The interfaces are the ones a physical robot would use — a goal pose in, telemetry out — so hardware can be substituted without changing the layers above.
 
 **Virtual Robot Fleet**
 ![EC2](https://img.shields.io/badge/AWS%20EC2-FF9900?logo=amazonec2&logoColor=white)
@@ -170,7 +175,9 @@ Initial development will focus on a virtual/simulated environment to validate en
   Robot Visualiser Frontend
 </p>
 
-- **Foxglove Robot Visualiser** — The foxglove app will connect to the ROS Bridge via secure WebSocket (wss) and visualise topics related to robot movements and navigation.
+- **Foxglove Robot Visualiser** — Hosted at [robot.dish-patch.com](https://robot.dish-patch.com/). Add a **Rosbridge** connection pointing at `wss://rosbridge.dish-patch.com` to visualise the fleet's movement and navigation topics. For the 3D view, use `/{ns}/local_costmap/costmap_viz` rather than Nav2's own costmap topic — see [robot-fleet/README.md](./robot-fleet/README.md).
+
+  `robot-visualiser/` vendors [Foxglove Studio](https://github.com/foxglove/studio) 1.86.0, which is licensed under the **MPL-2.0** rather than this repository's Apache-2.0. Its licence and notice are retained in `robot-visualiser/LICENSE` and `robot-visualiser/NOTICE`. The source is unmodified apart from build configuration.
 
 ## Deployment & CI/CD
 
@@ -179,7 +186,7 @@ See [deployment.md](./docs/deployment.md) for details.
 
 ## Testing
 
-The control backend has 152 tests across unit, integration and API levels, run on every pull request by
+The control backend has 162 tests across unit, integration and API levels, run on every pull request by
 [test-control-backend.yml](./.github/workflows/test-control-backend.yml) and again before every deployment.
 
 Measured fault detection, branch coverage, determinism and test-smell results are in
@@ -357,7 +364,7 @@ VITE_MENU_IMAGES_BASE_URL=https://dishpatch-pos-backend-menu-photo.s3.ap-southea
 
 ### Local Testing - Robot Visualiser
 
-Create this **.env** file in pos-frontend folder.
+Run these from the `robot-visualiser` folder.
 
 Enable corepack with admin/sudo permission and install dependencies (Run once)
 ```
@@ -372,7 +379,8 @@ Launch Frontend (Run Everytime)
 yarn start
 ```
 
-Then every
+Once it is open, add a **Rosbridge** connection. Point it at `ws://localhost:9090` for a
+fleet running on your own machine, or `wss://rosbridge.dish-patch.com` for the deployed one.
 
 ## EC2 Prerequisites
 
@@ -395,7 +403,14 @@ sudo docker buildx version
 
 # Nginx
 
-```
+## Rosbridge TLS Certificate
+
+The robot-fleet EC2 host terminates TLS for `rosbridge.dish-patch.com`, which is what the
+Robot Visualiser connects to over `wss://`. The fleet's nginx container mounts
+`/etc/letsencrypt` and `/var/www/certbot` from the host read-only, so the certificate is
+issued on the host once, before the first `docker compose up`:
+
+```bash
 sudo apt update
 sudo apt install -y certbot
 sudo mkdir -p /var/www/certbot
@@ -404,3 +419,7 @@ sudo certbot certonly \
   -w /var/www/certbot \
   -d rosbridge.dish-patch.com
 ```
+
+The control backend's own certificate for `controlapi.dish-patch.com` is handled
+differently — by a `certbot/certbot` container driven from
+`control-nginx/scripts/deploy-production.sh`
