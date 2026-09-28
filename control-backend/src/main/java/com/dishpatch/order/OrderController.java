@@ -96,7 +96,7 @@ public class OrderController {
                 );
     }
 
-    @ExceptionHander (OrderRepository.OrderNotPreparingException.class)
+    @ExceptionHandler (OrderRepository.OrderNotPreparingException.class)
     public ResponseEntity<ApiResponse<Map<String, Object>>> handleNotPreparing(
         OrderRepository.OrderNotPreparingException e
     ) {
