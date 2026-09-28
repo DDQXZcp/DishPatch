@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - robot-infrastructure
+      - control-backend-cancelOrder
     paths:
       - 'robot-fleet/**'
       - 'map-source/**'
