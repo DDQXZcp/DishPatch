@@ -93,6 +93,12 @@ public class OrderRepository {
         );
     }
 
+    public static class OrderNotPreparingException extends RuntimeException {
+        public OrderNotPreparingException(String orderId) {
+            super("Order " + orderId + " isn't preparing");
+        }
+    }
+
     // This is built on the assumption that you can't change an already completed order.
     // If that isn't true, the conditional needs to be changed to only prevent changing cancelled.
     public Optional<Map<String, Object>> updateStatus(
@@ -131,6 +137,7 @@ public class OrderRepository {
                                             AttributeValue.builder().s("Preparing").build()
                                     ))
                                     .returnValues(ReturnValue.ALL_NEW)
+                                    .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
                                     .build()
                     );
 
@@ -141,7 +148,11 @@ public class OrderRepository {
             );
 
         } catch (ConditionalCheckFailedException exception) {
-            // This should probably handle different returns depending on why it failed
+            if (exception.hasItem()) {
+                // Row exists so order not existing isnt the problem
+                throw new OrderNotPreparingException(orderId);
+            }
+
             return Optional.empty();
         }
     }

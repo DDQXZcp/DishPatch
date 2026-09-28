@@ -96,6 +96,13 @@ public class OrderController {
                 );
     }
 
+    @ExceptionHander (OrderRepository.OrderNotPreparingException.class)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> handleNotPreparing(
+        OrderRepository.OrderNotPreparingException e
+    ) {
+        return ResponseEntity.status(409).body(new ApiResponse<>(false, e.getMessage(), null));
+    }
+
     public record UpdateOrderRequest(
             @NotNull OrderStatus orderStatus
     ) {
