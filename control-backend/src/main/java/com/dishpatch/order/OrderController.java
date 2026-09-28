@@ -89,7 +89,7 @@ public class OrderController {
                         ResponseEntity.status(404).body(
                                 new ApiResponse<>(
                                         false,
-                                        "Order not found",
+                                        "This order doesn't exist or cant be changed",
                                         null
                                 )
                         )

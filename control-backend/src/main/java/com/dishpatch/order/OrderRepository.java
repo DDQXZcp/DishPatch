@@ -93,6 +93,8 @@ public class OrderRepository {
         );
     }
 
+    // This is built on the assumption that you can't change an already completed order.
+    // If that isn't true, the conditional needs to be changed to only prevent changing cancelled.
     public Optional<Map<String, Object>> updateStatus(
             String orderId,
             OrderStatus status
@@ -112,7 +114,7 @@ public class OrderRepository {
                                             "SET #status = :status"
                                     )
                                     .conditionExpression(
-                                            "attribute_exists(#orderId)"
+                                            "attribute_exists(#orderId) AND #status = :preparing"
                                     )
                                     .expressionAttributeNames(Map.of(
                                             "#orderId",
@@ -124,7 +126,9 @@ public class OrderRepository {
                                             ":status",
                                             AttributeValue.builder()
                                                     .s(status.getValue())
-                                                    .build()
+                                                    .build(),
+                                            ":preparing",
+                                            AttributeValue.builder().s("Preparing").build()
                                     ))
                                     .returnValues(ReturnValue.ALL_NEW)
                                     .build()
@@ -137,6 +141,7 @@ public class OrderRepository {
             );
 
         } catch (ConditionalCheckFailedException exception) {
+            // This should probably handle different returns depending on why it failed
             return Optional.empty();
         }
     }
