@@ -70,11 +70,8 @@ public class OrderService {
             String orderId,
             OrderStatus status
     ) {
-        try {
-             orderRepository.updateStatus(orderId, status).map(this::normalizeOrder);
-        } catch (OrderRepository.OrderNotPreparingException e) {
-                
-        }
+        return orderRepository.updateStatus(orderId, status)
+                .map(this::normalizeOrder);
     }
 
     private Map<String, Object> normalizeOrder(
