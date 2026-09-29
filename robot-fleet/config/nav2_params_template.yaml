@@ -3,7 +3,6 @@ ROBOT_NS/bt_navigator:
     global_frame: map
     robot_base_frame: ROBOT_NS/base_link
     odom_topic: /ROBOT_NS/odom
-    allow_navigator_preemption: true
 
     # How long a behavior tree action node waits for its action server to
     # acknowledge a goal request, in milliseconds.
