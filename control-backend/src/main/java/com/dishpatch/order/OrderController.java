@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import com.dishpatch.dispatch.DispatchService;
 
 import java.util.List;
 import java.util.Map;
@@ -19,9 +21,11 @@ import java.util.Map;
 public class OrderController {
 
     private final OrderService orderService;
+    private final DispatchService dispatchService;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, DispatchService dispatchService) {
         this.orderService = orderService;
+        this.dispatchService = dispatchService;
     }
 
     @GetMapping
@@ -76,15 +80,18 @@ public class OrderController {
                         id,
                         request.orderStatus()
                 )
-                .map(order ->
-                        ResponseEntity.ok(
+                .map(order -> {
+                        if (request.orderStatus() == OrderStatus.CANCELLED) {
+                                dispatchService.cancelOrder(id);
+                        }
+                        return ResponseEntity.ok(
                                 new ApiResponse<>(
                                         true,
                                         "Order updated",
                                         order
                                 )
-                        )
-                )
+                        );
+                })
                 .orElseGet(() ->
                         ResponseEntity.status(404).body(
                                 new ApiResponse<>(
@@ -94,6 +101,13 @@ public class OrderController {
                                 )
                         )
                 );
+    }
+
+    @ExceptionHandler (OrderRepository.OrderNotPreparingException.class)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> handleNotPreparing(
+        OrderRepository.OrderNotPreparingException e
+    ) {
+        return ResponseEntity.status(409).body(new ApiResponse<>(false, e.getMessage(), null));
     }
 
     public record UpdateOrderRequest(

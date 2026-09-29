@@ -110,6 +110,8 @@ public class DispatchService {
     /** In-flight deliveries, keyed by order id. Doubles as the re-dispatch guard. */
     private final Map<String, DispatchAssignment> assignments =
             new ConcurrentHashMap<>();
+    
+    private final Set<String> cancels = ConcurrentHashMap.newKeySet();
 
     /** Orders that cannot be dispatched, keyed by order id, with the reason. */
     private final Map<String, String> skipped = new ConcurrentHashMap<>();
@@ -214,6 +216,10 @@ public class DispatchService {
         }
     }
 
+    public void cancelOrder(String orderId) {
+        cancels.add(orderId);
+    }
+
     /**
      * Moves every assignment that is ready on to its next stage.
      * <p>
@@ -224,6 +230,10 @@ public class DispatchService {
         long now = clock.millis();
 
         for (DispatchAssignment assignment : List.copyOf(assignments.values())) {
+            if (cancels.remove(assignment.orderId()) && assignment.state() != DispatchState.RETURNING) {
+                abandon(assignment, "Order Cancelled", now);
+                continue;
+            }
             switch (assignment.state()) {
                 case TO_TABLE -> {
                     if (hasArrived(assignment.robotId(), assignment.destination())) {

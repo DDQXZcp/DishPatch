@@ -13,6 +13,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.ReturnValuesOnConditionCheckFailure;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,6 +94,14 @@ public class OrderRepository {
         );
     }
 
+    public static class OrderNotPreparingException extends RuntimeException {
+        public OrderNotPreparingException(String orderId) {
+            super("Order " + orderId + " isn't preparing");
+        }
+    }
+
+    // This is built on the assumption that you can't change an already completed order.
+    // If that isn't true, the conditional needs to be changed to only prevent changing cancelled.
     public Optional<Map<String, Object>> updateStatus(
             String orderId,
             OrderStatus status
@@ -112,7 +121,7 @@ public class OrderRepository {
                                             "SET #status = :status"
                                     )
                                     .conditionExpression(
-                                            "attribute_exists(#orderId)"
+                                            "attribute_exists(#orderId) AND #status = :preparing"
                                     )
                                     .expressionAttributeNames(Map.of(
                                             "#orderId",
@@ -124,9 +133,12 @@ public class OrderRepository {
                                             ":status",
                                             AttributeValue.builder()
                                                     .s(status.getValue())
-                                                    .build()
+                                                    .build(),
+                                            ":preparing",
+                                            AttributeValue.builder().s("Preparing").build()
                                     ))
                                     .returnValues(ReturnValue.ALL_NEW)
+                                    .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
                                     .build()
                     );
 
@@ -137,6 +149,11 @@ public class OrderRepository {
             );
 
         } catch (ConditionalCheckFailedException exception) {
+            if (exception.hasItem()) {
+                // Row exists so order not existing isnt the problem
+                throw new OrderNotPreparingException(orderId);
+            }
+
             return Optional.empty();
         }
     }

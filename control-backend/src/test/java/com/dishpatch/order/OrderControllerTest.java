@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.dishpatch.dispatch.DispatchService;
 
 /**
  * The orders API as the POS and the control frontend call it.
@@ -39,6 +40,9 @@ class OrderControllerTest {
 
     @MockBean
     private OrderService orderService;
+
+    @MockBean
+    private DispatchService dispatchService;
 
     private static Map<String, Object> order(String id, String status) {
         return Map.of("orderId", id, "orderStatus", status, "status", status);

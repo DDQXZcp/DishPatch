@@ -9,17 +9,20 @@
     fails the Sequence, which fails the tree, which aborts the whole navigation
     goal before the robot has moved. Two robots were stranded that way on
     2026-08-11.
+    
 
     Recovery *behaviors* (spin, back up, wait) are still deliberately absent: they
     would need a behavior_server, which multi_nav2_launch.py does not start. A
     retry decorator is plain behavior-tree logic and needs no extra node.
   -->
   <BehaviorTree ID="MainBT">
-    <Sequence>
-      <RetryUntilSuccessful num_attempts="3">
-        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
-      </RetryUntilSuccessful>
+    <PipelineSequence name="NavigateWithReplanning">
+      <RateController hz="1.0">
+        <RetryUntilSuccessful num_attempts="3">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </RetryUntilSuccessful>
+      </RateController>
       <FollowPath path="{path}" controller_id="FollowPath"/>
-    </Sequence>
+    </PipelineSequence>
   </BehaviorTree>
 </root>
