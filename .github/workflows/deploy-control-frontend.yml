@@ -5,7 +5,7 @@ name: Deploy Control Frontend (Vite → S3 + CloudFront)
 
 on:
   push:
-    branches: [ main, control-backend-cancelOrder ]
+    branches: [ main ]
     paths:
       - 'control-frontend/**'
       - 'map-source/**'
