@@ -2,6 +2,7 @@ package com.dishpatch.dispatch;
 
 import com.dishpatch.map.DropPointMap;
 import com.dishpatch.map.DropPointService;
+import com.dishpatch.order.OrderRepository;
 import com.dishpatch.order.OrderService;
 import com.dishpatch.order.OrderStatus;
 import com.dishpatch.service.RobotService;
@@ -110,7 +111,7 @@ public class DispatchService {
     /** In-flight deliveries, keyed by order id. Doubles as the re-dispatch guard. */
     private final Map<String, DispatchAssignment> assignments =
             new ConcurrentHashMap<>();
-    
+
     private final Set<String> cancels = ConcurrentHashMap.newKeySet();
 
     /** Orders that cannot be dispatched, keyed by order id, with the reason. */
@@ -421,22 +422,34 @@ public class DispatchService {
      * arrives.
      */
     private void completeAndSendBack(DispatchAssignment assignment) {
-        Optional<Map<String, Object>> completed =
-                orderService.updateStatus(
-                        assignment.orderId(),
-                        OrderStatus.COMPLETED
-                );
+        try {
+            Optional<Map<String, Object>> completed =
+                    orderService.updateStatus(
+                            assignment.orderId(),
+                            OrderStatus.COMPLETED
+                    );
 
-        if (completed.isEmpty()) {
+            if (completed.isEmpty()) {
+                logger.warning(
+                        "Order " + assignment.orderId()
+                                + " disappeared before it could be completed"
+                );
+            } else {
+                logger.info(
+                        "Order " + assignment.orderId() + " delivered to "
+                                + assignment.destination() + " by robot "
+                                + assignment.robotId()
+                );
+            }
+        } catch (OrderRepository.OrderNotPreparingException exception) {
+            // Must not escape. The transition below is what frees the robot, and an
+            // exception here leaves it in AT_TABLE and stops tick() reaching
+            // assignment — on this tick and on every later one.
             logger.warning(
                     "Order " + assignment.orderId()
-                            + " disappeared before it could be completed"
-            );
-        } else {
-            logger.info(
-                    "Order " + assignment.orderId() + " delivered to "
-                            + assignment.destination() + " by robot "
-                            + assignment.robotId()
+                            + " was no longer Preparing when robot "
+                            + assignment.robotId() + " finished serving it;"
+                            + " sending the robot back anyway"
             );
         }
 

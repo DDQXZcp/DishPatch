@@ -164,4 +164,40 @@ class DispatchAssignmentTest {
                 fixture.assignmentFor("o-1").orElseThrow().state());
         assertEquals(List.of("T6", "counter"), fixture.destinationsSentTo(1));
     }
+
+    @Test
+    void keepsDispatchingWhenAServedOrderIsNoLongerPreparing() {
+        // The completion write only succeeds while the order is still Preparing, and
+        // throws if something else has moved it on — an unauthenticated PUT, a POS
+        // write, an edit in the DynamoDB console. That throw used to escape the tick:
+        // the robot never left AT_TABLE, and because tick() catches at the top, the
+        // same tick never reached assignment either. Every later tick repeated it, so
+        // one stale row stopped the whole fleet until a restart.
+        DispatchFixture fixture = new DispatchFixture()
+                .robotAtCounter(1)
+                .robotAtCounter(2)
+                .pendingOrder("o-1", "T6");
+
+        fixture.tick();
+        int server = fixture.assignmentFor("o-1").orElseThrow().robotId();
+        int spare = server == 1 ? 2 : 1;
+
+        fixture.moveTo(server, "T6").nav2Idle(server).tick();
+        assertEquals(DispatchState.AT_TABLE,
+                fixture.assignmentFor("o-1").orElseThrow().state());
+
+        // Added only now, so the dwell-expiry tick is the first one that can place it.
+        fixture.orderLeftPreparing("o-1").pendingOrder("o-2", "T7");
+
+        fixture.advance(Duration.ofSeconds(6)).tick();
+
+        assertEquals(DispatchState.RETURNING,
+                fixture.assignmentFor("o-1").orElseThrow().state(),
+                "the meal is on the table; a terminal status on the row must not "
+                        + "strand the robot there");
+        assertEquals(List.of("T6", "counter"), fixture.destinationsSentTo(server));
+        assertEquals(spare, fixture.assignmentFor("o-2").orElseThrow().robotId(),
+                "the same tick must still reach assignment, or one stale row stops "
+                        + "every other delivery");
+    }
 }

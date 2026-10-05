@@ -2,6 +2,7 @@ package com.dishpatch.dispatch;
 
 import com.dishpatch.map.DropPointMap;
 import com.dishpatch.map.DropPointService;
+import com.dishpatch.order.OrderRepository;
 import com.dishpatch.order.OrderService;
 import com.dishpatch.order.OrderStatus;
 import com.dishpatch.service.RobotService;
@@ -346,6 +347,17 @@ final class DispatchFixture {
 
                     for (Map<String, Object> order : orders) {
                         if (orderId.equals(order.get("orderId"))) {
+                            // Mirrors OrderRepository.updateStatus: the write is
+                            // conditional on the row still being Preparing, and a
+                            // row that exists but has moved on throws rather than
+                            // returning empty. This stub used to accept any write,
+                            // which is how a dispatcher that died on that throw
+                            // passed every test here.
+                            if (!OrderStatus.PREPARING.getValue()
+                                    .equals(order.get("orderStatus"))) {
+                                throw new OrderRepository.OrderNotPreparingException(orderId);
+                            }
+
                             order.put("orderStatus", status.getValue());
                             return Optional.of(order);
                         }

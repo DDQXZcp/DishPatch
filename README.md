@@ -200,7 +200,7 @@ See [deployment.md](./docs/deployment.md) for details.
 
 ## Testing
 
-The control backend has 162 tests across unit, integration and API levels, run on every pull request by
+The control backend has 163 tests across unit, integration and API levels, run on every pull request by
 [test-control-backend.yml](./.github/workflows/test-control-backend.yml) and again before every deployment.
 
 Measured fault detection, branch coverage, determinism and test-smell results are in
