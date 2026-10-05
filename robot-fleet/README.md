@@ -206,8 +206,21 @@ floorplan's resolution that was 16.8 million cells and ~385 ms per plan.
 
 - **Goal tolerance** — the robot stops within 0.25 m of the goal
   (`xy_goal_tolerance` in `config/nav2_params_template.yaml`).
-- **Recovery behaviors** — not used. The Behavior Tree is minimal: compute path,
-  follow path.
+- **Replanning** — since 2026-09-29 the Behavior Tree recomputes the global path
+  about once a second while the robot follows it (a `PipelineSequence` with a
+  1 Hz `RateController` in `config/navigate_to_pose.xml`). Each plan starts from
+  the robot's current position and reads the current goal, so a goal published
+  mid-drive — the counter goal sent when a delivery is cancelled, for instance —
+  takes effect at the next replan. It does not route around obstacles: the
+  global costmap is only the static map and its inflation. Two costs come with
+  it. The planner runs once a second per robot with a live goal rather than once
+  per goal, which is load on the shared `nav2` container — see
+  [Why Nav2 is one container](#why-nav2-is-one-container) before adding a robot.
+  And a planning failure that exhausts the three retries now aborts the goal
+  wherever the robot is, not only before it sets off. The backend handles that
+  like any other aborted goal: it re-sends, up to its attempt cap.
+- **Recovery behaviors** — not used. Spin, back up and wait would need a
+  `behavior_server`, which `multi_nav2_launch.py` does not start.
 - **Battery** — drains at 0.05%/s, auto-charges at 20% or below, stops at 95% or
   above.
 - **Costmaps in a 3D view** — point Foxglove at

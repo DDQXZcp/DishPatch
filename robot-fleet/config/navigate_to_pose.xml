@@ -1,15 +1,24 @@
 <root BTCPP_format="4">
   <!--
-    Minimal navigation tree: plan a path, then follow it.
+    Plan a path, follow it, and replan about once a second while following.
+
+    PipelineSequence keeps FollowPath running while RateController re-ticks
+    ComputePathToPose at 1 Hz. Each new plan replaces {path} and starts from the
+    robot's current position, and FollowPath switches to it mid-drive. Each plan
+    also reads the current {goal}, so a goal published while the robot is already
+    driving takes effect at the next replan. The global costmap holds only the
+    static map and its inflation, so replanning does not route around anything
+    new: it re-anchors the path to where the robot actually is, toward whichever
+    goal is current.
 
     ComputePathToPose is wrapped in a retry because its failure mode here is not
     "no route exists" — it is "planner_server did not acknowledge the request in
     time". That is a transient timing race against a loaded host, and retrying it
     costs one extra round trip. Without the retry a single missed acknowledgement
-    fails the Sequence, which fails the tree, which aborts the whole navigation
-    goal before the robot has moved. Two robots were stranded that way on
-    2026-08-11.
-    
+    fails the PipelineSequence, which fails the tree, which aborts the whole
+    navigation goal. Two robots were stranded that way on 2026-08-11, when the
+    tree still planned once, up front. With replanning the planner is asked again
+    every second, so the same failure can now abort a goal at any point in a drive.
 
     Recovery *behaviors* (spin, back up, wait) are still deliberately absent: they
     would need a behavior_server, which multi_nav2_launch.py does not start. A
