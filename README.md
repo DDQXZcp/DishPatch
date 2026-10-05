@@ -183,6 +183,7 @@ The deployed fleet is simulated: robots run Nav2 against a real floor plan in Do
 
 | Document | Covers |
 |:--|:--|
+| [docs/architecture.md](./docs/architecture.md) | How the three systems connect: an order end to end, why the database is the queue, where state lives, deployment, trust boundaries |
 | [docs/api.md](./docs/api.md) | Every HTTP route and WebSocket topic on both backends, with status codes, authentication and known issues |
 | [control-backend/README.md](./control-backend/README.md) | Running, configuring, testing and deploying the Spring Boot backend; what each package holds |
 | [Dispatch pipeline](./control-backend/src/main/java/com/dishpatch/dispatch/README.md) | How orders become deliveries: the state machine, recovery, cancellation |

@@ -15,7 +15,9 @@ uses plural paths (`/api/orders`), the POS backend singular ones (`/api/order`);
 [comparison table](#the-two-backends-side-by-side) at the end sets them out together.
 
 They share one thing that matters: the **DynamoDB Orders table**. The POS writes orders into
-it, and the control backend reads and updates the same rows. There is no queue between them.
+it, and the control backend reads and updates the same rows. There is no queue between them —
+[architecture.md](./architecture.md#why-the-database-is-the-queue) explains why, and what the two
+sides must agree on.
 
 ---
 
