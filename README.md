@@ -422,4 +422,4 @@ sudo certbot certonly \
 
 The control backend's own certificate for `controlapi.dish-patch.com` is handled
 differently — by a `certbot/certbot` container driven from
-`control-nginx/scripts/deploy-production.sh`
+`control-nginx/scripts/deploy-production.sh`.
