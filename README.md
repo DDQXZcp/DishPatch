@@ -179,6 +179,17 @@ The deployed fleet is simulated: robots run Nav2 against a real floor plan in Do
 
   `robot-visualiser/` vendors [Foxglove Studio](https://github.com/foxglove/studio) 1.86.0, which is licensed under the **MPL-2.0** rather than this repository's Apache-2.0. Its licence and notice are retained in `robot-visualiser/LICENSE` and `robot-visualiser/NOTICE`. The source is unmodified apart from build configuration.
 
+## Documentation
+
+| Document | Covers |
+|:--|:--|
+| [docs/api.md](./docs/api.md) | Every HTTP route and WebSocket topic on both backends, with status codes, authentication and known issues |
+| [Dispatch pipeline](./control-backend/src/main/java/com/dishpatch/dispatch/README.md) | How orders become deliveries: the state machine, recovery, cancellation |
+| [robot-fleet/README.md](./robot-fleet/README.md) | The ROS 2 fleet: containers, Nav2, topics, and the decisions behind them |
+| [map-source/README.md](./map-source/README.md) | The floor plan and drop points, and how they are staged into each component |
+| [docs/deployment.md](./docs/deployment.md) | AWS deployment and CI/CD |
+| [docs/control-backend-test-quality.md](./docs/control-backend-test-quality.md) | Mutation score, coverage, determinism and test-smell results for the control backend |
+
 ## Deployment & CI/CD
 
 DishPatch is deployed on AWS via GitHub Actions. Deployments authenticate to AWS using IAM OIDC (no stored AWS keys).
