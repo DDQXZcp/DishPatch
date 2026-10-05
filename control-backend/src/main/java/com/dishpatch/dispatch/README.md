@@ -15,7 +15,7 @@ Independent, and separately owned. Easy to conflate.
 
 | Axis | Attached to | Owner | Values |
 |---|---|---|---|
-| Order status | an order | POS backend | `Preparing` / `Completed` / `Cancelled` (DynamoDB) |
+| Order status | an order | POS creates it; dispatch completes it; `OrderController` cancels it | `Preparing` / `Completed` / `Cancelled` (DynamoDB) |
 | Robot status | a robot | **this package** | `Serving` / `Pickup` / `Returning` / `Waiting` / `Maintenance` |
 | Dispatch state | a delivery job | **this package** | `TO_TABLE` / `AT_TABLE` / `RETURNING` (in memory) |
 
@@ -91,6 +91,32 @@ not run on a scheduler of its own: enabling the STOMP broker contributes a `Task
 bean, and `@EnableScheduling` binds to it, so dispatch work shares the `MessageBroker-N`
 pool that delivers dashboard updates. A blocking tick would stall the dashboard as well as
 the other deliveries.
+
+## Cancellation
+
+An order is cancelled through the endpoint that changes any order's status —
+`PUT /api/orders/{id}` with `"orderStatus": "Cancelled"`. There is no separate route.
+
+The write is conditional on the order still being `Preparing`, so it is refused with a
+409 once the order is `Completed` or already `Cancelled`. When it succeeds,
+`OrderController` also calls `DispatchService.cancelOrder(id)`, which only records the id
+in the `cancels` set. Nothing moves until the next tick, when `advanceAssignments()` checks
+each assignment's order against that set before advancing it:
+
+| Where the delivery is | What happens |
+|---|---|
+| No robot assigned yet | Nothing to undo. The order is no longer `Preparing`, so it is never dispatched. Its id stays in `cancels` for the life of the process — see special cases. |
+| `TO_TABLE` or `AT_TABLE` | `abandon(…, "Order Cancelled")`: the assignment is deleted, and the robot is sent to the counter as `Returning` and homed like any robot the pipeline has not placed. |
+| `RETURNING` | The meal has been handed over. The flag is consumed and ignored, and the robot finishes its run back. |
+
+`abandon()` was written for the recovery path, and its warning ends "Order returns to the
+queue" or "Order was already delivered". Neither is true of a cancellation: the order is
+`Cancelled` in DynamoDB, so it is not dispatched again.
+
+The DynamoDB write and the flag are not atomic. A tick that lands between them, just as that
+order's serve dwell expires, finds a non-`Preparing` order at completion. That is handled like
+any order that leaves `Preparing` mid-delivery (see special cases): the robot is sent back, and
+the flag is consumed on the following tick.
 
 ## Debug Endpoint
 
@@ -205,8 +231,11 @@ So none of these exist, on purpose:
 | Skip list growth | Intersected with pending order ids each tick, so orders leaving `Preparing` drop off. | Handled |
 | Same order on consecutive ticks | The assignment map is the guard. | Handled |
 | Order deleted mid-delivery | `updateStatus` returns empty; logged, robot still returned and freed. | Handled |
+| Order cancelled mid-delivery | Recorded by `cancelOrder`; the next tick abandons the assignment in `TO_TABLE` or `AT_TABLE` and sends the robot home. Ignored once `RETURNING`. See [Cancellation](#cancellation). | Handled |
+| Order leaves `Preparing` by another route mid-delivery | A direct `PUT` with `Completed`, a POS write, an edit in the DynamoDB console. The completion write is conditional on `Preparing`, so it throws `OrderNotPreparingException`; that is caught and logged, and the robot is sent back regardless — the meal is already on the table. This used to escape: the robot stayed at the table, and because the tick catches at the top, every later tick skipped assignment too. One stale row stopped the fleet until a restart. | Handled |
 | Counter goal fails to publish | Best effort — robot still moves to `RETURNING` so it is eventually freed. | Handled |
-| Exception inside the tick | Caught. An escaping exception silently cancels all future runs of a `@Scheduled` method. | Handled |
+| Exception inside the tick | Caught. An escaping exception silently cancels all future runs of a `@Scheduled` method. But it is caught at the *top*, so a step that throws on every tick still skips everything after it — the row above is what that looks like. A step that can fail for one order must catch its own failure. | Handled |
+| Cancel for an order no robot holds | The id is never consumed, so it stays in `cancels` for the life of the process. Small per entry, but unbounded: `skipped` has self-healing for exactly this, and `cancels` does not. | **Not handled** |
 | Concurrency | Scheduler writes, request threads read. `ConcurrentHashMap` and an immutable assignment replaced whole, so no torn reads. | Handled |
 | Cold start | Robots boot wherever the simulator puts them, so each is homed to the counter before it can take an order. | Handled |
 | Backend restart mid-delivery | Assignments are lost, so the robot is treated as unplaced and homed. Its order stays `Preparing` and is dispatched again. | Handled |
