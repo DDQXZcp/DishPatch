@@ -15,8 +15,11 @@ From the repository root, stage the map assets once:
 ```
 
 This writes `public/maps/map-manifest.json` and `public/maps/map-floorplan.webp`, both
-gitignored. **If you skip it the map fails silently** — the manifest fetch only logs a
-`console.warn`, and the map widget renders an empty grey pane with no error on screen.
+gitignored. **If you skip it the map fails silently**: the map widget is simply blank, with
+nothing on screen to say why. The only trace is a `console.warn`, and it is misleading — Vite
+answers the missing file with `index.html`, so it reads
+`Unable to load map manifest SyntaxError: Unexpected token '<'` rather than anything about a
+missing file.
 
 Then, from this folder:
 
