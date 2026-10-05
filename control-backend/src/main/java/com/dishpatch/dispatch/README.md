@@ -177,7 +177,8 @@ dispatches until the first one gets there.
 Log in first:
 
 ```bash
-read -rp "POS email: " POS_EMAIL && read -rsp "POS password: " POS_PASS && echo
+read -rp "POS email: <email>" POS_EMAIL && read -rsp "POS password: <password>" POS_PASS && echo
+
 curl -s -c /tmp/dishpatch-cookies.txt -X POST https://posapi.dish-patch.com/api/user/login \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$POS_EMAIL\",\"password\":\"$POS_PASS\"}" \
