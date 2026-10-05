@@ -186,6 +186,7 @@ The deployed fleet is simulated: robots run Nav2 against a real floor plan in Do
 | [docs/api.md](./docs/api.md) | Every HTTP route and WebSocket topic on both backends, with status codes, authentication and known issues |
 | [control-backend/README.md](./control-backend/README.md) | Running, configuring, testing and deploying the Spring Boot backend; what each package holds |
 | [Dispatch pipeline](./control-backend/src/main/java/com/dishpatch/dispatch/README.md) | How orders become deliveries: the state machine, recovery, cancellation |
+| [control-frontend/README.md](./control-frontend/README.md) | The operator dashboard: running and checking it, the live data layer, the map, and which parts of `src/` are template |
 | [robot-fleet/README.md](./robot-fleet/README.md) | The ROS 2 fleet: containers, Nav2, topics, and the decisions behind them |
 | [map-source/README.md](./map-source/README.md) | The floor plan and drop points, and how they are staged into each component |
 | [docs/deployment.md](./docs/deployment.md) | AWS deployment and CI/CD |
