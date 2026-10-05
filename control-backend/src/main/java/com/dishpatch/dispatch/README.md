@@ -6,7 +6,7 @@
 |---|---|
 | `DispatchService` | The pipeline. Holds the state, runs the scheduled tick. |
 | `DispatchAssignment` | One in-flight delivery. Immutable record, replaced on each transition. |
-| `DispatchState` | `TO_TABLE` / `RETURNING`. |
+| `DispatchState` | `TO_TABLE` / `AT_TABLE` / `RETURNING`. |
 | `DispatchController` | `GET /api/dispatch` — read-only diagnostic view. |
 
 ## Three state axes
@@ -19,12 +19,18 @@ Independent, and separately owned. Easy to conflate.
 | Robot status | a robot | **this package** | `Serving` / `Pickup` / `Returning` / `Waiting` / `Maintenance` |
 | Dispatch state | a delivery job | **this package** | `TO_TABLE` / `AT_TABLE` / `RETURNING` (in memory) |
 
-Robot status values are a contract with `RobotStatus` in
-`control-frontend/src/types/Robot.ts` — anything outside that set renders unstyled.
-Constants live on `RobotService`.
+Robot status values are meant to match `RobotStatus` in
+`control-frontend/src/types/Robot.ts`, and do not quite. `RobotService` defines five
+constants; the frontend union has four — `Pickup` is missing, though
+`RobotStats.pickupCount` survives. The fallback is not "unstyled": the map and the fleet
+table both draw any status other than `Serving`, `Returning` or `Waiting` in the red they
+use for `Maintenance`, so a `Pickup` robot looks like one under maintenance.
 
-This package is the sole writer; `RobotService.updateField` deliberately leaves
-status alone. `Pickup` and `Maintenance` have no producer yet.
+In the deployed pipeline this package is the only writer — `RobotService.updateField`
+deliberately leaves status alone — and it never produces `Pickup` or `Maintenance`. The
+exception is the `/app/robot-data` STOMP mapping, marked temporary, which copies whatever
+status a client sends. Its one sender in the repo,
+`control-backend/virtual-robots/virtual-robots.py`, cycles through all five.
 
 `RobotService.setAssignment` writes status, `destination` and `orderId` together —
 they always change as one — and the frontend picks the write up on the next
